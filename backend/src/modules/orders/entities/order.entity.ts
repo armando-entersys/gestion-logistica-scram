@@ -32,10 +32,10 @@ export class Order {
   @Column({ name: 'client_email', length: 150 })
   clientEmail: string;
 
-  @Column({ name: 'client_phone', length: 20, nullable: true })
+  @Column({ name: 'client_phone', type: 'varchar', length: 20, nullable: true })
   clientPhone: string | null;
 
-  @Column({ name: 'client_rfc', length: 15, nullable: true })
+  @Column({ name: 'client_rfc', type: 'varchar', length: 15, nullable: true })
   clientRfc: string | null;
 
   @Column({
