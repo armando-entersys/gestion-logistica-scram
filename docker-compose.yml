@@ -1,0 +1,214 @@
+version: "3.9"
+
+# ============================================
+# SCRAM - Sistema de Gestión Logística
+# Dominios:
+#   - Frontend: gestion-logistica.scram2k.com
+#   - API: api-gestion-logistica.scram2k.com
+# Servidor: prod-server (34.59.193.54)
+# ============================================
+
+services:
+  # ============================================
+  # PostgreSQL 16 + PostGIS
+  # ============================================
+  db:
+    image: postgres:16-alpine
+    container_name: scram-logistica-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-scram_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-scram_logistica_db}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./scripts/init-postgis.sql:/docker-entrypoint-initdb.d/init-postgis.sql:ro
+    ports:
+      - "127.0.0.1:5434:5432"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-scram_user} -d ${DB_NAME:-scram_logistica_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis 7 (Queue + Cache)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: scram-logistica-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6381:6379"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Backend API (NestJS)
+  # ============================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: scram-logistica-api:prod
+    container_name: scram-logistica-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${DB_USER:-scram_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-scram_logistica_db}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1d}
+      BIND_API_URL: ${BIND_API_URL}
+      BIND_API_KEY: ${BIND_API_KEY}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-notificaciones@scram2k.com}
+      OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
+      APP_URL: https://gestion-logistica.scram2k.com
+      API_URL: https://api-gestion-logistica.scram2k.com
+    labels:
+      - "traefik.enable=true"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-logistica-api-http.rule=Host(`api-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-api-http.entrypoints=web"
+      - "traefik.http.routers.scram-logistica-api-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-logistica-api.rule=Host(`api-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-api.entrypoints=websecure"
+      - "traefik.http.routers.scram-logistica-api.tls=true"
+      - "traefik.http.routers.scram-logistica-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-logistica-api.loadbalancer.server.port=3000"
+      # Middleware HTTPS redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+    networks:
+      - traefik
+      - internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/health/liveness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Worker Service (BullMQ Processor)
+  # ============================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: scram-logistica-worker:prod
+    container_name: scram-logistica-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://${DB_USER:-scram_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-scram_logistica_db}
+      REDIS_URL: redis://redis:6379
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-notificaciones@scram2k.com}
+      OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
+      APP_URL: https://gestion-logistica.scram2k.com
+    networks:
+      - internal
+
+  # ============================================
+  # Frontend Web (Next.js)
+  # ============================================
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api-gestion-logistica.scram2k.com/api/v1
+        - NEXT_PUBLIC_APP_URL=https://gestion-logistica.scram2k.com
+    image: scram-logistica-web:prod
+    container_name: scram-logistica-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+    labels:
+      - "traefik.enable=true"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-logistica-web-http.rule=Host(`gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-web-http.entrypoints=web"
+      - "traefik.http.routers.scram-logistica-web-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-logistica-web.rule=Host(`gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-web.entrypoints=websecure"
+      - "traefik.http.routers.scram-logistica-web.tls=true"
+      - "traefik.http.routers.scram-logistica-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-logistica-web.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+      - internal
+
+  # ============================================
+  # Mobile PWA (Vite - opcional)
+  # ============================================
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://api-gestion-logistica.scram2k.com/api/v1
+    image: scram-logistica-mobile:prod
+    container_name: scram-logistica-mobile
+    restart: unless-stopped
+    depends_on:
+      - api
+    labels:
+      - "traefik.enable=true"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-logistica-mobile-http.rule=Host(`app-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-mobile-http.entrypoints=web"
+      - "traefik.http.routers.scram-logistica-mobile-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-logistica-mobile.rule=Host(`app-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-logistica-mobile.entrypoints=websecure"
+      - "traefik.http.routers.scram-logistica-mobile.tls=true"
+      - "traefik.http.routers.scram-logistica-mobile.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-logistica-mobile.loadbalancer.server.port=80"
+    networks:
+      - traefik
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  traefik:
+    external: true
+  internal:
+    driver: bridge
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
