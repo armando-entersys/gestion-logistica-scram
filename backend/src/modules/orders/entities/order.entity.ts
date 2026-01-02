@@ -26,10 +26,10 @@ export class Order {
   @Column({ name: 'bind_id', type: 'varchar', length: 50, unique: true })
   bindId: string;
 
-  @Column({ name: 'client_name', length: 200 })
+  @Column({ name: 'client_name', type: 'varchar', length: 200 })
   clientName: string;
 
-  @Column({ name: 'client_email', length: 150 })
+  @Column({ name: 'client_email', type: 'varchar', length: 150 })
   clientEmail: string;
 
   @Column({ name: 'client_phone', type: 'varchar', length: 20, nullable: true })
