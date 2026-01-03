@@ -84,6 +84,7 @@ services:
       API_URL: https://api-gestion-logistica.scram2k.com
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
       # Router HTTP -> HTTPS redirect
       - "traefik.http.routers.scram-logistica-api-http.rule=Host(`api-gestion-logistica.scram2k.com`)"
       - "traefik.http.routers.scram-logistica-api-http.entrypoints=web"
@@ -152,6 +153,7 @@ services:
       NODE_ENV: production
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
       # Router HTTP -> HTTPS redirect
       - "traefik.http.routers.scram-logistica-web-http.rule=Host(`gestion-logistica.scram2k.com`)"
       - "traefik.http.routers.scram-logistica-web-http.entrypoints=web"
@@ -182,6 +184,7 @@ services:
       - api
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
       # Router HTTP -> HTTPS redirect
       - "traefik.http.routers.scram-logistica-mobile-http.rule=Host(`app-gestion-logistica.scram2k.com`)"
       - "traefik.http.routers.scram-logistica-mobile-http.entrypoints=web"
