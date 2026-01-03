@@ -12,11 +12,9 @@ import {
   Stack,
   Card,
   CardContent,
-  CardActionArea,
   Avatar,
   Button,
   Chip,
-  CircularProgress,
 } from '@mui/material';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import PhoneIcon from '@mui/icons-material/Phone';
