@@ -2,14 +2,26 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowLeft,
-  Camera,
-  Pen,
-  CheckCircle,
-  MapPin,
-  User,
-  XCircle,
-} from 'lucide-react';
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Paper,
+  Stack,
+  Button,
+  Tab,
+  Tabs,
+  Alert,
+  CircularProgress,
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import DrawIcon from '@mui/icons-material/Draw';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import PersonIcon from '@mui/icons-material/Person';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 import {
   db,
@@ -178,102 +190,132 @@ export default function DeliveryPage() {
 
   if (!order) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <p className="text-gray-500">Cargando...</p>
-      </div>
+      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header */}
-      <header className="bg-white px-4 py-3 shadow-sm safe-area-top">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/route')}
-            className="p-2 -ml-2 rounded-lg active:bg-gray-100"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Confirmar Entrega</h1>
-            <p className="text-sm text-gray-500">{order.bindId}</p>
-          </div>
-        </div>
-      </header>
+      <AppBar position="static" color="default" elevation={1}>
+        <Toolbar>
+          <IconButton edge="start" onClick={() => navigate('/route')} sx={{ mr: 1 }}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              Confirmar Entrega
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {order.bindId}
+            </Typography>
+          </Box>
+        </Toolbar>
+      </AppBar>
 
       {/* Order Info */}
-      <div className="bg-white px-4 py-4 border-b border-gray-100">
-        <div className="flex items-center gap-3 mb-3">
-          <User className="w-5 h-5 text-gray-400" />
-          <span className="font-medium">{order.clientName}</span>
-        </div>
-        <div className="flex items-start gap-3 text-sm text-gray-600">
-          <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-          <div>
-            <p>
-              {order.addressRaw.street} {order.addressRaw.number}
-            </p>
-            <p>
-              {order.addressRaw.neighborhood}, {order.addressRaw.city}
-            </p>
-          </div>
-        </div>
-      </div>
+      <Paper sx={{ mx: 0, borderRadius: 0 }} elevation={0}>
+        <Box sx={{ px: 2, py: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" mb={1.5}>
+            <PersonIcon color="action" />
+            <Typography variant="subtitle1" fontWeight={500}>
+              {order.clientName}
+            </Typography>
+          </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="flex-start">
+            <LocationOnIcon color="action" sx={{ mt: 0.3 }} />
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {order.addressRaw.street} {order.addressRaw.number}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {order.addressRaw.neighborhood}, {order.addressRaw.city}
+              </Typography>
+            </Box>
+          </Stack>
+        </Box>
+      </Paper>
 
       {/* Evidence Type Tabs */}
-      <div className="flex bg-white border-b border-gray-100">
-        <button
-          onClick={() => setEvidenceType('PHOTO')}
-          className={`flex-1 py-3 text-center font-medium transition-colors ${
-            evidenceType === 'PHOTO'
-              ? 'text-primary-600 border-b-2 border-primary-500'
-              : 'text-gray-500'
-          }`}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
+        <Tabs
+          value={evidenceType}
+          onChange={(_, v) => setEvidenceType(v)}
+          variant="fullWidth"
         >
-          <Camera className="w-5 h-5 mx-auto mb-1" />
-          Foto
-        </button>
-        <button
-          onClick={() => setEvidenceType('SIGNATURE')}
-          className={`flex-1 py-3 text-center font-medium transition-colors ${
-            evidenceType === 'SIGNATURE'
-              ? 'text-primary-600 border-b-2 border-primary-500'
-              : 'text-gray-500'
-          }`}
-        >
-          <Pen className="w-5 h-5 mx-auto mb-1" />
-          Firma
-        </button>
-      </div>
+          <Tab
+            value="PHOTO"
+            icon={<CameraAltIcon />}
+            label="Foto"
+            iconPosition="top"
+          />
+          <Tab
+            value="SIGNATURE"
+            icon={<DrawIcon />}
+            label="Firma"
+            iconPosition="top"
+          />
+        </Tabs>
+      </Box>
 
       {/* Evidence Capture Area */}
-      <div className="flex-1 p-4">
+      <Box sx={{ flex: 1, p: 2, display: 'flex', flexDirection: 'column' }}>
         {evidenceType === 'PHOTO' ? (
-          <div className="h-full">
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {photoDataUrl ? (
-              <div className="relative h-full">
-                <img
+              <Box sx={{ position: 'relative', flex: 1 }}>
+                <Box
+                  component="img"
                   src={photoDataUrl}
                   alt="Evidencia"
-                  className="w-full h-full object-contain rounded-xl"
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    borderRadius: 3,
+                  }}
                 />
-                <button
+                <IconButton
                   onClick={() => setPhotoDataUrl(null)}
-                  className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                    bgcolor: 'error.main',
+                    color: 'white',
+                    '&:hover': { bgcolor: 'error.dark' },
+                  }}
                 >
-                  <XCircle className="w-5 h-5" />
-                </button>
-              </div>
+                  <CancelIcon />
+                </IconButton>
+              </Box>
             ) : (
-              <button
+              <Button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full h-full min-h-[300px] border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-500 active:bg-gray-50"
+                sx={{
+                  flex: 1,
+                  minHeight: 300,
+                  border: 2,
+                  borderStyle: 'dashed',
+                  borderColor: 'divider',
+                  borderRadius: 3,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                }}
               >
-                <Camera className="w-16 h-16 mb-4" />
-                <p className="font-medium">Tomar Foto</p>
-                <p className="text-sm">del paquete en el domicilio</p>
-              </button>
+                <CameraAltIcon sx={{ fontSize: 64, mb: 2, color: 'text.disabled' }} />
+                <Typography variant="subtitle1" fontWeight={500}>
+                  Tomar Foto
+                </Typography>
+                <Typography variant="body2" color="text.disabled">
+                  del paquete en el domicilio
+                </Typography>
+              </Button>
             )}
             <input
               ref={fileInputRef}
@@ -281,15 +323,31 @@ export default function DeliveryPage() {
               accept="image/*"
               capture="environment"
               onChange={handlePhotoCapture}
-              className="hidden"
+              style={{ display: 'none' }}
             />
-          </div>
+          </Box>
         ) : (
-          <div className="h-full">
-            <div className="relative h-full min-h-[300px] bg-white rounded-xl border-2 border-gray-300">
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box
+              sx={{
+                position: 'relative',
+                flex: 1,
+                minHeight: 300,
+                bgcolor: 'background.paper',
+                borderRadius: 3,
+                border: 2,
+                borderColor: 'divider',
+                overflow: 'hidden',
+              }}
+            >
               <canvas
                 ref={canvasRef}
-                className="w-full h-full touch-none"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  touchAction: 'none',
+                  display: 'block',
+                }}
                 onTouchStart={startDrawing}
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
@@ -299,47 +357,72 @@ export default function DeliveryPage() {
                 onMouseLeave={stopDrawing}
               />
               {!signatureDataUrl && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-gray-400">Firme aqui</p>
-                </div>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <Typography color="text.disabled">Firme aqui</Typography>
+                </Box>
               )}
               {signatureDataUrl && (
-                <button
+                <Button
+                  size="small"
                   onClick={clearSignature}
-                  className="absolute top-2 right-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm"
+                  sx={{
+                    position: 'absolute',
+                    top: 8,
+                    right: 8,
+                  }}
                 >
                   Limpiar
-                </button>
+                </Button>
               )}
-            </div>
-          </div>
+            </Box>
+          </Box>
         )}
-      </div>
+      </Box>
 
       {/* Error Message */}
       {error && (
-        <div className="mx-4 mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-          {error}
-        </div>
+        <Box sx={{ px: 2, pb: 2 }}>
+          <Alert severity="error">{error}</Alert>
+        </Box>
       )}
 
       {/* Submit Button */}
-      <div className="p-4 bg-white safe-area-bottom">
-        <button
-          onClick={handleSubmit}
+      <Paper
+        sx={{
+          p: 2,
+          borderRadius: 0,
+          pb: 'calc(16px + var(--safe-area-inset-bottom, 0px))',
+        }}
+        elevation={2}
+      >
+        <Button
+          variant="contained"
+          color="success"
+          size="large"
+          fullWidth
           disabled={isSubmitting}
-          className="w-full btn btn-success flex items-center justify-center gap-2"
+          onClick={handleSubmit}
+          startIcon={
+            isSubmitting ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              <CheckCircleIcon />
+            )
+          }
+          sx={{ py: 1.5 }}
         >
-          {isSubmitting ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <CheckCircle className="w-5 h-5" />
-              Confirmar Entrega
-            </>
-          )}
-        </button>
-      </div>
-    </div>
+          {isSubmitting ? 'Guardando...' : 'Confirmar Entrega'}
+        </Button>
+      </Paper>
+    </Box>
   );
 }

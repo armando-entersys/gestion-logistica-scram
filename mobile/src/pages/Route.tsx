@@ -3,15 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import axios from 'axios';
 import {
-  MapPin,
-  Phone,
-  Navigation,
-  Clock,
-  Package,
-  RefreshCw,
-  LogOut,
-  CheckCircle,
-} from 'lucide-react';
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Paper,
+  Stack,
+  Card,
+  CardContent,
+  CardActionArea,
+  Avatar,
+  Button,
+  Chip,
+  CircularProgress,
+} from '@mui/material';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import PhoneIcon from '@mui/icons-material/Phone';
+import NavigationIcon from '@mui/icons-material/Navigation';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import LogoutIcon from '@mui/icons-material/Logout';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import {
   db,
@@ -73,8 +87,6 @@ export default function RoutePage() {
   const openNavigation = (order: LocalOrder) => {
     const address = `${order.addressRaw.street} ${order.addressRaw.number}, ${order.addressRaw.neighborhood}, ${order.addressRaw.city}`;
     const encodedAddress = encodeURIComponent(address);
-
-    // Try Google Maps first, fallback to Apple Maps
     const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`;
     window.open(googleMapsUrl, '_blank');
   };
@@ -83,81 +95,113 @@ export default function RoutePage() {
     window.location.href = `tel:${phone}`;
   };
 
+  const deliveredCount = orders?.filter((o) => o.status === 'DELIVERED').length || 0;
+  const pendingCount = orders?.filter((o) => o.status !== 'DELIVERED').length || 0;
+
   return (
-    <div className="flex-1 flex flex-col bg-gray-50">
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header */}
-      <header className="bg-white px-4 py-3 shadow-sm safe-area-top">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Mi Ruta</h1>
-            <p className="text-sm text-gray-500">
+      <AppBar position="static" color="default" elevation={1}>
+        <Toolbar>
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Mi Ruta
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
               Hola, {session?.firstName || 'Chofer'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className="p-2 rounded-lg bg-gray-100 active:bg-gray-200"
-            >
-              <RefreshCw
-                className={`w-5 h-5 text-gray-600 ${isLoading ? 'animate-spin' : ''}`}
-              />
-            </button>
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg bg-gray-100 active:bg-gray-200"
-            >
-              <LogOut className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
-        </div>
-      </header>
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <IconButton onClick={handleRefresh} disabled={isLoading}>
+              <RefreshIcon sx={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
+            </IconButton>
+            <IconButton onClick={handleLogout}>
+              <LogoutIcon />
+            </IconButton>
+          </Stack>
+        </Toolbar>
+      </AppBar>
 
       {/* Stats Bar */}
-      <div className="bg-primary-500 px-4 py-3 flex items-center justify-around text-white">
-        <div className="text-center">
-          <p className="text-2xl font-bold">{orders?.length || 0}</p>
-          <p className="text-xs opacity-80">Paradas</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold">
-            {orders?.filter((o) => o.status === 'DELIVERED').length || 0}
-          </p>
-          <p className="text-xs opacity-80">Entregados</p>
-        </div>
-        <div className="text-center">
-          <p className="text-2xl font-bold">
-            {orders?.filter((o) => o.status !== 'DELIVERED').length || 0}
-          </p>
-          <p className="text-xs opacity-80">Pendientes</p>
-        </div>
-      </div>
+      <Paper
+        sx={{
+          py: 2,
+          px: 3,
+          bgcolor: 'primary.main',
+          borderRadius: 0,
+          display: 'flex',
+          justifyContent: 'space-around',
+        }}
+        elevation={0}
+      >
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="h4" fontWeight={700} color="white">
+            {orders?.length || 0}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Paradas
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="h4" fontWeight={700} color="white">
+            {deliveredCount}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Entregados
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: 'center' }}>
+          <Typography variant="h4" fontWeight={700} color="white">
+            {pendingCount}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Pendientes
+          </Typography>
+        </Box>
+      </Paper>
 
       {/* Orders List */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 safe-area-bottom">
+      <Box
+        sx={{
+          flex: 1,
+          overflow: 'auto',
+          p: 2,
+          pb: 'calc(16px + var(--safe-area-inset-bottom, 0px))',
+        }}
+      >
         {!orders || orders.length === 0 ? (
-          <div className="text-center py-12">
-            <Package className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500 font-medium">No tienes entregas asignadas</p>
-            <p className="text-gray-400 text-sm mt-1">
+          <Box sx={{ textAlign: 'center', py: 8 }}>
+            <LocalShippingIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" color="text.secondary" gutterBottom>
+              No tienes entregas asignadas
+            </Typography>
+            <Typography variant="body2" color="text.disabled">
               Espera a que te asignen una ruta
-            </p>
-          </div>
+            </Typography>
+          </Box>
         ) : (
-          orders.map((order, index) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              position={index + 1}
-              onNavigate={() => openNavigation(order)}
-              onCall={() => order.clientPhone && handleCall(order.clientPhone)}
-              onDeliver={() => navigate(`/delivery/${order.id}`)}
-            />
-          ))
+          <Stack spacing={2}>
+            {orders.map((order, index) => (
+              <OrderCard
+                key={order.id}
+                order={order}
+                position={index + 1}
+                onNavigate={() => openNavigation(order)}
+                onCall={() => order.clientPhone && handleCall(order.clientPhone)}
+                onDeliver={() => navigate(`/delivery/${order.id}`)}
+              />
+            ))}
+          </Stack>
         )}
-      </div>
-    </div>
+      </Box>
+
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </Box>
   );
 }
 
@@ -179,75 +223,88 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver }: OrderCard
     : null;
 
   return (
-    <div
-      className={`card p-4 ${isDelivered ? 'opacity-60' : ''}`}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <span
-            className={`flex items-center justify-center w-8 h-8 rounded-full text-white font-bold text-sm ${
-              isDelivered ? 'bg-green-500' : 'bg-primary-500'
-            }`}
-          >
-            {isDelivered ? <CheckCircle className="w-5 h-5" /> : position}
-          </span>
-          <div>
-            <h3 className="font-semibold text-gray-900">{order.clientName}</h3>
-            <p className="text-sm text-gray-500">{order.bindId}</p>
-          </div>
-        </div>
-        {etaStart && !isDelivered && (
-          <div className="flex items-center gap-1 text-sm text-primary-600">
-            <Clock className="w-4 h-4" />
-            <span>{etaStart}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Address */}
-      <div className="flex items-start gap-2 text-sm text-gray-600 mb-4">
-        <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-        <div>
-          <p>
-            {order.addressRaw.street} {order.addressRaw.number}
-          </p>
-          <p>
-            {order.addressRaw.neighborhood}, {order.addressRaw.city}
-          </p>
-          {order.addressRaw.reference && (
-            <p className="text-gray-400 italic">{order.addressRaw.reference}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Actions */}
-      {!isDelivered && (
-        <div className="flex gap-2">
-          <button
-            onClick={onNavigate}
-            className="flex-1 btn bg-gray-100 text-gray-700 flex items-center justify-center gap-2"
-          >
-            <Navigation className="w-4 h-4" />
-            Navegar
-          </button>
-          {order.clientPhone && (
-            <button
-              onClick={onCall}
-              className="btn bg-gray-100 text-gray-700 px-4"
+    <Card sx={{ opacity: isDelivered ? 0.6 : 1 }}>
+      <CardContent>
+        {/* Header */}
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: isDelivered ? 'success.main' : 'primary.main',
+                fontSize: 14,
+              }}
             >
-              <Phone className="w-4 h-4" />
-            </button>
+              {isDelivered ? <CheckCircleIcon sx={{ fontSize: 20 }} /> : position}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {order.clientName}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {order.bindId}
+              </Typography>
+            </Box>
+          </Stack>
+          {etaStart && !isDelivered && (
+            <Chip
+              size="small"
+              icon={<AccessTimeIcon />}
+              label={etaStart}
+              color="primary"
+              variant="outlined"
+            />
           )}
-          <button
-            onClick={onDeliver}
-            className="flex-1 btn btn-success flex items-center justify-center gap-2"
-          >
-            <CheckCircle className="w-4 h-4" />
-            Entregar
-          </button>
-        </div>
-      )}
-    </div>
+        </Stack>
+
+        {/* Address */}
+        <Stack direction="row" spacing={1} alignItems="flex-start" mb={2}>
+          <LocationOnIcon fontSize="small" color="action" sx={{ mt: 0.3 }} />
+          <Box>
+            <Typography variant="body2" color="text.secondary">
+              {order.addressRaw.street} {order.addressRaw.number}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {order.addressRaw.neighborhood}, {order.addressRaw.city}
+            </Typography>
+            {order.addressRaw.reference && (
+              <Typography variant="caption" color="text.disabled" fontStyle="italic">
+                {order.addressRaw.reference}
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+
+        {/* Actions */}
+        {!isDelivered && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              color="inherit"
+              startIcon={<NavigationIcon />}
+              onClick={onNavigate}
+              sx={{ flex: 1 }}
+            >
+              Navegar
+            </Button>
+            {order.clientPhone && (
+              <IconButton onClick={onCall} sx={{ border: 1, borderColor: 'divider' }}>
+                <PhoneIcon />
+              </IconButton>
+            )}
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckCircleIcon />}
+              onClick={onDeliver}
+              sx={{ flex: 1 }}
+            >
+              Entregar
+            </Button>
+          </Stack>
+        )}
+      </CardContent>
+    </Card>
   );
 }

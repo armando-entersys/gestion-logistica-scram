@@ -3,15 +3,32 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
-import { Truck, Mail, Lock, LogIn } from 'lucide-react';
+import {
+  Box,
+  Container,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  InputAdornment,
+  CircularProgress,
+  Alert,
+  Avatar,
+  useTheme,
+} from '@mui/material';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import EmailIcon from '@mui/icons-material/Email';
+import LockIcon from '@mui/icons-material/Lock';
+import LoginIcon from '@mui/icons-material/Login';
 
 import { authApi } from '@/lib/api';
 
 export default function LoginPage() {
+  const theme = useTheme();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
   const loginMutation = useMutation({
     mutationFn: async () => {
@@ -21,9 +38,7 @@ export default function LoginPage() {
     onSuccess: (data) => {
       localStorage.setItem('token', data.accessToken);
       localStorage.setItem('user', JSON.stringify(data.user));
-      toast.success('Bienvenido a SCRAM');
 
-      // Redirect based on role
       const role = data.user.roleCode;
       if (role === 'ADMIN') {
         router.push('/planning');
@@ -36,88 +51,143 @@ export default function LoginPage() {
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Credenciales invalidas');
+      setError(error.response?.data?.message || 'Credenciales inválidas');
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     loginMutation.mutate();
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-500 to-primary-700 px-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
-            <Truck className="w-8 h-8 text-primary-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-white">SCRAM</h1>
-          <p className="text-primary-100">Sistema de Gestion Logistica</p>
-        </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+        px: 2,
+      }}
+    >
+      <Container maxWidth="xs">
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Avatar
+            sx={{
+              width: 72,
+              height: 72,
+              bgcolor: 'white',
+              mx: 'auto',
+              mb: 2,
+            }}
+          >
+            <LocalShippingIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+          </Avatar>
+          <Typography
+            variant="h3"
+            component="h1"
+            sx={{ fontWeight: 700, color: 'white' }}
+          >
+            SCRAM
+          </Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Sistema de Gestión Logística
+          </Typography>
+        </Box>
 
-        <div className="card p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
-            Iniciar Sesion
-          </h2>
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            borderRadius: 4,
+          }}
+        >
+          <Typography
+            variant="h5"
+            component="h2"
+            sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}
+          >
+            Iniciar Sesión
+          </Typography>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo electronico
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@empresa.com"
-                  className="input pl-11"
-                  required
-                />
-              </div>
-            </div>
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              {error}
+            </Alert>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contrasena
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="********"
-                  className="input pl-11"
-                  required
-                  minLength={6}
-                />
-              </div>
-            </div>
+          <Box component="form" onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Correo electrónico"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@empresa.com"
+              required
+              sx={{ mb: 2.5 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-            <button
+            <TextField
+              fullWidth
+              label="Contraseña"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              inputProps={{ minLength: 6 }}
+              sx={{ mb: 3 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <Button
               type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
               disabled={loginMutation.isPending}
-              className="w-full btn btn-primary py-3 flex items-center justify-center gap-2"
+              startIcon={
+                loginMutation.isPending ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <LoginIcon />
+                )
+              }
+              sx={{ py: 1.5 }}
             >
-              {loginMutation.isPending ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Ingresar
-                </>
-              )}
-            </button>
-          </form>
-        </div>
+              {loginMutation.isPending ? 'Ingresando...' : 'Ingresar'}
+            </Button>
+          </Box>
+        </Paper>
 
-        <p className="text-center mt-6 text-primary-100 text-sm">
-          SCRAM - Despacho y Ultima Milla
-        </p>
-      </div>
-    </main>
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            textAlign: 'center',
+            mt: 3,
+            color: 'rgba(255, 255, 255, 0.7)',
+          }}
+        >
+          SCRAM - Despacho y Última Milla
+        </Typography>
+      </Container>
+    </Box>
   );
 }

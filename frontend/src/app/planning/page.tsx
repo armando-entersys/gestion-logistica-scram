@@ -2,39 +2,71 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'react-hot-toast';
 import {
-  Truck,
-  MapPin,
-  Clock,
-  DollarSign,
-  AlertTriangle,
-  CheckCircle,
-  RefreshCw,
-  Send,
-  User,
-  Package,
-} from 'lucide-react';
+  Box,
+  AppBar,
+  Toolbar,
+  Typography,
+  IconButton,
+  Button,
+  Card,
+  CardContent,
+  CardActionArea,
+  Chip,
+  Checkbox,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  TextField,
+  Divider,
+  Avatar,
+  Stack,
+  Paper,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  CircularProgress,
+  Snackbar,
+  Alert,
+  Fab,
+  Badge,
+} from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import SendIcon from '@mui/icons-material/Send';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import WarningIcon from '@mui/icons-material/Warning';
+import PersonIcon from '@mui/icons-material/Person';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import MapIcon from '@mui/icons-material/Map';
 
 import { useOrdersStore, Order, Driver } from '@/store/orders.store';
 import { ordersApi, usersApi, routesApi } from '@/lib/api';
 
-const priorityConfig = {
-  1: { label: 'Normal', color: 'badge-normal', icon: null },
-  2: { label: 'Alta', color: 'badge-high', icon: DollarSign },
-  3: { label: 'Critica', color: 'badge-critical', icon: AlertTriangle },
+const priorityConfig: Record<number, { label: string; color: 'default' | 'warning' | 'error'; icon?: React.ReactNode }> = {
+  1: { label: 'Normal', color: 'default' },
+  2: { label: 'Alta', color: 'warning', icon: <AttachMoneyIcon fontSize="small" /> },
+  3: { label: 'Crítica', color: 'error', icon: <WarningIcon fontSize="small" /> },
 };
 
-const statusConfig = {
-  DRAFT: { label: 'Borrador', color: 'badge-draft' },
-  READY: { label: 'Listo', color: 'badge-ready' },
-  IN_TRANSIT: { label: 'En Ruta', color: 'badge-transit' },
-  DELIVERED: { label: 'Entregado', color: 'badge-delivered' },
+const statusConfig: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'success' | 'info' }> = {
+  DRAFT: { label: 'Borrador', color: 'default' },
+  READY: { label: 'Listo', color: 'info' },
+  IN_TRANSIT: { label: 'En Ruta', color: 'primary' },
+  DELIVERED: { label: 'Entregado', color: 'success' },
 };
 
 export default function PlanningPage() {
   const queryClient = useQueryClient();
   const [startTime, setStartTime] = useState('09:00');
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
 
   const {
     orders,
@@ -47,7 +79,6 @@ export default function PlanningPage() {
     setSelectedDriver,
   } = useOrdersStore();
 
-  // Fetch orders for planning
   const { data: ordersData, isLoading, refetch } = useQuery({
     queryKey: ['planning-orders'],
     queryFn: async () => {
@@ -56,7 +87,6 @@ export default function PlanningPage() {
     },
   });
 
-  // Fetch drivers
   const { data: drivers } = useQuery({
     queryKey: ['drivers'],
     queryFn: async () => {
@@ -65,7 +95,6 @@ export default function PlanningPage() {
     },
   });
 
-  // Dispatch mutation
   const dispatchMutation = useMutation({
     mutationFn: async () => {
       if (!selectedDriverId || selectedOrderIds.length === 0) {
@@ -74,18 +103,23 @@ export default function PlanningPage() {
       return ordersApi.dispatch(selectedDriverId, selectedOrderIds, startTime);
     },
     onSuccess: (response) => {
-      toast.success(
-        `Ruta despachada: ${response.data.dispatched} pedidos, ${response.data.emailsQueued} emails enviados`
-      );
+      setSnackbar({
+        open: true,
+        message: `Ruta despachada: ${response.data.dispatched} pedidos, ${response.data.emailsQueued} emails enviados`,
+        severity: 'success',
+      });
       clearSelection();
       queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Error al despachar ruta');
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al despachar ruta',
+        severity: 'error',
+      });
     },
   });
 
-  // Update store when data changes
   useEffect(() => {
     if (ordersData) {
       setOrders(ordersData);
@@ -96,176 +130,195 @@ export default function PlanningPage() {
   const canDispatch = selectedDriverId && selectedOrderIds.length > 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Panel de Trafico
-            </h1>
-            <p className="text-sm text-gray-500">
-              Planificacion y despacho de rutas
-            </p>
-          </div>
-          <button
+      <AppBar position="static" color="default" elevation={1}>
+        <Toolbar>
+          <LocalShippingIcon sx={{ mr: 2, color: 'primary.main' }} />
+          <Box sx={{ flexGrow: 1 }}>
+            <Typography variant="h6" component="h1" fontWeight={600}>
+              Panel de Tráfico
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Planificación y despacho de rutas
+            </Typography>
+          </Box>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
             onClick={() => refetch()}
-            className="btn btn-secondary flex items-center gap-2"
           >
-            <RefreshCw className="w-4 h-4" />
             Actualizar
-          </button>
-        </div>
-      </header>
+          </Button>
+        </Toolbar>
+      </AppBar>
 
-      {/* Main Content - 2 Column Layout */}
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Left Column - Order List */}
-        <div className="w-1/2 border-r border-gray-200 overflow-hidden flex flex-col">
-          {/* Filters & Actions */}
-          <div className="p-4 bg-white border-b border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600">
-                  {selectedOrderIds.length} de {orders.length} seleccionados
-                </span>
+      {/* Main Content */}
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left Panel - Order List */}
+        <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider' }}>
+          {/* Filters */}
+          <Paper sx={{ p: 2, borderRadius: 0 }} elevation={0}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+              <Typography variant="body2" color="text.secondary">
+                {selectedOrderIds.length} de {orders.length} seleccionados
+              </Typography>
+              <Stack direction="row" spacing={1}>
                 {selectedOrderIds.length > 0 && (
-                  <button
-                    onClick={clearSelection}
-                    className="text-sm text-primary-600 hover:underline"
-                  >
+                  <Button size="small" onClick={clearSelection}>
                     Limpiar
-                  </button>
+                  </Button>
                 )}
-              </div>
-              <button
-                onClick={() => selectAllOrders(orders.map((o) => o.id))}
-                className="text-sm text-primary-600 hover:underline"
-              >
-                Seleccionar todos
-              </button>
-            </div>
+                <Button size="small" onClick={() => selectAllOrders(orders.map((o) => o.id))}>
+                  Seleccionar todos
+                </Button>
+              </Stack>
+            </Stack>
 
-            {/* Driver Selection */}
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-medium text-gray-700">
-                Chofer:
-              </label>
-              <select
-                value={selectedDriverId || ''}
-                onChange={(e) => setSelectedDriver(e.target.value || null)}
-                className="input flex-1"
-              >
-                <option value="">Seleccionar chofer...</option>
-                {drivers?.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.firstName} {driver.lastName}
-                  </option>
-                ))}
-              </select>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <FormControl size="small" sx={{ minWidth: 200, flex: 1 }}>
+                <InputLabel>Chofer</InputLabel>
+                <Select
+                  value={selectedDriverId || ''}
+                  label="Chofer"
+                  onChange={(e) => setSelectedDriver(e.target.value || null)}
+                >
+                  <MenuItem value="">
+                    <em>Seleccionar chofer...</em>
+                  </MenuItem>
+                  {drivers?.map((driver) => (
+                    <MenuItem key={driver.id} value={driver.id}>
+                      {driver.firstName} {driver.lastName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-              <label className="text-sm font-medium text-gray-700">
-                Hora inicio:
-              </label>
-              <input
+              <TextField
+                size="small"
                 type="time"
+                label="Hora inicio"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                className="input w-32"
+                sx={{ width: 140 }}
+                InputLabelProps={{ shrink: true }}
               />
-            </div>
-          </div>
+            </Stack>
+          </Paper>
+
+          <Divider />
 
           {/* Orders List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
             {isLoading ? (
-              <div className="text-center py-12 text-gray-500">
-                Cargando pedidos...
-              </div>
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
             ) : orders.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                No hay pedidos pendientes de planificacion
-              </div>
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <LocalShippingIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                <Typography color="text.secondary">
+                  No hay pedidos pendientes de planificación
+                </Typography>
+              </Box>
             ) : (
-              orders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  isSelected={selectedOrderIds.includes(order.id)}
-                  onToggle={() => toggleOrderSelection(order.id)}
-                />
-              ))
+              <Stack spacing={2}>
+                {orders.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    isSelected={selectedOrderIds.includes(order.id)}
+                    onToggle={() => toggleOrderSelection(order.id)}
+                  />
+                ))}
+              </Stack>
             )}
-          </div>
+          </Box>
 
           {/* Dispatch Button */}
-          <div className="p-4 bg-white border-t border-gray-200">
-            <button
-              onClick={() => dispatchMutation.mutate()}
+          <Paper sx={{ p: 2, borderRadius: 0 }} elevation={2}>
+            <Button
+              variant="contained"
+              size="large"
+              fullWidth
               disabled={!canDispatch || dispatchMutation.isPending}
-              className="w-full btn btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => dispatchMutation.mutate()}
+              startIcon={dispatchMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+              sx={{ py: 1.5 }}
             >
-              {dispatchMutation.isPending ? (
-                <RefreshCw className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
               Confirmar Despacho ({selectedOrderIds.length} pedidos)
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Paper>
+        </Box>
 
-        {/* Right Column - Map */}
-        <div className="w-1/2 bg-gray-100 flex flex-col">
-          <div className="p-4 bg-white border-b border-gray-200">
-            <h2 className="font-semibold text-gray-900">Mapa de Rutas</h2>
-          </div>
+        {/* Right Panel - Map */}
+        <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column', bgcolor: 'grey.100' }}>
+          <Paper sx={{ p: 2, borderRadius: 0 }} elevation={0}>
+            <Typography variant="h6" fontWeight={600}>
+              Mapa de Rutas
+            </Typography>
+          </Paper>
 
-          {/* Map Placeholder */}
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <MapPin className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-500 text-lg font-medium">
-                Interactive Map
-              </p>
-              <p className="text-gray-400 text-sm mt-2">
+          <Divider />
+
+          <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+            <Box sx={{ textAlign: 'center', maxWidth: 400 }}>
+              <Avatar sx={{ width: 80, height: 80, bgcolor: 'grey.300', mx: 'auto', mb: 2 }}>
+                <MapIcon sx={{ fontSize: 48, color: 'grey.500' }} />
+              </Avatar>
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Mapa Interactivo
+              </Typography>
+              <Typography variant="body2" color="text.disabled" mb={4}>
                 Integrar con Google Maps API
-              </p>
+              </Typography>
 
               {/* Selected Orders Preview */}
               {selectedOrders.length > 0 && (
-                <div className="mt-8 max-w-md mx-auto">
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">
+                <Paper sx={{ p: 2, textAlign: 'left' }}>
+                  <Typography variant="subtitle2" gutterBottom>
                     Ruta planificada ({selectedOrders.length} paradas):
-                  </h3>
-                  <div className="space-y-2">
+                  </Typography>
+                  <List dense>
                     {selectedOrders.map((order, index) => (
-                      <div
-                        key={order.id}
-                        className="flex items-center gap-3 bg-white rounded-lg p-3 shadow-sm"
-                      >
-                        <span className="flex items-center justify-center w-6 h-6 bg-primary-500 text-white rounded-full text-xs font-bold">
-                          {index + 1}
-                        </span>
-                        <div className="text-left">
-                          <p className="text-sm font-medium text-gray-900">
-                            {order.clientName}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {order.addressRaw.neighborhood},{' '}
-                            {order.addressRaw.city}
-                          </p>
-                        </div>
-                      </div>
+                      <ListItem key={order.id} sx={{ px: 0 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ width: 28, height: 28, bgcolor: 'primary.main', fontSize: 14 }}>
+                            {index + 1}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={order.clientName}
+                          secondary={`${order.addressRaw.neighborhood}, ${order.addressRaw.city}`}
+                          primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                      </ListItem>
                     ))}
-                  </div>
-                </div>
+                  </List>
+                </Paper>
               )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Snackbar */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 }
 
@@ -279,63 +332,81 @@ function OrderCard({
   isSelected: boolean;
   onToggle: () => void;
 }) {
-  const priority = priorityConfig[order.priorityLevel];
-  const status = statusConfig[order.status];
-  const PriorityIcon = priority.icon;
+  const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
+  const status = statusConfig[order.status] || statusConfig.DRAFT;
 
   return (
-    <div
-      onClick={onToggle}
-      className={`card p-4 cursor-pointer transition-all ${
-        isSelected
-          ? 'ring-2 ring-primary-500 bg-primary-50'
-          : 'hover:border-gray-300'
-      }`}
+    <Card
+      variant={isSelected ? 'elevation' : 'outlined'}
+      sx={{
+        transition: 'all 0.2s',
+        ...(isSelected && {
+          borderColor: 'primary.main',
+          borderWidth: 2,
+          bgcolor: 'primary.50',
+        }),
+      }}
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={onToggle}
-            onClick={(e) => e.stopPropagation()}
-            className="w-5 h-5 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-          <div>
-            <h3 className="font-semibold text-gray-900">{order.clientName}</h3>
-            <p className="text-sm text-gray-500">{order.bindId}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`badge ${priority.color}`}>
-            {PriorityIcon && <PriorityIcon className="w-3 h-3 mr-1" />}
-            {priority.label}
-          </span>
-          <span className={`badge ${status.color}`}>{status.label}</span>
-        </div>
-      </div>
+      <CardActionArea onClick={onToggle} sx={{ p: 0 }}>
+        <CardContent>
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Checkbox
+                checked={isSelected}
+                onClick={(e) => e.stopPropagation()}
+                onChange={onToggle}
+                color="primary"
+              />
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  {order.clientName}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {order.bindId}
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack direction="row" spacing={1}>
+              <Chip
+                size="small"
+                label={priority.label}
+                color={priority.color}
+                icon={priority.icon as React.ReactElement}
+              />
+              <Chip
+                size="small"
+                label={status.label}
+                color={status.color}
+                variant="outlined"
+              />
+            </Stack>
+          </Stack>
 
-      <div className="flex items-center gap-4 text-sm text-gray-600">
-        <div className="flex items-center gap-1">
-          <MapPin className="w-4 h-4" />
-          <span>
-            {order.addressRaw.neighborhood}, {order.addressRaw.city}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <DollarSign className="w-4 h-4" />
-          <span>${order.totalAmount.toLocaleString()}</span>
-        </div>
-      </div>
+          <Stack direction="row" spacing={3}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <LocationOnIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary">
+                {order.addressRaw.neighborhood}, {order.addressRaw.city}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <AttachMoneyIcon fontSize="small" color="action" />
+              <Typography variant="body2" color="text.secondary">
+                ${order.totalAmount.toLocaleString()}
+              </Typography>
+            </Stack>
+          </Stack>
 
-      {order.assignedDriver && (
-        <div className="mt-2 flex items-center gap-1 text-sm text-primary-600">
-          <User className="w-4 h-4" />
-          <span>
-            {order.assignedDriver.firstName} {order.assignedDriver.lastName}
-          </span>
-        </div>
-      )}
-    </div>
+          {order.assignedDriver && (
+            <Stack direction="row" spacing={0.5} alignItems="center" mt={1}>
+              <PersonIcon fontSize="small" color="primary" />
+              <Typography variant="body2" color="primary">
+                {order.assignedDriver.firstName} {order.assignedDriver.lastName}
+              </Typography>
+            </Stack>
+          )}
+        </CardContent>
+      </CardActionArea>
+    </Card>
   );
 }

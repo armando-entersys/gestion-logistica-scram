@@ -1,5 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Box, Alert, LinearProgress, Typography } from '@mui/material';
+import WifiOffIcon from '@mui/icons-material/WifiOff';
+import SyncIcon from '@mui/icons-material/Sync';
+
 import { db } from '@/lib/db';
 import useSync from '@/hooks/useSync';
 
@@ -14,24 +18,30 @@ function App() {
   const isAuthenticated = !!session?.token;
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Offline/Sync Banner */}
       {(!isOnline || pendingCount > 0) && (
-        <div
-          className={`px-4 py-2 text-center text-sm font-medium ${
-            !isOnline
-              ? 'bg-orange-500 text-white'
-              : 'bg-blue-500 text-white'
-          }`}
+        <Alert
+          severity={!isOnline ? 'warning' : 'info'}
+          icon={!isOnline ? <WifiOffIcon fontSize="small" /> : <SyncIcon fontSize="small" />}
+          sx={{
+            borderRadius: 0,
+            py: 0.5,
+            '& .MuiAlert-message': {
+              width: '100%',
+              textAlign: 'center',
+            },
+          }}
         >
-          {!isOnline ? (
-            'Sin conexion - Trabajando offline'
-          ) : isSyncing ? (
-            'Sincronizando...'
-          ) : (
-            `${pendingCount} cambios pendientes de sincronizar`
-          )}
-        </div>
+          <Typography variant="body2" fontWeight={500}>
+            {!isOnline
+              ? 'Sin conexion - Trabajando offline'
+              : isSyncing
+                ? 'Sincronizando...'
+                : `${pendingCount} cambios pendientes de sincronizar`}
+          </Typography>
+          {isSyncing && <LinearProgress sx={{ mt: 0.5, mx: -2 }} />}
+        </Alert>
       )}
 
       {/* Routes */}
@@ -50,7 +60,7 @@ function App() {
         />
         <Route path="*" element={<Navigate to={isAuthenticated ? '/route' : '/login'} />} />
       </Routes>
-    </div>
+    </Box>
   );
 }
 

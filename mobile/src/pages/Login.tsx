@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Truck, Mail, Lock, LogIn } from 'lucide-react';
+import {
+  Box,
+  Container,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  InputAdornment,
+  CircularProgress,
+  Alert,
+  Avatar,
+  useTheme,
+} from '@mui/material';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import EmailIcon from '@mui/icons-material/Email';
+import LockIcon from '@mui/icons-material/Lock';
+import LoginIcon from '@mui/icons-material/Login';
+
 import { saveSession } from '@/lib/db';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 export default function LoginPage() {
+  const theme = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,79 +70,121 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex-1 flex items-center justify-center px-6 bg-gradient-to-b from-primary-500 to-primary-700">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full mb-4">
-            <Truck className="w-10 h-10 text-primary-500" />
-          </div>
-          <h1 className="text-3xl font-bold text-white">SCRAM</h1>
-          <p className="text-primary-100">App de Chofer</p>
-        </div>
+    <Box
+      sx={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        px: 3,
+        py: 4,
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+      }}
+    >
+      <Container maxWidth="xs" disableGutters>
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
+          <Avatar
+            sx={{
+              width: 80,
+              height: 80,
+              bgcolor: 'white',
+              mx: 'auto',
+              mb: 2,
+            }}
+          >
+            <LocalShippingIcon sx={{ fontSize: 44, color: 'primary.main' }} />
+          </Avatar>
+          <Typography
+            variant="h3"
+            component="h1"
+            sx={{ fontWeight: 700, color: 'white' }}
+          >
+            SCRAM
+          </Typography>
+          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            App de Chofer
+          </Typography>
+        </Box>
 
-        <div className="card p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 text-center">
+        <Paper
+          elevation={3}
+          sx={{
+            p: 4,
+            borderRadius: 4,
+          }}
+        >
+          <Typography
+            variant="h5"
+            component="h2"
+            sx={{ fontWeight: 600, mb: 3, textAlign: 'center' }}
+          >
             Iniciar Sesion
-          </h2>
+          </Typography>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+            <Alert severity="error" sx={{ mb: 3 }}>
               {error}
-            </div>
+            </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@empresa.com"
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                  required
-                />
-              </div>
-            </div>
+          <Box component="form" onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Correo"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@empresa.com"
+              required
+              sx={{ mb: 2.5 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contrasena
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="********"
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-                  required
-                />
-              </div>
-            </div>
+            <TextField
+              fullWidth
+              label="Contrasena"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="********"
+              required
+              inputProps={{ minLength: 6 }}
+              sx={{ mb: 3 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
 
-            <button
+            <Button
               type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
               disabled={isLoading}
-              className="w-full btn btn-primary flex items-center justify-center gap-2"
+              startIcon={
+                isLoading ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <LoginIcon />
+                )
+              }
+              sx={{ py: 1.5 }}
             >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <LogIn className="w-5 h-5" />
-                  Ingresar
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-      </div>
-    </main>
+              {isLoading ? 'Ingresando...' : 'Ingresar'}
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 }

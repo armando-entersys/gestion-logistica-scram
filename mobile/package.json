@@ -17,7 +17,15 @@
     "react-router-dom": "^6.21.2",
     "axios": "^1.6.5",
     "date-fns": "^3.2.0",
-    "lucide-react": "^0.312.0"
+    "lucide-react": "^0.312.0",
+    "@mui/material": "^5.15.6",
+    "@mui/icons-material": "^5.15.6",
+    "@emotion/react": "^11.11.3",
+    "@emotion/styled": "^11.11.0",
+    "@fontsource/roboto": "^5.0.8"
+  },
+  "resolutions": {
+    "@emotion/react": "^11.11.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",
