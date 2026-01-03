@@ -126,38 +126,6 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
     },
     typography: {
       fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-      // MD3 Typography Scale
-      displayLarge: {
-        fontSize: '57px',
-        fontWeight: 400,
-        lineHeight: 1.12,
-        letterSpacing: '-0.25px',
-      },
-      displayMedium: {
-        fontSize: '45px',
-        fontWeight: 400,
-        lineHeight: 1.16,
-      },
-      displaySmall: {
-        fontSize: '36px',
-        fontWeight: 400,
-        lineHeight: 1.22,
-      },
-      headlineLarge: {
-        fontSize: '32px',
-        fontWeight: 400,
-        lineHeight: 1.25,
-      },
-      headlineMedium: {
-        fontSize: '28px',
-        fontWeight: 400,
-        lineHeight: 1.29,
-      },
-      headlineSmall: {
-        fontSize: '24px',
-        fontWeight: 400,
-        lineHeight: 1.33,
-      },
       h1: {
         fontSize: '32px',
         fontWeight: 500,
