@@ -9,6 +9,8 @@ async function bootstrap() {
   // CORS Configuration
   app.enableCors({
     origin: [
+      'https://gestion-logistica.scram2k.com',
+      'https://app-gestion-logistica.scram2k.com',
       'https://scram.entersys.mx',
       'https://app-scram.entersys.mx',
       'http://localhost:3001',
