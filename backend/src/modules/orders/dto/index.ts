@@ -159,10 +159,10 @@ export class SubmitCsatDto {
 }
 
 export class OrderFilterDto {
-  @ApiPropertyOptional({ enum: OrderStatus })
+  @ApiPropertyOptional({ description: 'Status filter (single or comma-separated)', example: 'DRAFT,READY' })
   @IsOptional()
-  @IsEnum(OrderStatus)
-  status?: OrderStatus;
+  @IsString()
+  status?: string;
 
   @ApiPropertyOptional({ enum: PriorityLevel })
   @IsOptional()

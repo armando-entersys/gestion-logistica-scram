@@ -394,7 +394,12 @@ export class OrdersService {
     const queryBuilder = this.orderRepository.createQueryBuilder('order');
 
     if (filters.status) {
-      queryBuilder.andWhere('order.status = :status', { status: filters.status });
+      const statuses = filters.status.split(',').map(s => s.trim());
+      if (statuses.length === 1) {
+        queryBuilder.andWhere('order.status = :status', { status: statuses[0] });
+      } else {
+        queryBuilder.andWhere('order.status IN (:...statuses)', { statuses });
+      }
     }
 
     if (filters.priorityLevel) {
