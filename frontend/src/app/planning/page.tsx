@@ -42,9 +42,11 @@ import PersonIcon from '@mui/icons-material/Person';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MapIcon from '@mui/icons-material/Map';
+import SyncIcon from '@mui/icons-material/Sync';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 
 import { useOrdersStore, Order, Driver } from '@/store/orders.store';
-import { ordersApi, usersApi, routesApi } from '@/lib/api';
+import { ordersApi, usersApi, routesApi, syncApi } from '@/lib/api';
 
 const priorityConfig: Record<number, { label: string; color: 'default' | 'warning' | 'error'; icon?: React.ReactNode }> = {
   1: { label: 'Normal', color: 'default' },
@@ -120,6 +122,28 @@ export default function PlanningPage() {
     },
   });
 
+  const syncBindMutation = useMutation({
+    mutationFn: async () => {
+      return syncApi.syncBind();
+    },
+    onSuccess: (response) => {
+      const data = response.data;
+      setSnackbar({
+        open: true,
+        message: `Sincronización completada: ${data.created || 0} nuevos, ${data.updated || 0} actualizados`,
+        severity: 'success',
+      });
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al sincronizar con Bind ERP',
+        severity: 'error',
+      });
+    },
+  });
+
   useEffect(() => {
     if (ordersData) {
       setOrders(ordersData);
@@ -143,13 +167,24 @@ export default function PlanningPage() {
               Planificación y despacho de rutas
             </Typography>
           </Box>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => refetch()}
-          >
-            Actualizar
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={syncBindMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+              onClick={() => syncBindMutation.mutate()}
+              disabled={syncBindMutation.isPending}
+            >
+              Sincronizar Bind
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => refetch()}
+            >
+              Actualizar
+            </Button>
+          </Stack>
         </Toolbar>
       </AppBar>
 
