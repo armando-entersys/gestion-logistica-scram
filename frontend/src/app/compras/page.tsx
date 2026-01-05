@@ -73,7 +73,7 @@ export default function ComprasPage() {
     queryKey: ['compras-orders'],
     queryFn: async () => {
       const response = await ordersApi.getAll({ status: 'DRAFT,READY' });
-      return response.data;
+      return response.data.data || response.data;
     },
   });
 

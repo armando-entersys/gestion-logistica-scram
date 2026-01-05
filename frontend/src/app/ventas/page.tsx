@@ -71,7 +71,7 @@ export default function VentasPage() {
     queryKey: ['ventas-orders', search],
     queryFn: async () => {
       const response = await ordersApi.getAll({ search });
-      return response.data;
+      return response.data.data || response.data;
     },
   });
 
