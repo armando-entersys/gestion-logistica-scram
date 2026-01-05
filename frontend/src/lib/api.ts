@@ -72,6 +72,9 @@ export const ordersApi = {
 
   submitCsat: (hash: string, score: number, feedback?: string) =>
     api.post(`/orders/track/${hash}/csat`, { score, feedback }),
+
+  release: (orderIds: string[]) =>
+    api.post('/orders/release', { orderIds }),
 };
 
 // Users API
