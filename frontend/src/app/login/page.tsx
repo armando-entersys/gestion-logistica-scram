@@ -42,10 +42,12 @@ export default function LoginPage() {
       const role = data.user.roleCode;
       if (role === 'ADMIN') {
         router.push('/planning');
+      } else if (role === 'PURCHASING') {
+        router.push('/compras');
       } else if (role === 'DRIVER') {
         router.push('/driver');
       } else if (role === 'SALES') {
-        router.push('/sales');
+        router.push('/ventas');
       } else {
         router.push('/dashboard');
       }

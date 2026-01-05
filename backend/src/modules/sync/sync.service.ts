@@ -14,7 +14,8 @@ export class SyncService {
     private readonly ordersService: OrdersService,
     private readonly configService: ConfigService,
   ) {
-    this.timeout = this.configService.get('bind.timeout') || 30000;
+    // Timeout de 2 minutos para sincronización completa
+    this.timeout = this.configService.get('bind.timeout') || 120000;
   }
 
   /**

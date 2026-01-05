@@ -140,7 +140,7 @@ export class BindAdapter {
 
       for (const invoice of invoices) {
         try {
-          const order = await this.transformInvoice(invoice);
+          const order = this.transformInvoice(invoice);
           orders.push(order);
         } catch (error) {
           this.logger.warn(`Failed to transform invoice ${invoice.ID}: ${error.message}`);
@@ -177,32 +177,9 @@ export class BindAdapter {
   /**
    * Transforma una factura de Bind al formato interno de SCRAM
    * Implementa el Anti-Corruption Layer (ACL) del patrón DDD
+   * Nota: No hacemos llamadas adicionales por cliente para evitar timeouts
    */
-  private async transformInvoice(invoice: BindInvoice): Promise<CreateOrderDto> {
-    // Intentar obtener dirección del cliente
-    let addressParts = {
-      street: '',
-      number: '',
-      neighborhood: '',
-      postalCode: '',
-      city: '',
-      state: '',
-    };
-
-    // Obtener datos del cliente para dirección y teléfono
-    const client = await this.getClientDetails(invoice.ClientID);
-    if (client?.Addresses && client.Addresses.length > 0) {
-      const addr = client.Addresses[0];
-      addressParts = {
-        street: addr.Street || '',
-        number: addr.ExteriorNumber || '',
-        neighborhood: addr.Neighborhood || '',
-        postalCode: addr.ZipCode || '',
-        city: addr.City || '',
-        state: addr.State || '',
-      };
-    }
-
+  private transformInvoice(invoice: BindInvoice): CreateOrderDto {
     // RF-02: Detectar VIP/Urgente en comentarios
     const comments = (invoice.Comments || '').toUpperCase();
     const isVip = comments.includes('VIP') ||
@@ -212,25 +189,68 @@ export class BindAdapter {
     // Generar ID único basado en UUID o número de factura
     const bindId = invoice.UUID || `FAC-${invoice.Serie || ''}${invoice.Number}`;
 
+    // Extraer información de dirección de los comentarios si existe
+    const addressInfo = this.extractAddressFromComments(invoice.Comments || '');
+
     return {
       bindId,
       clientName: this.cleanString(invoice.ClientName),
-      clientEmail: client?.Email || '',
-      clientPhone: client?.Telephones,
+      clientEmail: '',
+      clientPhone: undefined,
       clientRfc: invoice.RFC,
       addressRaw: {
-        street: addressParts.street,
-        number: addressParts.number,
-        neighborhood: addressParts.neighborhood,
-        postalCode: addressParts.postalCode,
-        city: addressParts.city,
-        state: addressParts.state,
+        street: addressInfo.street || 'Por confirmar',
+        number: addressInfo.number || '',
+        neighborhood: addressInfo.neighborhood || '',
+        postalCode: addressInfo.postalCode || '',
+        city: addressInfo.city || 'CDMX',
+        state: addressInfo.state || '',
         reference: invoice.Comments?.substring(0, 200),
       },
       totalAmount: invoice.Total || 0,
       isVip,
       promisedDate: invoice.ExpirationDate ? new Date(invoice.ExpirationDate) : undefined,
     };
+  }
+
+  /**
+   * Intenta extraer información de dirección de los comentarios
+   */
+  private extractAddressFromComments(comments: string): {
+    street: string;
+    number: string;
+    neighborhood: string;
+    postalCode: string;
+    city: string;
+    state: string;
+  } {
+    const result = {
+      street: '',
+      number: '',
+      neighborhood: '',
+      postalCode: '',
+      city: '',
+      state: '',
+    };
+
+    if (!comments) return result;
+
+    // Buscar código postal
+    const cpMatch = comments.match(/(?:CP|C\.P\.?)?\s*(\d{5})/i);
+    if (cpMatch) {
+      result.postalCode = cpMatch[1];
+    }
+
+    // Buscar ciudades comunes
+    const cities = ['CDMX', 'Ciudad de México', 'Guadalajara', 'Monterrey', 'Manzanillo', 'Tuxpan', 'Veracruz'];
+    for (const city of cities) {
+      if (comments.toUpperCase().includes(city.toUpperCase())) {
+        result.city = city;
+        break;
+      }
+    }
+
+    return result;
   }
 
   private cleanString(str: string): string {

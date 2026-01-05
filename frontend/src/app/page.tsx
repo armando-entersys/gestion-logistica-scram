@@ -116,7 +116,7 @@ export default function Home() {
             color: 'rgba(255, 255, 255, 0.7)',
           }}
         >
-          SCRAM 2024 - Todos los derechos reservados
+          SCRAM 2026 - Todos los derechos reservados
         </Typography>
       </Container>
     </Box>

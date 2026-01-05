@@ -44,7 +44,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MapIcon from '@mui/icons-material/Map';
 import SyncIcon from '@mui/icons-material/Sync';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import LogoutIcon from '@mui/icons-material/Logout';
+import PeopleIcon from '@mui/icons-material/People';
 
+import { useRouter } from 'next/navigation';
 import { useOrdersStore, Order, Driver } from '@/store/orders.store';
 import { ordersApi, usersApi, routesApi, syncApi } from '@/lib/api';
 
@@ -62,6 +65,7 @@ const statusConfig: Record<string, { label: string; color: 'default' | 'primary'
 };
 
 export default function PlanningPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [startTime, setStartTime] = useState('09:00');
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
@@ -69,6 +73,12 @@ export default function PlanningPage() {
     message: '',
     severity: 'success',
   });
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    router.push('/login');
+  };
 
   const {
     orders,
@@ -183,6 +193,21 @@ export default function PlanningPage() {
               onClick={() => refetch()}
             >
               Actualizar
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PeopleIcon />}
+              onClick={() => router.push('/usuarios')}
+            >
+              Usuarios
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<LogoutIcon />}
+              onClick={handleLogout}
+            >
+              Salir
             </Button>
           </Stack>
         </Toolbar>
