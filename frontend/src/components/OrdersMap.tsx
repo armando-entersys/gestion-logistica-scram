@@ -32,7 +32,7 @@ const DEFAULT_ZOOM = 12;
 
 // Custom marker icons with optional number
 const createIcon = (color: string, isSelected: boolean, number?: number) => {
-  const size = isSelected ? 40 : 30;
+  const size = isSelected ? 38 : 28;
   const html = `
     <div style="
       background-color: ${color};
@@ -40,8 +40,8 @@ const createIcon = (color: string, isSelected: boolean, number?: number) => {
       height: ${size}px;
       border-radius: 50% 50% 50% 0;
       transform: rotate(-45deg);
-      border: 3px solid ${isSelected ? '#1976d2' : 'white'};
-      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      border: 3px solid ${isSelected ? '#1e40af' : 'white'};
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -49,8 +49,9 @@ const createIcon = (color: string, isSelected: boolean, number?: number) => {
       <span style="
         transform: rotate(45deg);
         color: white;
-        font-weight: bold;
-        font-size: ${isSelected ? '14px' : '12px'};
+        font-weight: 600;
+        font-size: ${isSelected ? '13px' : '11px'};
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
       ">${number !== undefined ? number : ''}</span>
     </div>
   `;
@@ -65,12 +66,12 @@ const createIcon = (color: string, isSelected: boolean, number?: number) => {
 };
 
 const getMarkerColor = (status: string, priorityLevel: number, isSelected: boolean) => {
-  if (isSelected) return '#1976d2'; // Selected - Primary Blue
-  if (priorityLevel === 3) return '#d32f2f'; // Urgente - Red
-  if (status === 'IN_TRANSIT') return '#7b1fa2'; // En Ruta - Purple
-  if (status === 'DELIVERED') return '#2e7d32'; // Entregado - Green
-  if (priorityLevel === 2) return '#ed6c02'; // Alta - Orange
-  return '#0288d1'; // Normal/Ready - Light Blue
+  if (isSelected) return '#1e40af'; // Seleccionado - Dark Blue
+  if (priorityLevel === 3) return '#dc2626'; // Urgente - Red
+  if (status === 'IN_TRANSIT') return '#0d9488'; // En Ruta - Teal
+  if (status === 'DELIVERED') return '#16a34a'; // Entregado - Green
+  if (priorityLevel === 2) return '#ea580c'; // Alta - Orange
+  return '#0284c7'; // Listo/Ready - Info Blue
 };
 
 export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersMapProps) {
@@ -136,9 +137,9 @@ export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersM
     // Draw route polyline if there are 2+ selected orders
     if (routeCoords.length >= 2) {
       polylineRef.current = L.polyline(routeCoords, {
-        color: '#1976d2',
+        color: '#1e40af',
         weight: 4,
-        opacity: 0.7,
+        opacity: 0.8,
         dashArray: '10, 10',
       }).addTo(mapRef.current);
     }
@@ -165,27 +166,34 @@ export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersM
         DELIVERED: 'Entregado',
       };
 
+      const statusColors: Record<string, string> = {
+        DRAFT: '#64748b',
+        READY: '#0284c7',
+        IN_TRANSIT: '#0d9488',
+        DELIVERED: '#16a34a',
+      };
+
       const popupContent = `
-        <div style="min-width: 220px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <strong>${order.clientName}</strong>
-            ${isSelected ? `<span style="background: #1976d2; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;">#${routeNumber}</span>` : ''}
+        <div style="min-width: 200px; font-family: system-ui, sans-serif;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <strong style="color: #0f172a; font-size: 14px;">${order.clientName}</strong>
+            ${isSelected ? `<span style="background: #1e40af; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">#${routeNumber}</span>` : ''}
           </div>
-          <small style="color: #666;">${order.bindId}</small><br/>
+          <div style="color: #64748b; font-size: 12px; font-family: monospace; margin-bottom: 8px;">${order.bindId}</div>
           <span style="
             display: inline-block;
-            margin-top: 4px;
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 4px;
             font-size: 11px;
-            background: ${order.status === 'IN_TRANSIT' ? '#7b1fa2' : order.status === 'DELIVERED' ? '#2e7d32' : '#0288d1'};
+            font-weight: 500;
+            background: ${statusColors[order.status] || '#64748b'};
             color: white;
           ">${statusLabels[order.status] || order.status}</span>
-          <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;"/>
-          <small>
+          <hr style="margin: 10px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+          <div style="color: #64748b; font-size: 12px; line-height: 1.4;">
             ${order.addressRaw?.street || ''} ${order.addressRaw?.number || ''}<br/>
             ${order.addressRaw?.neighborhood || ''}, ${order.addressRaw?.city || ''}
-          </small>
+          </div>
         </div>
       `;
 

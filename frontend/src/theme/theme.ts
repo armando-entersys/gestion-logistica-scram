@@ -2,106 +2,106 @@
 
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 
-// SCRAM Brand Colors from design-tokens-colores-scram.csv
-// Primary: #ff9900 (Orange) - CTAs, active links
-// Secondary: #44ce6f (Green) - Accents, success states
-// Text: #0e314c (Dark blue) - Headers, main text
+// SCRAM Brand Colors - 2026 Professional Palette
+// Refined, softer tones for better readability and modern aesthetics
+// Primary: Teal/Cyan - Professional, trustworthy
+// Secondary: Warm amber - Accent, actions
 // Typography: Cabin (Headers) + Asap (Body)
 
 const scramTokens = {
   light: {
     primary: {
-      main: '#ff9900',      // brand-primary
-      light: '#ffb84d',
-      dark: '#cc7a00',      // brand-primary-hover adjusted
+      main: '#0d9488',      // Refined teal - professional, calming
+      light: '#2dd4bf',
+      dark: '#0f766e',
       contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#44ce6f',      // brand-secondary
-      light: '#76e097',
-      dark: '#2ea855',
+      main: '#f59e0b',      // Warm amber - softer than pure orange
+      light: '#fbbf24',
+      dark: '#d97706',
       contrastText: '#FFFFFF',
     },
     error: {
-      main: '#eb6b3d',      // error-color
-      light: '#ff9a6f',
-      dark: '#c94d22',
+      main: '#dc2626',      // Clear red for errors
+      light: '#f87171',
+      dark: '#b91c1c',
       contrastText: '#FFFFFF',
     },
     success: {
-      main: '#44ce6f',      // Same as secondary (brand-secondary)
-      light: '#76e097',
-      dark: '#2ea855',
+      main: '#16a34a',      // Natural green
+      light: '#4ade80',
+      dark: '#15803d',
       contrastText: '#FFFFFF',
     },
     warning: {
-      main: '#ff9900',      // warning-color (same as primary)
-      light: '#ffb84d',
-      dark: '#cc7a00',
+      main: '#ea580c',      // Distinct warning orange
+      light: '#fb923c',
+      dark: '#c2410c',
       contrastText: '#FFFFFF',
     },
     info: {
-      main: '#4a6f8a',      // neutral-navlink / info-color
-      light: '#7a9db5',
-      dark: '#2d4a5c',
+      main: '#0284c7',      // Professional blue
+      light: '#38bdf8',
+      dark: '#0369a1',
       contrastText: '#FFFFFF',
     },
     background: {
-      default: '#f7fafd',   // neutral-bg-light
+      default: '#f8fafc',   // Very subtle cool gray
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#0e314c',   // neutral-black
-      secondary: '#6084a4', // neutral-paragraph
+      primary: '#0f172a',   // Near black - high contrast
+      secondary: '#64748b', // Balanced gray
     },
-    divider: '#e0e0e0',     // neutral-border-light
+    divider: '#e2e8f0',     // Soft border
   },
   dark: {
     primary: {
-      main: '#ffb84d',
-      light: '#ffd699',
-      dark: '#ff9900',
-      contrastText: '#1a1a1a',
+      main: '#2dd4bf',
+      light: '#5eead4',
+      dark: '#0d9488',
+      contrastText: '#0f172a',
     },
     secondary: {
-      main: '#76e097',
-      light: '#a8f0b8',
-      dark: '#44ce6f',
-      contrastText: '#1a1a1a',
+      main: '#fbbf24',
+      light: '#fcd34d',
+      dark: '#f59e0b',
+      contrastText: '#0f172a',
     },
     error: {
-      main: '#ff9a6f',
-      light: '#ffbda3',
-      dark: '#eb6b3d',
-      contrastText: '#1a1a1a',
+      main: '#f87171',
+      light: '#fca5a5',
+      dark: '#dc2626',
+      contrastText: '#0f172a',
     },
     success: {
-      main: '#76e097',
-      light: '#a8f0b8',
-      dark: '#44ce6f',
-      contrastText: '#1a1a1a',
+      main: '#4ade80',
+      light: '#86efac',
+      dark: '#16a34a',
+      contrastText: '#0f172a',
     },
     warning: {
-      main: '#ffb84d',
-      light: '#ffd699',
-      dark: '#ff9900',
-      contrastText: '#1a1a1a',
+      main: '#fb923c',
+      light: '#fdba74',
+      dark: '#ea580c',
+      contrastText: '#0f172a',
     },
     info: {
-      main: '#7a9db5',
-      light: '#a5c4d6',
-      dark: '#4a6f8a',
-      contrastText: '#1a1a1a',
+      main: '#38bdf8',
+      light: '#7dd3fc',
+      dark: '#0284c7',
+      contrastText: '#0f172a',
     },
     background: {
-      default: '#0e1f2f',
-      paper: '#152636',
+      default: '#0f172a',
+      paper: '#1e293b',
     },
     text: {
-      primary: '#FFFFFF',
-      secondary: '#b0c4d8',
+      primary: '#f8fafc',
+      secondary: '#94a3b8',
     },
-    divider: '#3a5068',
+    divider: '#334155',
   },
 };
 
@@ -215,10 +215,10 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
     },
     shadows: [
       'none',
-      '0 5px 15px rgba(0,0,0,0.08)',   // shadow-card
-      '0 10px 25px rgba(0,0,0,0.12)',  // shadow-card-hover
-      '0 13px 27px 0 rgba(68, 206, 111, 0.25)', // shadow-primary
-      ...Array(21).fill('0 5px 15px rgba(0,0,0,0.08)'),
+      '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',   // subtle
+      '0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06)',   // card
+      '0 10px 15px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.05)', // elevated
+      ...Array(21).fill('0 4px 6px rgba(0,0,0,0.07)'),
     ] as any,
     components: {
       MuiCssBaseline: {
@@ -248,14 +248,14 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
           contained: {
             boxShadow: 'none',
             '&:hover': {
-              boxShadow: '0 13px 27px 0 rgba(68, 206, 111, 0.25)',
-              transform: 'translateY(-2px)',
+              boxShadow: '0 8px 20px rgba(13, 148, 136, 0.3)',
+              transform: 'translateY(-1px)',
             },
           },
           containedPrimary: {
-            background: `linear-gradient(135deg, #23bdb8 0%, #43e794 100%)`,
+            background: tokens.primary.main,
             '&:hover': {
-              background: `linear-gradient(135deg, #1fa8a3 0%, #38d480 100%)`,
+              background: tokens.primary.dark,
             },
           },
           outlined: {
