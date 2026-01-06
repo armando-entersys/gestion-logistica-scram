@@ -1,8 +1,8 @@
 # Manual de Usuario - Sistema de Gestión Logística SCRAM
 
-**Versión:** 1.0
+**Versión:** 2.0
 **Fecha:** Enero 2026
-**URL Producción:** https://api-gestion-logistica.scram2k.com
+**URL Producción:** https://gestion-logistica.scram2k.com
 
 ---
 
@@ -21,7 +21,8 @@
    - [Rastreo de Pedido](#rastreo-de-pedido)
    - [Encuesta de Satisfacción](#encuesta-de-satisfacción)
 6. [Flujos de Trabajo](#flujos-de-trabajo)
-7. [Preguntas Frecuentes](#preguntas-frecuentes)
+7. [Paqueterías Externas](#paqueterías-externas)
+8. [Preguntas Frecuentes](#preguntas-frecuentes)
 
 ---
 
@@ -33,40 +34,44 @@ El Sistema de Gestión Logística SCRAM es una plataforma integral diseñada par
 
 - Sincronización automática con Bind ERP
 - Gestión de pedidos por estados
-- Asignación y despacho de rutas
+- Asignación y despacho de rutas con choferes internos
+- **Asignación a paqueterías externas** (FedEx, DHL, Estafeta, etc.)
 - Notificaciones automáticas por email
 - Rastreo público para clientes
 - Encuestas de satisfacción (CSAT)
 - Dashboard con KPIs en tiempo real
+- **Vista de mapa interactivo con filtros por estado**
 
 ---
 
 ## Roles y Permisos
 
-El sistema cuenta con 4 roles principales, cada uno con permisos específicos:
+El sistema cuenta con 5 roles principales, cada uno con permisos específicos:
 
 | Rol | Código | Descripción | Acceso Principal |
 |-----|--------|-------------|------------------|
 | **Analista de Compras** | PURCHASING | Sincroniza pedidos desde Bind y los libera a tráfico | `/compras` |
-| **Jefe de Tráfico** | ADMIN | Planifica rutas, asigna choferes y despacha | `/planning` |
+| **Jefe de Tráfico** | ADMIN | Planifica rutas, asigna choferes/paqueterías y despacha | `/planning` |
+| **Chofer** | DRIVER | Visualiza y completa entregas asignadas | `/driver` (PWA móvil) |
 | **Ventas/Comercial** | SALES | Consulta estado de pedidos (solo lectura) | `/ventas` |
 | **Dirección/Gerencia** | DIRECTOR | Visualiza KPIs y métricas globales | `/dashboard` |
 
 ### Matriz de Permisos Detallada
 
-| Función | PURCHASING | ADMIN | SALES | DIRECTOR |
-|---------|:----------:|:-----:|:-----:|:--------:|
-| Sincronizar con Bind | ✅ | ❌ | ❌ | ❌ |
-| Liberar pedidos a tráfico | ✅ | ❌ | ❌ | ❌ |
-| Revertir pedidos a borrador | ✅ | ✅ | ❌ | ❌ |
-| Ver mapa de pedidos | ❌ | ✅ | ❌ | ❌ |
-| Asignar choferes | ❌ | ✅ | ❌ | ❌ |
-| Despachar rutas | ❌ | ✅ | ❌ | ❌ |
-| Gestionar usuarios | ❌ | ✅ | ❌ | ❌ |
-| Consultar pedidos | ✅ | ✅ | ✅ | ✅ |
-| Ver montos | ✅ | ✅ | ✅ | ✅ |
-| Ver KPIs/Dashboard | ❌ | ✅ | ❌ | ✅ |
-| Agregar notas internas | ❌ | ✅ | ✅ | ❌ |
+| Función | PURCHASING | ADMIN | DRIVER | SALES | DIRECTOR |
+|---------|:----------:|:-----:|:------:|:-----:|:--------:|
+| Sincronizar con Bind | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Liberar pedidos a tráfico | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Revertir pedidos a borrador | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Ver mapa de pedidos | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Asignar choferes | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **Asignar paqueterías externas** | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Despachar rutas | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Gestionar usuarios | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Consultar pedidos | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Ver montos | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Ver KPIs/Dashboard | ❌ | ✅ | ❌ | ❌ | ✅ |
+| Completar entregas | ❌ | ❌ | ✅ | ❌ | ❌ |
 
 ---
 
@@ -74,25 +79,24 @@ El sistema cuenta con 4 roles principales, cada uno con permisos específicos:
 
 ### Pantalla de Login
 
-**URL:** `https://api-gestion-logistica.scram2k.com/login`
-
-![Login](./docs/login.png)
+**URL:** `https://gestion-logistica.scram2k.com/login`
 
 #### Campos Requeridos
 
 | Campo | Descripción | Ejemplo |
 |-------|-------------|---------|
-| **Email** | Correo electrónico registrado | usuario@scram.com |
-| **Contraseña** | Contraseña de acceso | ******** |
+| **Email** | Correo electrónico registrado | usuario@scram2k.com |
+| **Contraseña** | Contraseña de acceso (mín. 6 caracteres) | ******** |
 
 #### Proceso de Ingreso
 
 1. Ingresa tu correo electrónico
 2. Ingresa tu contraseña
-3. Haz clic en **"Iniciar Sesión"**
+3. Haz clic en **"Ingresar"**
 4. El sistema te redirigirá automáticamente a tu panel según tu rol:
    - PURCHASING → `/compras`
    - ADMIN → `/planning`
+   - DRIVER → `/driver`
    - SALES → `/ventas`
    - DIRECTOR → `/dashboard`
 
@@ -120,7 +124,7 @@ Esta pantalla es el punto de entrada de los pedidos al sistema logístico. Aquí
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Logo] Panel de Compras          [Sincronizar Bind] [Salir] │
+│ [Logo SCRAM] Panel de Compras      [Sincronizar] [Salir]    │
 ├─────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐    ┌─────────────────┐                 │
 │  │ 25              │    │ 10              │                 │
@@ -144,12 +148,10 @@ Esta pantalla es el punto de entrada de los pedidos al sistema logístico. Aquí
 
 ##### 1. Sincronizar con Bind ERP
 
-**Botón:** "Sincronizar Bind" (esquina superior derecha)
-
-**Descripción:** Obtiene los pedidos pendientes desde el ERP Bind y los importa al sistema.
+**Botón:** "Sincronizar" (esquina superior derecha)
 
 **Proceso:**
-1. Haz clic en "Sincronizar Bind"
+1. Haz clic en "Sincronizar"
 2. El botón mostrará un indicador de carga
 3. Al completar, verás un mensaje con el resultado:
    - "Sincronización completada: X nuevos, Y actualizados"
@@ -157,7 +159,6 @@ Esta pantalla es el punto de entrada de los pedidos al sistema logístico. Aquí
 **Notas:**
 - Los pedidos nuevos entran con estado **DRAFT** (Borrador)
 - Los pedidos existentes se actualizan con la información más reciente
-- La sincronización puede tomar hasta 2 minutos si hay muchos pedidos
 
 ##### 2. Pestaña "Pendientes"
 
@@ -168,59 +169,32 @@ Muestra los pedidos en estado **DRAFT** que aún no han sido liberados a tráfic
 | Columna | Descripción |
 |---------|-------------|
 | ☐ | Checkbox para seleccionar el pedido |
-| ID Bind | Identificador único del pedido en Bind (ej: FAC-A1234) |
+| ID Bind | Identificador único del pedido en Bind |
 | Cliente | Nombre del cliente |
 | RFC | RFC del cliente |
 | Monto | Valor total del pedido en pesos |
 | Prioridad | Normal / Alta / Urgente |
 | Estado | Borrador / Listo |
 
-**Acciones disponibles:**
-- **Seleccionar pedidos:** Haz clic en la fila o en el checkbox
-- **Liberar a Tráfico:** Selecciona uno o más pedidos y haz clic en "Liberar a Tráfico (N)"
-
 ##### 3. Liberar Pedidos a Tráfico
 
 **Botón:** "Liberar a Tráfico (N)"
 
-**Descripción:** Cambia el estado de los pedidos seleccionados de DRAFT a READY, haciéndolos visibles para el equipo de tráfico.
-
 **Proceso:**
-1. Selecciona los pedidos que deseas liberar (checkbox o clic en fila)
+1. Selecciona los pedidos que deseas liberar
 2. El contador del botón mostrará la cantidad seleccionada
 3. Haz clic en "Liberar a Tráfico"
-4. Los pedidos desaparecerán de esta pestaña y aparecerán en "Liberados"
+4. Los pedidos pasarán de DRAFT a READY
 
 **Importante:** Solo libera pedidos cuya existencia física haya sido verificada.
 
-##### 4. Pestaña "Liberados"
+##### 4. Revertir Pedidos a Borrador
 
-Muestra los pedidos en estado **READY** que ya fueron liberados a tráfico pero aún no han sido despachados.
-
-**Acciones disponibles:**
-- **Revertir a Borrador:** Selecciona pedidos y haz clic en "Revertir a Borrador (N)"
-
-##### 5. Revertir Pedidos a Borrador
-
-**Botón:** "Revertir a Borrador (N)"
-
-**Descripción:** Regresa pedidos de READY a DRAFT. Útil cuando se liberó un pedido por error o se necesita hacer correcciones.
-
-**Proceso:**
-1. Ve a la pestaña "Liberados"
-2. Selecciona los pedidos a revertir
-3. Haz clic en "Revertir a Borrador"
-4. Los pedidos volverán a la pestaña "Pendientes"
+En la pestaña "Liberados", puedes seleccionar pedidos y usar "Revertir a Borrador" para regresarlos de READY a DRAFT.
 
 **Restricciones:**
 - Solo se pueden revertir pedidos en estado READY
-- No se pueden revertir pedidos que ya están EN_TRANSIT o DELIVERED
-
-##### 6. Cerrar Sesión
-
-**Botón:** "Salir"
-
-Cierra la sesión actual y redirige a la pantalla de login.
+- No se pueden revertir pedidos IN_TRANSIT o DELIVERED
 
 ---
 
@@ -229,93 +203,171 @@ Cierra la sesión actual y redirige a la pantalla de login.
 **URL:** `/planning`
 **Rol requerido:** ADMIN
 
-Esta pantalla permite al Jefe de Tráfico visualizar los pedidos en un mapa, asignar choferes y despachar rutas.
+Esta es la pantalla principal para el Jefe de Tráfico. Permite visualizar pedidos en mapa y lista, asignar a choferes internos o paqueterías externas, y despachar rutas.
 
-#### Estructura de la Pantalla
+#### Estructura de la Pantalla (Versión 2.0)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ [Logo] Panel de Tráfico    [Usuarios] [Despachar] [Salir]   │
+│ [Logo] Panel de Tráfico   🔄 👥 🚪  │ 📦12 Listos │ 🚚8 En Ruta │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐ ┌─────────────────┐ ┌────────────────┐ │
-│  │ 35 Listos       │ │ 12 En Ruta      │ │ 8 Entregados   │ │
-│  └─────────────────┘ └─────────────────┘ └────────────────┘ │
-├───────────────────────────────┬─────────────────────────────┤
-│                               │ Lista de Pedidos            │
-│      [MAPA DE PEDIDOS]        │ ┌─────────────────────────┐ │
-│                               │ │ ☐ FAC-1234 - Cliente A  │ │
-│       📍 📍                    │ │ ☐ FAC-1235 - Cliente B  │ │
-│    📍      📍                  │ │ ☑ FAC-1236 - Cliente C  │ │
-│        📍                      │ └─────────────────────────┘ │
-│                               │ Chofer: [Seleccionar ▼]     │
-│                               │ [Asignar Chofer]            │
-└───────────────────────────────┴─────────────────────────────┘
+│ [🔍 Buscar cliente, ID, RFC...]  [Sel. Todos] [Limpiar]     │
+├─────────────────────────────────────────────────────────────┤
+│ [Activos (20)] [Listos (12)] [En Ruta (8)] [Entregados (45)]│
+├────────────────────────────┬────────────────────────────────┤
+│                            │                                │
+│   LISTA DE PEDIDOS         │        MAPA DE PEDIDOS         │
+│                            │                                │
+│ ┌────────────────────────┐ │    📍 📍                       │
+│ │ ☐ Cliente A            │ │       📍   📍                  │
+│ │   FAC-1234 | $5,000    │ │  📍        📍                  │
+│ │   Col. Centro [Listo]  │ │       📍                       │
+│ ├────────────────────────┤ │                                │
+│ │ ☑ Cliente B            │ │                                │
+│ │   FAC-1235 | $8,000    │ │  Leyenda:                      │
+│ │   Col. Norte [Urgente] │ │  🔵 Listo  🟢 En Ruta          │
+│ └────────────────────────┘ │  🔴 Urgente 🔷 Seleccionado    │
+│                            │                                │
+├────────────────────────────┴────────────────────────────────┤
+│ [👤 Chofer (2)] [🏢 Paquetería] [▶️ Despachar (2)]          │
+├─────────────────────────────────────────────────────────────┤
+│                              [📋] [📋🗺️] [🗺️] ← Toggle vista │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### Funcionalidades
+#### Funcionalidades Principales
 
-##### 1. Mapa de Pedidos
+##### 1. Header Compacto con Estadísticas
 
-Visualización geográfica de todos los pedidos con coordenadas.
+El header muestra estadísticas en línea:
+- **📦 Listos:** Pedidos en estado READY
+- **🚚 En Ruta:** Pedidos en estado IN_TRANSIT
+- **✅ Entregados:** Pedidos completados
+- **⚠️ Urgentes:** Pedidos con prioridad crítica (si hay)
 
-**Marcadores:**
-- 🟡 Amarillo: Pedidos READY (listos para asignar)
-- 🔵 Azul: Pedidos IN_TRANSIT (en camino)
-- 🟢 Verde: Pedidos DELIVERED (entregados)
-- 🔴 Rojo: Pedidos con prioridad URGENTE
+**Botones de acción:**
+- 🔄 **Actualizar:** Refresca los datos
+- 👥 **Usuarios:** Accede a gestión de usuarios
+- 🚪 **Salir:** Cierra sesión
+
+##### 2. Barra de Búsqueda y Selección
+
+- **Campo de búsqueda:** Filtra por nombre de cliente, ID de Bind, RFC o nombre de chofer
+- **Seleccionar todos:** Selecciona todos los pedidos "Listos" visibles
+- **Limpiar:** Deselecciona todos los pedidos
+
+##### 3. Pestañas de Filtrado por Estado
+
+| Pestaña | Descripción |
+|---------|-------------|
+| **Activos** | Muestra READY + IN_TRANSIT (vista por defecto) |
+| **Listos** | Solo pedidos READY (pendientes de asignar/despachar) |
+| **En Ruta** | Solo pedidos IN_TRANSIT (ya despachados) |
+| **Entregados** | Solo pedidos DELIVERED (completados) |
+
+##### 4. Lista de Pedidos (Panel Izquierdo)
+
+Cada tarjeta de pedido muestra:
+- **Checkbox:** Para seleccionar el pedido
+- **Nombre del cliente**
+- **ID de Bind** (código de factura)
+- **Ubicación:** Colonia y ciudad
+- **Monto:** Valor del pedido
+- **Estado:** Chip con el estado actual
+- **Urgente:** Badge rojo si es prioridad crítica
+- **Chofer asignado:** Si ya tiene chofer
+- **Paquetería:** Si fue asignado a carrier externo
+
+**Ordenamiento automático:**
+1. Urgentes primero
+2. Listos antes que En Ruta
+3. Entregados al final
+
+##### 5. Mapa de Pedidos (Panel Derecho)
+
+Visualización geográfica de los pedidos con coordenadas.
+
+**Colores de marcadores:**
+
+| Color | Significado |
+|-------|-------------|
+| 🔵 Azul (#0284c7) | Pedido Listo (READY) |
+| 🟢 Teal (#0d9488) | Pedido En Ruta (IN_TRANSIT) |
+| 🔴 Rojo (#dc2626) | Pedido Urgente |
+| 🔷 Azul oscuro (#1e40af) | Pedido Seleccionado |
+| 🟢 Verde (#16a34a) | Pedido Entregado |
 
 **Interacción:**
-- Haz clic en un marcador para ver detalles del pedido
-- Arrastra el mapa para navegar
-- Usa los controles de zoom para acercar/alejar
+- Clic en marcador: Ver popup con detalles
+- Los pedidos seleccionados muestran número de secuencia
+- Línea punteada conecta los pedidos seleccionados (vista de ruta)
 
-##### 2. Lista de Pedidos
+##### 6. Toggle de Vista
 
-Panel lateral con la lista de pedidos filtrable.
+Botones en esquina inferior derecha:
 
-**Filtros disponibles:**
-- Por estado (READY, IN_TRANSIT, DELIVERED)
-- Por prioridad (Normal, Alta, Urgente)
-- Por chofer asignado
-- Búsqueda por cliente o ID
+| Botón | Vista |
+|-------|-------|
+| 📋 | Solo lista (100% ancho) |
+| 📋🗺️ | Split 50/50 (lista + mapa) |
+| 🗺️ | Solo mapa (100% ancho) |
 
-##### 3. Asignar Chofer
+##### 7. Barra de Acciones
 
-**Proceso:**
-1. Selecciona uno o más pedidos de la lista
-2. Selecciona un chofer del dropdown
-3. Haz clic en "Asignar Chofer"
-4. Los pedidos quedarán vinculados al chofer seleccionado
+###### Asignar Chofer
 
-**Validaciones:**
-- Máximo 15 pedidos por chofer (configurable)
-- Si se excede, aparece una advertencia pero permite continuar
-
-##### 4. Despachar Ruta
-
-**Botón:** "Despachar"
-
-**Descripción:** Inicia la ruta del chofer seleccionado, enviando notificaciones ETA a todos los clientes.
+**Botón:** "👤 Chofer (N)"
 
 **Proceso:**
-1. Asegúrate de que el chofer tenga pedidos asignados
+1. Selecciona uno o más pedidos
+2. Haz clic en "Chofer"
+3. En el diálogo, selecciona un chofer del dropdown
+4. Haz clic en "Asignar"
+
+**Resultado:** Los pedidos quedan vinculados al chofer pero siguen en READY.
+
+###### Asignar Paquetería Externa
+
+**Botón:** "🏢 Paquetería"
+
+**Proceso:**
+1. Selecciona uno o más pedidos
+2. Haz clic en "Paquetería"
+3. En el diálogo:
+   - Selecciona la paquetería (FedEx, DHL, Estafeta, etc.)
+   - Si seleccionas "Otra", ingresa el nombre
+   - Opcionalmente, ingresa el número de guía
+4. Haz clic en "Asignar"
+
+**Paqueterías disponibles:**
+- FedEx
+- DHL
+- Estafeta
+- Paquete Express
+- Redpack
+- UPS
+- Otra (personalizada)
+
+###### Despachar Ruta
+
+**Botón:** "▶️ Despachar (N)"
+
+**Proceso:**
+1. Selecciona los pedidos a despachar
 2. Haz clic en "Despachar"
-3. Opcionalmente, configura la hora de inicio
-4. Confirma el despacho
+3. En el diálogo:
+   - Selecciona el chofer
+   - Configura la hora de inicio (default: 09:00)
+   - Revisa la lista de paradas
+4. Haz clic en "Despachar"
 
 **Resultado:**
 - Los pedidos cambian a estado IN_TRANSIT
-- Se calculan las ventanas ETA para cada pedido
+- Se calculan las ventanas ETA
 - Se envían emails automáticos a los clientes con:
   - Hora estimada de llegada
   - Nombre del chofer
   - Link de rastreo
-
-##### 5. Gestión de Usuarios
-
-**Botón:** "Usuarios"
-
-Acceso directo a la pantalla de gestión de usuarios (`/usuarios`).
 
 ---
 
@@ -326,29 +378,9 @@ Acceso directo a la pantalla de gestión de usuarios (`/usuarios`).
 
 Pantalla para administrar los usuarios del sistema.
 
-#### Estructura de la Pantalla
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Logo] Gestión de Usuarios              [+ Nuevo] [Salir]   │
-├─────────────────────────────────────────────────────────────┤
-│ [Buscar usuario...]                                         │
-├─────────────────────────────────────────────────────────────┤
-│ ┌────────┬───────────────┬──────────────┬────────┬────────┐ │
-│ │ Nombre │ Email         │ Rol          │ Estado │Acciones│ │
-│ ├────────┼───────────────┼──────────────┼────────┼────────┤ │
-│ │ Juan   │ juan@scram.com│ Administrador│ Activo │ ✏️ 🗑️  │ │
-│ │ María  │ maria@scram.com│ Compras     │ Activo │ ✏️ 🗑️  │ │
-│ │ Pedro  │ pedro@scram.com│ Chofer      │Inactivo│ ✏️ 🗑️  │ │
-│ └────────┴───────────────┴──────────────┴────────┴────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
 #### Funcionalidades
 
-##### 1. Crear Usuario
-
-**Botón:** "+ Nuevo Usuario"
+##### Crear Usuario
 
 **Campos del formulario:**
 
@@ -356,28 +388,19 @@ Pantalla para administrar los usuarios del sistema.
 |-------|:---------:|-------------|
 | Nombre | ✅ | Nombre del usuario |
 | Apellido | ✅ | Apellido del usuario |
-| Email | ✅ | Correo electrónico (será el usuario de acceso) |
-| Contraseña | ✅ | Mínimo 8 caracteres |
-| Rol | ✅ | ADMIN, PURCHASING, SALES, DRIVER |
+| Email | ✅ | Correo electrónico (usuario de acceso) |
+| Contraseña | ✅ | Mínimo 6 caracteres |
+| Rol | ✅ | ADMIN, PURCHASING, SALES, DRIVER, DIRECTOR |
 | Teléfono | ❌ | Número de contacto |
 
-##### 2. Editar Usuario
+##### Editar Usuario
 
-**Botón:** ✏️ (en la fila del usuario)
+Permite modificar datos excepto el email.
 
-Permite modificar los datos del usuario excepto el email.
-
-##### 3. Activar/Desactivar Usuario
-
-**Botón:** 🗑️ (en la fila del usuario)
+##### Activar/Desactivar Usuario
 
 - Usuarios activos pueden acceder al sistema
 - Usuarios inactivos no pueden iniciar sesión
-- No se eliminan permanentemente (solo se desactivan)
-
-##### 4. Buscar Usuarios
-
-Campo de búsqueda que filtra por nombre, apellido o email.
 
 ---
 
@@ -388,70 +411,21 @@ Campo de búsqueda que filtra por nombre, apellido o email.
 
 Pantalla de solo lectura para que el equipo comercial consulte el estado de los pedidos.
 
-#### Estructura de la Pantalla
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Logo] Portal de Ventas                            [Salir]  │
-├─────────────────────────────────────────────────────────────┤
-│ [🔍 Buscar por cliente, RFC o ID...]                        │
-├────────────────────────────────┬────────────────────────────┤
-│ Lista de Pedidos               │ Detalle del Pedido         │
-│ ┌────────────────────────────┐ │ ┌────────────────────────┐ │
-│ │ FAC-1234                   │ │ │ FAC-1234               │ │
-│ │ Cliente A                  │ │ │ Cliente A              │ │
-│ │ [En Ruta]                  │ │ │ RFC: XAXX010101000     │ │
-│ ├────────────────────────────┤ │ │                        │ │
-│ │ FAC-1235                   │ │ │ Estado:                │ │
-│ │ Cliente B                  │ │ │ ○ Recibido             │ │
-│ │ [Entregado] ✓              │ │ │ ○ Preparación          │ │
-│ └────────────────────────────┘ │ │ ● En Ruta              │ │
-│                                │ │ ○ Entregado            │ │
-│                                │ │                        │ │
-│                                │ │ Chofer: Juan Pérez     │ │
-│                                │ │ ETA: 14:30 - 15:00     │ │
-│                                │ └────────────────────────┘ │
-└────────────────────────────────┴────────────────────────────┘
-```
-
 #### Funcionalidades
 
-##### 1. Búsqueda de Pedidos
+- **Búsqueda:** Por cliente, RFC o ID de Bind
+- **Lista de pedidos:** Con indicador visual de estado
+- **Detalle del pedido:** Timeline de progreso, chofer, ETA, paquetería asignada
+- **Notas internas:** Permite agregar comentarios
 
-Campo de búsqueda para encontrar pedidos por:
-- Nombre de cliente
-- RFC
-- ID de Bind
-
-##### 2. Lista de Pedidos
-
-Muestra todos los pedidos con indicador visual de estado.
-
-**Estados mostrados:**
-- Recibido (DRAFT)
-- Preparación (READY)
-- En Ruta (IN_TRANSIT)
-- Entregado (DELIVERED)
-
-##### 3. Detalle del Pedido
-
-Al seleccionar un pedido, se muestra:
-
-| Información | Descripción |
-|-------------|-------------|
-| ID Bind | Número de factura |
-| Cliente | Nombre del cliente |
-| RFC | RFC del cliente |
-| Dirección | Dirección de entrega |
-| Monto | Valor del pedido |
-| Estado | Timeline visual del progreso |
-| Chofer | Nombre del chofer asignado (si aplica) |
-| ETA | Hora estimada de llegada (si está en ruta) |
-| Entregado | Fecha y hora de entrega (si aplica) |
-
-##### 4. Agregar Nota Interna
-
-Permite agregar comentarios internos al pedido para seguimiento de calidad.
+**Información visible en detalle:**
+- ID Bind y datos del cliente
+- Dirección de entrega
+- Estado con timeline visual
+- Chofer asignado (si aplica)
+- **Paquetería asignada** (si aplica)
+- **Número de guía** (si aplica)
+- ETA o fecha de entrega
 
 ---
 
@@ -462,176 +436,41 @@ Permite agregar comentarios internos al pedido para seguimiento de calidad.
 
 Panel ejecutivo con KPIs y métricas del negocio.
 
-#### Estructura de la Pantalla
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Logo] Dashboard Ejecutivo                         [Salir]  │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐        │
-│  │   150    │ │   92%    │ │   4.5    │ │ $2.5M    │        │
-│  │ Pedidos  │ │ Tasa     │ │ CSAT     │ │ Ingresos │        │
-│  │ Totales  │ │ Entrega  │ │ Promedio │ │ Mes      │        │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘        │
-├─────────────────────────────────────────────────────────────┤
-│  Pedidos por Estado                                         │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Borrador    ████████████████░░░░░░░░░░░░░░░ 45      │    │
-│  │ Listo       ████████████░░░░░░░░░░░░░░░░░░░ 35      │    │
-│  │ En Ruta     ████████░░░░░░░░░░░░░░░░░░░░░░░ 25      │    │
-│  │ Entregado   ███████████████████████████████ 95      │    │
-│  └─────────────────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────────────────┤
-│  Pedidos por Prioridad                                      │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ Normal      ███████████████████████████████ 120     │    │
-│  │ Alta        ████████████░░░░░░░░░░░░░░░░░░░ 25      │    │
-│  │ Urgente     ████░░░░░░░░░░░░░░░░░░░░░░░░░░░ 5       │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
-
 #### Métricas Disponibles
 
-| Métrica | Descripción | Fórmula |
-|---------|-------------|---------|
-| **Total Pedidos** | Cantidad total de pedidos en el sistema | COUNT(*) |
-| **Tasa de Entrega** | Porcentaje de pedidos entregados | DELIVERED / TOTAL × 100 |
-| **CSAT Promedio** | Satisfacción promedio del cliente | AVG(csat_score) |
-| **Ingresos** | Suma de montos de pedidos | SUM(total_amount) |
-
-#### Gráficos
-
-##### Pedidos por Estado
-Muestra la distribución de pedidos según su estado actual:
-- DRAFT (Borrador)
-- READY (Listo)
-- IN_TRANSIT (En Ruta)
-- DELIVERED (Entregado)
-
-##### Pedidos por Prioridad
-Muestra la distribución por nivel de prioridad:
-- Normal
-- Alta
-- Urgente/Crítica
+| Métrica | Descripción |
+|---------|-------------|
+| **Total Pedidos** | Cantidad total en el sistema |
+| **Tasa de Entrega** | Porcentaje de pedidos entregados |
+| **CSAT Promedio** | Satisfacción promedio del cliente |
+| **Por Estado** | Distribución DRAFT/READY/IN_TRANSIT/DELIVERED |
+| **Por Prioridad** | Distribución Normal/Alta/Urgente |
 
 ---
 
 ## Páginas Públicas
-
-Las siguientes páginas son accesibles sin autenticación y están diseñadas para los clientes finales.
-
----
 
 ### Rastreo de Pedido
 
 **URL:** `/track/[hash]`
 **Acceso:** Público (link enviado por email)
 
-Permite al cliente final ver el estado de su pedido en tiempo real.
+Permite al cliente ver el estado de su pedido en tiempo real.
 
-#### Estructura de la Pantalla
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 🚚 Rastreo de Pedido                                        │
-│    SCRAM Logística                                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Estado actual                              [📦]            │
-│  EN CAMINO                                                  │
-│                                                             │
-│  ○ Recibido → ○ Preparación → ● En Camino → ○ Entregado    │
-│                                                             │
-│  ████████████████████████░░░░░░░░░░░░░░░░                   │
-│  Tu pedido está en camino                                   │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ INFORMACIÓN DEL PEDIDO                                      │
-│                                                             │
-│ 📄 Número de Pedido                                         │
-│    FAC-A1234                                                │
-│                                                             │
-│ 📍 Dirección de Entrega                                     │
-│    Av. Principal 123                                        │
-│    Col. Centro, Monterrey                                   │
-│                                                             │
-│ 👤 Chofer Asignado                                          │
-│    Juan Pérez                                               │
-│                                                             │
-│ 🕐 Hora Estimada de Llegada                                 │
-│    14:30 - 15:00                                            │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ ⭐ Califica tu experiencia                                  │
-│    Tu opinión nos ayuda a mejorar                           │
-│    [    Dejar Calificación    ]                             │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### Información Mostrada
-
-| Elemento | Descripción |
-|----------|-------------|
-| **Estado** | Estado actual del pedido con stepper visual |
-| **Número de Pedido** | ID de la factura en Bind |
-| **Dirección** | Dirección de entrega |
-| **Chofer** | Nombre del chofer asignado (si está en ruta) |
-| **ETA** | Ventana de hora estimada de llegada |
-
-#### Estados del Pedido
-
-1. **Recibido** - El pedido fue registrado en el sistema
-2. **Preparación** - El pedido está siendo preparado para envío
-3. **En Camino** - El chofer está en ruta hacia la dirección
-4. **Entregado** - El pedido fue entregado exitosamente
-
-#### Link de Encuesta
-
-Una vez que el pedido es entregado, aparece un botón para dejar calificación que lleva a la encuesta CSAT.
-
----
+**Información mostrada:**
+- Estado actual con stepper visual
+- Número de pedido (ID Bind)
+- Dirección de entrega
+- Chofer asignado (si entrega interna)
+- **Paquetería y número de guía** (si entrega externa)
+- ETA (hora estimada de llegada)
 
 ### Encuesta de Satisfacción
 
 **URL:** `/survey/[hash]`
-**Acceso:** Público (link enviado por email o desde rastreo)
+**Acceso:** Público
 
-Permite al cliente calificar su experiencia de entrega.
-
-#### Estructura de la Pantalla
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ⭐ Califica tu Experiencia                                  │
-│    SCRAM Logística                                          │
-├─────────────────────────────────────────────────────────────┤
-│ PEDIDO #FAC-A1234                                           │
-│ Cliente ABC                                                 │
-│ Entregado el 05/01/2026                                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│        ¿Cómo fue tu experiencia de entrega?                 │
-│                                                             │
-│           😢    😟    😐    🙂    😄                         │
-│                            [●]                              │
-│                                                             │
-│                         Bueno                               │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│ Comentarios adicionales (opcional)                          │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ Cuéntanos más sobre tu experiencia...                   │ │
-│ │                                                         │ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-│ [          Enviar Calificación          ]                   │
-│                                                             │
-│              Volver al rastreo                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-#### Sistema de Calificación
+Sistema de calificación de 1 a 5 estrellas con emojis:
 
 | Emoji | Puntuación | Etiqueta |
 |:-----:|:----------:|----------|
@@ -641,44 +480,36 @@ Permite al cliente calificar su experiencia de entrega.
 | 🙂 | 4 | Bueno |
 | 😄 | 5 | Excelente |
 
-#### Proceso
-
-1. Selecciona una calificación (1-5 estrellas)
-2. Opcionalmente, escribe un comentario
-3. Haz clic en "Enviar Calificación"
-4. Verás un mensaje de agradecimiento
-
-#### Alertas de Detractor
-
-Cuando un cliente califica con 1 o 2 estrellas (detractor), el sistema envía automáticamente una alerta al equipo de calidad para seguimiento.
+Calificaciones de 1-2 generan alertas automáticas al equipo de calidad.
 
 ---
 
 ## Flujos de Trabajo
 
-### Flujo Completo de un Pedido
+### Flujo Principal: Entrega con Chofer Interno
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│    BIND     │────▶│   COMPRAS   │────▶│   TRÁFICO   │────▶│   CHOFER    │
-│    ERP      │     │  Validación │     │ Planificación│     │   Entrega   │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-       │                   │                   │                   │
-       ▼                   ▼                   ▼                   ▼
-   Factura            Pedido en           Pedido en           Pedido
-   creada             DRAFT               READY               DELIVERED
-                                              │
-                                              ▼
-                                         Asignación
-                                         a chofer
-                                              │
-                                              ▼
-                                          Despacho
-                                          de ruta
-                                              │
-                                              ▼
-                                         Email ETA
-                                         al cliente
+BIND ERP → COMPRAS → TRÁFICO → CHOFER → CLIENTE
+   │          │          │         │         │
+   ▼          ▼          ▼         ▼         ▼
+Factura   Validar    Asignar   Entregar   Calificar
+creada    y liberar  y despachar          (CSAT)
+   │          │          │         │
+   ▼          ▼          ▼         ▼
+ DRAFT     READY    IN_TRANSIT  DELIVERED
+```
+
+### Flujo Alternativo: Entrega con Paquetería Externa
+
+```
+BIND ERP → COMPRAS → TRÁFICO → PAQUETERÍA → CLIENTE
+   │          │          │          │           │
+   ▼          ▼          ▼          ▼           ▼
+Factura   Validar    Asignar    Envío      Calificar
+creada    y liberar  carrier    externo    (CSAT)
+   │          │          │          │
+   ▼          ▼          ▼          ▼
+ DRAFT     READY    IN_TRANSIT  DELIVERED
 ```
 
 ### Detalle por Etapa
@@ -688,12 +519,45 @@ Cuando un cliente califica con 1 o 2 estrellas (detractor), el sistema envía au
 | 1 | Sistema | Sincroniza desde Bind | DRAFT |
 | 2 | Compras | Valida existencia física | DRAFT |
 | 3 | Compras | Libera a tráfico | READY |
-| 4 | Tráfico | Asigna chofer | READY |
-| 5 | Tráfico | Despacha ruta | IN_TRANSIT |
+| 4a | Tráfico | Asigna chofer interno | READY |
+| 4b | Tráfico | Asigna paquetería externa | READY → IN_TRANSIT |
+| 5 | Tráfico | Despacha ruta (si chofer interno) | IN_TRANSIT |
 | 6 | Sistema | Envía email ETA | IN_TRANSIT |
-| 7 | Chofer | Entrega pedido | DELIVERED |
+| 7 | Chofer/Paquetería | Entrega pedido | DELIVERED |
 | 8 | Sistema | Envía email + encuesta | DELIVERED |
 | 9 | Cliente | Califica experiencia | DELIVERED |
+
+---
+
+## Paqueterías Externas
+
+### Carriers Soportados
+
+| Carrier | Código | Descripción |
+|---------|--------|-------------|
+| **Interno** | INTERNAL | Entrega con choferes propios (default) |
+| **FedEx** | FEDEX | FedEx Express |
+| **DHL** | DHL | DHL Express |
+| **Estafeta** | ESTAFETA | Estafeta Mexicana |
+| **Paquete Express** | PAQUETE_EXPRESS | Paquete Express |
+| **Redpack** | REDPACK | Redpack |
+| **UPS** | UPS | United Parcel Service |
+| **Otra** | OTHER | Paquetería personalizada |
+
+### Proceso de Asignación
+
+1. Desde `/planning`, selecciona los pedidos
+2. Haz clic en "🏢 Paquetería"
+3. Selecciona el carrier del dropdown
+4. Si es "Otra", ingresa el nombre personalizado
+5. Ingresa el número de guía (opcional pero recomendado)
+6. Haz clic en "Asignar"
+
+### Visualización
+
+- En la lista de pedidos: Chip con el nombre del carrier
+- En el detalle: Carrier y número de guía
+- En rastreo público: Cliente ve la paquetería asignada
 
 ---
 
@@ -710,26 +574,35 @@ R: Sí, todas las pantallas son responsivas. La PWA para choferes está optimiza
 ### Compras
 
 **P: ¿Con qué frecuencia debo sincronizar con Bind?**
-R: Se recomienda sincronizar al inicio de cada jornada y después de capturar nuevas facturas en Bind.
+R: Se recomienda sincronizar al inicio de cada jornada y después de capturar nuevas facturas.
 
 **P: ¿Puedo revertir un pedido que ya está en ruta?**
-R: No. Solo se pueden revertir pedidos en estado READY. Contacta a tráfico para casos especiales.
+R: No. Solo se pueden revertir pedidos en estado READY.
 
 ### Tráfico
 
-**P: ¿Cuántos pedidos puede llevar un chofer?**
-R: El límite recomendado es 15 pedidos. El sistema permite asignar más pero mostrará una advertencia.
+**P: ¿Cuál es la diferencia entre asignar chofer y despachar?**
+R: Asignar solo vincula el chofer al pedido. Despachar inicia la ruta, cambia el estado a IN_TRANSIT y envía notificaciones.
 
-**P: ¿Cómo se calculan las horas ETA?**
-R: Se calcula en base a la posición en la ruta, 30 minutos promedio por parada, y un buffer de 15% por tráfico.
+**P: ¿Cuándo uso paquetería externa vs chofer interno?**
+R: Usa paquetería externa para envíos foráneos o cuando no hay capacidad interna. Usa chofer interno para entregas locales.
+
+**P: ¿Puedo cambiar el carrier después de asignarlo?**
+R: Sí, mientras el pedido esté en READY. Una vez despachado, contacta a soporte.
+
+**P: ¿Cómo veo solo los pedidos urgentes?**
+R: Usa la pestaña "Activos" y busca los pedidos con badge rojo. Siempre aparecen primero en la lista.
+
+**P: ¿Cómo cambio entre vista de lista y mapa?**
+R: Usa los botones en la esquina inferior derecha: 📋 (solo lista), 📋🗺️ (split), 🗺️ (solo mapa).
 
 ### Clientes
 
 **P: ¿Cuánto tiempo es válido el link de rastreo?**
 R: El link es válido hasta 24 horas después de la entrega.
 
-**P: ¿Puedo cambiar mi calificación?**
-R: No, solo se permite una calificación por pedido.
+**P: ¿Cómo sé si mi pedido va con paquetería externa?**
+R: En la página de rastreo verás el nombre de la paquetería y número de guía en lugar del nombre del chofer.
 
 ---
 
@@ -743,5 +616,5 @@ Para soporte técnico o reportar problemas:
 
 ---
 
-*SCRAM 2026 - Sistema de Gestión Logística*
+*SCRAM 2026 - Sistema de Gestión Logística v2.0*
 *Todos los derechos reservados*
