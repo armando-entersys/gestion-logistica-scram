@@ -98,9 +98,39 @@ export class OrdersController {
   }
 
   /**
+   * Get dashboard statistics
+   * - ADMIN: KPIs operativos
+   * - DIRECTOR: Dashboard global (solo lectura)
+   * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
+   */
+  @Get('stats/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get dashboard statistics' })
+  getDashboardStats() {
+    return this.ordersService.getDashboardStats();
+  }
+
+  /**
+   * Get driver's current route
+   * Solo ve pedidos asignados a él
+   * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
+   */
+  @Get('my-route')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current driver assigned route' })
+  getMyRoute(@CurrentUser('id') driverId: string) {
+    return this.ordersService.getDriverRoute(driverId);
+  }
+
+  /**
    * Get single order details
    * - Todos los roles autenticados pueden ver detalles
    * - DRIVER: Solo puede ver órdenes asignadas a él
+   * IMPORTANTE: Debe estar DESPUÉS de rutas específicas (stats/dashboard, my-route)
    */
   @Get(':id')
   @UseGuards(JwtAuthGuard)
@@ -111,20 +141,6 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.findOne(id, user);
-  }
-
-  /**
-   * Get dashboard statistics
-   * - ADMIN: KPIs operativos
-   * - DIRECTOR: Dashboard global (solo lectura)
-   */
-  @Get('stats/dashboard')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get dashboard statistics' })
-  getDashboardStats() {
-    return this.ordersService.getDashboardStats();
   }
 
   // =============================================
@@ -211,19 +227,6 @@ export class OrdersController {
   // Permisos: Solo SU ruta, botones acción, captura POD
   // Restricciones: NO ve montos, NO ve rutas de otros
   // =============================================
-
-  /**
-   * Get driver's current route
-   * Solo ve pedidos asignados a él
-   */
-  @Get('my-route')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.DRIVER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get current driver assigned route' })
-  getMyRoute(@CurrentUser('id') driverId: string) {
-    return this.ordersService.getDriverRoute(driverId);
-  }
 
   /**
    * Mark order as delivered with evidence
