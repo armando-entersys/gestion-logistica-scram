@@ -701,27 +701,24 @@ export default function ComprasPage() {
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       <LocationOnIcon color="primary" fontSize="small" />
                       <Typography variant="subtitle2" fontWeight={600}>
-                        Destino
+                        Dirección de Entrega
                       </Typography>
                     </Stack>
                     {detailOrder.addressRaw ? (
                       <Box>
-                        <Typography variant="body2">
+                        <Typography variant="body2" fontWeight={500}>
                           {detailOrder.addressRaw.street} {detailOrder.addressRaw.number}
                         </Typography>
-                        <Typography variant="body2">
-                          {detailOrder.addressRaw.neighborhood}
-                          {detailOrder.addressRaw.postalCode && ` CP ${detailOrder.addressRaw.postalCode}`}
-                        </Typography>
+                        {detailOrder.addressRaw.neighborhood && (
+                          <Typography variant="body2">
+                            Col. {detailOrder.addressRaw.neighborhood}
+                            {detailOrder.addressRaw.postalCode && `, CP ${detailOrder.addressRaw.postalCode}`}
+                          </Typography>
+                        )}
                         <Typography variant="body2" color="text.secondary">
                           {detailOrder.addressRaw.city}
                           {detailOrder.addressRaw.state && `, ${detailOrder.addressRaw.state}`}
                         </Typography>
-                        {detailOrder.addressRaw.reference && (
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                            Ref: {detailOrder.addressRaw.reference}
-                          </Typography>
-                        )}
                       </Box>
                     ) : (
                       <Typography variant="body2" color="text.secondary">
@@ -730,6 +727,26 @@ export default function ComprasPage() {
                     )}
                   </Paper>
                 </Grid>
+
+                {/* Comentarios/Notas del Pedido - Pueden contener dirección alternativa */}
+                {detailOrder.addressRaw?.reference && (
+                  <Grid item xs={12}>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'warning.50', border: '1px solid', borderColor: 'warning.main' }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                        <NotesIcon color="warning" fontSize="small" />
+                        <Typography variant="subtitle2" fontWeight={600} color="warning.dark">
+                          Comentarios del Pedido (Revisar dirección)
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {detailOrder.addressRaw.reference}
+                      </Typography>
+                      <Typography variant="caption" color="warning.dark" sx={{ mt: 1, display: 'block' }}>
+                        ⚠️ Verificar si hay una dirección de entrega diferente en estos comentarios
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                )}
 
                 {/* Datos del Pedido */}
                 <Grid item xs={6}>
