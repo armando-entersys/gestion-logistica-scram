@@ -8,7 +8,6 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  IconButton,
   Button,
   Card,
   CardContent,
@@ -25,8 +24,9 @@ import {
   Snackbar,
   Alert,
   Avatar,
-  Tooltip,
   Checkbox,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -34,6 +34,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningIcon from '@mui/icons-material/Warning';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import SendIcon from '@mui/icons-material/Send';
+import UndoIcon from '@mui/icons-material/Undo';
 import InventoryIcon from '@mui/icons-material/Inventory';
 
 import { ordersApi, syncApi } from '@/lib/api';
@@ -54,7 +55,9 @@ const priorityConfig: Record<number, { label: string; color: 'default' | 'warnin
 export default function ComprasPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
+  const [selectedReadyIds, setSelectedReadyIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState(0);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
@@ -69,7 +72,7 @@ export default function ComprasPage() {
     }
   }, [router]);
 
-  const { data: orders, isLoading, refetch } = useQuery({
+  const { data: orders, isLoading } = useQuery({
     queryKey: ['compras-orders'],
     queryFn: async () => {
       const response = await ordersApi.getAll({ status: 'DRAFT,READY' });
@@ -101,15 +104,15 @@ export default function ComprasPage() {
 
   const releaseMutation = useMutation({
     mutationFn: async () => {
-      return ordersApi.release ? ordersApi.release(selectedIds) : Promise.reject('Not implemented');
+      return ordersApi.release(selectedDraftIds);
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
       setSnackbar({
         open: true,
-        message: `${selectedIds.length} pedidos liberados a Trafico`,
+        message: `${response.data.released || selectedDraftIds.length} pedidos liberados a Trafico`,
         severity: 'success',
       });
-      setSelectedIds([]);
+      setSelectedDraftIds([]);
       queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
     },
     onError: (error: any) => {
@@ -121,20 +124,101 @@ export default function ComprasPage() {
     },
   });
 
+  const revertMutation = useMutation({
+    mutationFn: async () => {
+      return ordersApi.revert(selectedReadyIds);
+    },
+    onSuccess: (response) => {
+      setSnackbar({
+        open: true,
+        message: `${response.data.reverted || selectedReadyIds.length} pedidos revertidos a Borrador`,
+        severity: 'success',
+      });
+      setSelectedReadyIds([]);
+      queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al revertir pedidos',
+        severity: 'error',
+      });
+    },
+  });
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     router.push('/login');
   };
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) =>
+  const toggleDraftSelection = (id: string) => {
+    setSelectedDraftIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleReadySelection = (id: string) => {
+    setSelectedReadyIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
   };
 
   const draftOrders = orders?.filter((o: any) => o.status === 'DRAFT') || [];
   const readyOrders = orders?.filter((o: any) => o.status === 'READY') || [];
+
+  const renderOrdersTable = (orderList: any[], selectedIds: string[], onToggle: (id: string) => void) => (
+    <TableContainer>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell padding="checkbox"></TableCell>
+            <TableCell>ID Bind</TableCell>
+            <TableCell>Cliente</TableCell>
+            <TableCell>RFC</TableCell>
+            <TableCell align="right">Monto</TableCell>
+            <TableCell>Prioridad</TableCell>
+            <TableCell>Estado</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {orderList.map((order: any) => {
+            const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
+            const status = statusConfig[order.status] || statusConfig.DRAFT;
+            return (
+              <TableRow
+                key={order.id}
+                hover
+                selected={selectedIds.includes(order.id)}
+                onClick={() => onToggle(order.id)}
+                sx={{ cursor: 'pointer' }}
+              >
+                <TableCell padding="checkbox">
+                  <Checkbox checked={selectedIds.includes(order.id)} />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" fontWeight={500}>
+                    {order.bindId}
+                  </Typography>
+                </TableCell>
+                <TableCell>{order.clientName}</TableCell>
+                <TableCell>{order.clientRfc || '-'}</TableCell>
+                <TableCell align="right">
+                  ${order.totalAmount?.toLocaleString() || 0}
+                </TableCell>
+                <TableCell>
+                  <Chip size="small" label={priority.label} color={priority.color} />
+                </TableCell>
+                <TableCell>
+                  <Chip size="small" label={status.label} color={status.color} variant="outlined" />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -174,7 +258,7 @@ export default function ComprasPage() {
       {/* Stats Cards */}
       <Box sx={{ p: 3 }}>
         <Stack direction="row" spacing={3} sx={{ mb: 3 }}>
-          <Card sx={{ flex: 1 }}>
+          <Card sx={{ flex: 1, cursor: 'pointer', border: activeTab === 0 ? 2 : 0, borderColor: 'warning.main' }} onClick={() => setActiveTab(0)}>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
                 <Avatar sx={{ bgcolor: 'warning.light' }}>
@@ -191,11 +275,11 @@ export default function ComprasPage() {
               </Stack>
             </CardContent>
           </Card>
-          <Card sx={{ flex: 1 }}>
+          <Card sx={{ flex: 1, cursor: 'pointer', border: activeTab === 1 ? 2 : 0, borderColor: 'info.main' }} onClick={() => setActiveTab(1)}>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: 'success.light' }}>
-                  <CheckCircleIcon color="success" />
+                <Avatar sx={{ bgcolor: 'info.light' }}>
+                  <CheckCircleIcon color="info" />
                 </Avatar>
                 <Box>
                   <Typography variant="h4" fontWeight={700}>
@@ -210,86 +294,81 @@ export default function ComprasPage() {
           </Card>
         </Stack>
 
-        {/* Orders Table */}
-        <Paper sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="h6">
-              Pedidos Pendientes ({orders?.length || 0})
-            </Typography>
-            <Button
-              variant="contained"
-              startIcon={<SendIcon />}
-              disabled={selectedIds.length === 0}
-              onClick={() => releaseMutation.mutate()}
-            >
-              Liberar a Trafico ({selectedIds.length})
-            </Button>
-          </Stack>
-
-          {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-              <CircularProgress />
-            </Box>
-          ) : orders?.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <LocalShippingIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-              <Typography color="text.secondary">
-                No hay pedidos pendientes. Sincroniza con Bind para obtener nuevos pedidos.
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox"></TableCell>
-                    <TableCell>ID Bind</TableCell>
-                    <TableCell>Cliente</TableCell>
-                    <TableCell>RFC</TableCell>
-                    <TableCell align="right">Monto</TableCell>
-                    <TableCell>Prioridad</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {orders?.map((order: any) => {
-                    const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
-                    const status = statusConfig[order.status] || statusConfig.DRAFT;
-                    return (
-                      <TableRow
-                        key={order.id}
-                        hover
-                        selected={selectedIds.includes(order.id)}
-                        onClick={() => toggleSelection(order.id)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell padding="checkbox">
-                          <Checkbox checked={selectedIds.includes(order.id)} />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {order.bindId}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{order.clientName}</TableCell>
-                        <TableCell>{order.clientRfc || '-'}</TableCell>
-                        <TableCell align="right">
-                          ${order.totalAmount?.toLocaleString() || 0}
-                        </TableCell>
-                        <TableCell>
-                          <Chip size="small" label={priority.label} color={priority.color} />
-                        </TableCell>
-                        <TableCell>
-                          <Chip size="small" label={status.label} color={status.color} variant="outlined" />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+        {/* Tabs */}
+        <Paper sx={{ mb: 2 }}>
+          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
+            <Tab label={`Pendientes (${draftOrders.length})`} />
+            <Tab label={`Liberados (${readyOrders.length})`} />
+          </Tabs>
         </Paper>
+
+        {/* Tab Content */}
+        {activeTab === 0 && (
+          <Paper sx={{ p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Typography variant="h6">
+                Pedidos Pendientes de Validar
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={releaseMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                disabled={selectedDraftIds.length === 0 || releaseMutation.isPending}
+                onClick={() => releaseMutation.mutate()}
+              >
+                Liberar a Trafico ({selectedDraftIds.length})
+              </Button>
+            </Stack>
+
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : draftOrders.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <LocalShippingIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                <Typography color="text.secondary">
+                  No hay pedidos pendientes. Sincroniza con Bind para obtener nuevos pedidos.
+                </Typography>
+              </Box>
+            ) : (
+              renderOrdersTable(draftOrders, selectedDraftIds, toggleDraftSelection)
+            )}
+          </Paper>
+        )}
+
+        {activeTab === 1 && (
+          <Paper sx={{ p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+              <Typography variant="h6">
+                Pedidos Liberados a Trafico
+              </Typography>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={revertMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <UndoIcon />}
+                disabled={selectedReadyIds.length === 0 || revertMutation.isPending}
+                onClick={() => revertMutation.mutate()}
+              >
+                Revertir a Borrador ({selectedReadyIds.length})
+              </Button>
+            </Stack>
+
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+                <CircularProgress />
+              </Box>
+            ) : readyOrders.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <CheckCircleIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+                <Typography color="text.secondary">
+                  No hay pedidos liberados a trafico.
+                </Typography>
+              </Box>
+            ) : (
+              renderOrdersTable(readyOrders, selectedReadyIds, toggleReadySelection)
+            )}
+          </Paper>
+        )}
       </Box>
 
       {/* Snackbar */}

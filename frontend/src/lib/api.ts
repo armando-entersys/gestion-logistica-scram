@@ -75,6 +75,9 @@ export const ordersApi = {
 
   release: (orderIds: string[]) =>
     api.post('/orders/release', { orderIds }),
+
+  revert: (orderIds: string[]) =>
+    api.post('/orders/revert', { orderIds }),
 };
 
 // Users API

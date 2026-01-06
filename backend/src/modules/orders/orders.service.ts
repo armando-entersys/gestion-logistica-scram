@@ -140,6 +140,27 @@ export class OrdersService {
   }
 
   /**
+   * Revertir pedidos de Tráfico a Compras (READY -> DRAFT)
+   * Solo pedidos en READY pueden ser revertidos (no IN_TRANSIT ni DELIVERED)
+   */
+  async revertToDraft(orderIds: string[]): Promise<{ reverted: number }> {
+    const result = await this.orderRepository.update(
+      {
+        id: In(orderIds),
+        status: OrderStatus.READY,
+      },
+      {
+        status: OrderStatus.DRAFT,
+        assignedDriverId: null,
+        routePosition: null,
+      },
+    );
+
+    this.logger.log(`Reverted ${result.affected} orders back to draft`);
+    return { reverted: result.affected || 0 };
+  }
+
+  /**
    * RF-03: Asignación de Recursos y Gestión de Flota
    */
   async assignDriver(dto: AssignDriverDto): Promise<{ assigned: number; warning?: string }> {

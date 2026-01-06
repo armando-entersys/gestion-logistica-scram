@@ -146,6 +146,20 @@ export class OrdersController {
     return this.ordersService.releaseToTraffic(body.orderIds);
   }
 
+  /**
+   * Revert orders from Traffic back to Purchasing (READY -> DRAFT)
+   * Permite revertir pedidos liberados por error
+   */
+  @Post('revert')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Revert orders from Traffic back to Purchasing' })
+  revertOrders(@Body() body: { orderIds: string[] }) {
+    return this.ordersService.revertToDraft(body.orderIds);
+  }
+
   // =============================================
   // ENDPOINTS ROL: ADMIN (Jefe de Tráfico)
   // Permisos: Mapa, Asignar Choferes, Despachar, Gestión
