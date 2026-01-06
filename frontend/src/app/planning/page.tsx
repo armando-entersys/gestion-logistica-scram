@@ -119,6 +119,7 @@ export default function PlanningPage() {
   const [selectedDriverId, setSelectedDriverId] = useState<string>('');
   const [startTime, setStartTime] = useState('09:00');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null); // null = all, 'READY', 'IN_TRANSIT', 'DELIVERED'
   const [page, setPage] = useState(1);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
@@ -173,26 +174,38 @@ export default function PlanningPage() {
 
   // Filtered and paginated orders
   const filteredOrders = useMemo(() => {
-    let result = orders.filter((o) => o.status === 'READY' || o.status === 'IN_TRANSIT');
+    let result = orders;
+
+    // Filter by status
+    if (statusFilter) {
+      result = result.filter((o) => o.status === statusFilter);
+    } else {
+      // Default: show READY and IN_TRANSIT
+      result = result.filter((o) => o.status === 'READY' || o.status === 'IN_TRANSIT');
+    }
+
+    // Filter by search
     if (search) {
       const searchLower = search.toLowerCase();
       result = result.filter(
         (o) =>
           o.clientName?.toLowerCase().includes(searchLower) ||
           o.bindId?.toLowerCase().includes(searchLower) ||
-          o.clientRfc?.toLowerCase().includes(searchLower)
+          o.clientRfc?.toLowerCase().includes(searchLower) ||
+          o.assignedDriver?.firstName?.toLowerCase().includes(searchLower) ||
+          o.assignedDriver?.lastName?.toLowerCase().includes(searchLower)
       );
     }
     return result;
-  }, [orders, search]);
+  }, [orders, search, statusFilter]);
 
   const totalPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
   const paginatedOrders = filteredOrders.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  // Reset page when search changes
+  // Reset page when search or filter changes
   useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, statusFilter]);
 
   // Assign driver mutation
   const assignMutation = useMutation({
@@ -318,10 +331,20 @@ export default function PlanningPage() {
         </Toolbar>
       </AppBar>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Clickable to filter */}
       <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
         <Stack direction="row" spacing={2}>
-          <Card sx={{ flex: 1 }}>
+          <Card
+            sx={{
+              flex: 1,
+              cursor: 'pointer',
+              border: statusFilter === 'READY' ? 2 : 0,
+              borderColor: 'info.main',
+              transition: 'all 0.2s',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 }
+            }}
+            onClick={() => setStatusFilter(statusFilter === 'READY' ? null : 'READY')}
+          >
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
                 <Avatar sx={{ bgcolor: 'info.light', width: 40, height: 40 }}>
@@ -334,7 +357,17 @@ export default function PlanningPage() {
               </Stack>
             </CardContent>
           </Card>
-          <Card sx={{ flex: 1 }}>
+          <Card
+            sx={{
+              flex: 1,
+              cursor: 'pointer',
+              border: statusFilter === 'IN_TRANSIT' ? 2 : 0,
+              borderColor: 'primary.main',
+              transition: 'all 0.2s',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 }
+            }}
+            onClick={() => setStatusFilter(statusFilter === 'IN_TRANSIT' ? null : 'IN_TRANSIT')}
+          >
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
                 <Avatar sx={{ bgcolor: 'primary.light', width: 40, height: 40 }}>
@@ -347,7 +380,17 @@ export default function PlanningPage() {
               </Stack>
             </CardContent>
           </Card>
-          <Card sx={{ flex: 1 }}>
+          <Card
+            sx={{
+              flex: 1,
+              cursor: 'pointer',
+              border: statusFilter === 'DELIVERED' ? 2 : 0,
+              borderColor: 'success.main',
+              transition: 'all 0.2s',
+              '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 }
+            }}
+            onClick={() => setStatusFilter(statusFilter === 'DELIVERED' ? null : 'DELIVERED')}
+          >
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
                 <Avatar sx={{ bgcolor: 'success.light', width: 40, height: 40 }}>
@@ -361,6 +404,16 @@ export default function PlanningPage() {
             </CardContent>
           </Card>
         </Stack>
+        {statusFilter && (
+          <Box sx={{ mt: 1, textAlign: 'center' }}>
+            <Chip
+              label={`Filtrando: ${statusConfig[statusFilter]?.label || statusFilter}`}
+              onDelete={() => setStatusFilter(null)}
+              size="small"
+              color={statusFilter === 'READY' ? 'info' : statusFilter === 'IN_TRANSIT' ? 'primary' : 'success'}
+            />
+          </Box>
+        )}
       </Box>
 
       {/* Main Content */}

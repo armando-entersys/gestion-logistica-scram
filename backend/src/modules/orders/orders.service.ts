@@ -420,7 +420,8 @@ export class OrdersService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.orderRepository.createQueryBuilder('order');
+    const queryBuilder = this.orderRepository.createQueryBuilder('order')
+      .leftJoinAndSelect('order.assignedDriver', 'driver');
 
     if (filters.status) {
       const statuses = filters.status.split(',').map(s => s.trim());
