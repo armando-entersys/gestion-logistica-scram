@@ -56,7 +56,7 @@ const priorityConfig: Record<number, { label: string; color: 'default' | 'warnin
   3: { label: 'Urgente', color: 'error' },
 };
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 15;
 
 export default function ComprasPage() {
   const router = useRouter();
@@ -173,17 +173,27 @@ export default function ComprasPage() {
     );
   };
 
-  // Filter orders by search
+  // Filter and sort orders by search and date
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
-    if (!search) return orders;
-    const searchLower = search.toLowerCase();
-    return orders.filter(
-      (o: any) =>
-        o.clientName?.toLowerCase().includes(searchLower) ||
-        o.bindId?.toLowerCase().includes(searchLower) ||
-        o.clientRfc?.toLowerCase().includes(searchLower)
-    );
+    let result = orders;
+
+    if (search) {
+      const searchLower = search.toLowerCase();
+      result = result.filter(
+        (o: any) =>
+          o.clientName?.toLowerCase().includes(searchLower) ||
+          o.bindId?.toLowerCase().includes(searchLower) ||
+          o.clientRfc?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort by createdAt descending (newest first)
+    return result.sort((a: any, b: any) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
   }, [orders, search]);
 
   const draftOrders = filteredOrders.filter((o: any) => o.status === 'DRAFT') || [];
@@ -208,12 +218,25 @@ export default function ComprasPage() {
     setReadyPage(1);
   }, [search]);
 
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   const renderOrdersTable = (orderList: any[], selectedIds: string[], onToggle: (id: string) => void) => (
     <TableContainer>
       <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell padding="checkbox"></TableCell>
+            <TableCell>Fecha</TableCell>
             <TableCell>ID Bind</TableCell>
             <TableCell>Cliente</TableCell>
             <TableCell>RFC</TableCell>
@@ -236,6 +259,11 @@ export default function ComprasPage() {
               >
                 <TableCell padding="checkbox">
                   <Checkbox checked={selectedIds.includes(order.id)} size="small" />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="caption" color="text.secondary">
+                    {formatDate(order.createdAt)}
+                  </Typography>
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" fontWeight={500}>
