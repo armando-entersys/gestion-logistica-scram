@@ -98,7 +98,7 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener pedidos con StatusCode=0 (Pendiente)
+      // Obtener pedidos pendientes (Status=0 o sin filtro para obtener todos)
       const response = await firstValueFrom(
         this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
           headers: {
@@ -106,7 +106,6 @@ export class BindAdapter {
             'Content-Type': 'application/json',
           },
           params: {
-            '$filter': 'StatusCode eq 0',
             '$orderby': 'OrderDate desc',
             '$top': 100,
           },
