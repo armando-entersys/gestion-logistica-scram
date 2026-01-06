@@ -30,6 +30,14 @@ import {
   TextField,
   InputAdornment,
   Pagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Divider,
+  Grid,
+  Tooltip,
 } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -40,6 +48,13 @@ import SendIcon from '@mui/icons-material/Send';
 import UndoIcon from '@mui/icons-material/Undo';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import PersonIcon from '@mui/icons-material/Person';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import NotesIcon from '@mui/icons-material/Notes';
 
 import { ordersApi, syncApi } from '@/lib/api';
 
@@ -58,6 +73,32 @@ const priorityConfig: Record<number, { label: string; color: 'default' | 'warnin
 
 const ITEMS_PER_PAGE = 15;
 
+interface Order {
+  id: string;
+  bindId: string;
+  clientName: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  clientRfc?: string;
+  addressRaw?: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    reference?: string;
+  };
+  status: string;
+  priorityLevel: number;
+  totalAmount: number;
+  isVip?: boolean;
+  promisedDate?: string;
+  internalNotes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export default function ComprasPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -67,6 +108,7 @@ export default function ComprasPage() {
   const [search, setSearch] = useState('');
   const [draftPage, setDraftPage] = useState(1);
   const [readyPage, setReadyPage] = useState(1);
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
@@ -230,23 +272,34 @@ export default function ComprasPage() {
     });
   };
 
-  const renderOrdersTable = (orderList: any[], selectedIds: string[], onToggle: (id: string) => void) => (
+  const formatAddress = (addressRaw: Order['addressRaw']) => {
+    if (!addressRaw) return '-';
+    const parts = [
+      addressRaw.street,
+      addressRaw.number,
+      addressRaw.neighborhood,
+      addressRaw.city,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : '-';
+  };
+
+  const renderOrdersTable = (orderList: Order[], selectedIds: string[], onToggle: (id: string) => void) => (
     <TableContainer>
       <Table size="small">
         <TableHead>
-          <TableRow>
-            <TableCell padding="checkbox"></TableCell>
-            <TableCell>Fecha</TableCell>
-            <TableCell>ID Bind</TableCell>
-            <TableCell>Cliente</TableCell>
-            <TableCell>RFC</TableCell>
-            <TableCell align="right">Monto</TableCell>
-            <TableCell>Prioridad</TableCell>
-            <TableCell>Estado</TableCell>
+          <TableRow sx={{ bgcolor: 'grey.50' }}>
+            <TableCell padding="checkbox" sx={{ width: 40 }}></TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Cliente</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Destino</TableCell>
+            <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
+            <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
+            <TableCell align="center" sx={{ fontWeight: 600, width: 60 }}>Ver</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
-          {orderList.map((order: any) => {
+          {orderList.map((order: Order) => {
             const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
             const status = statusConfig[order.status] || statusConfig.DRAFT;
             return (
@@ -254,38 +307,78 @@ export default function ComprasPage() {
                 key={order.id}
                 hover
                 selected={selectedIds.includes(order.id)}
-                onClick={() => onToggle(order.id)}
-                sx={{ cursor: 'pointer' }}
+                sx={{
+                  cursor: 'pointer',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
               >
-                <TableCell padding="checkbox">
+                <TableCell padding="checkbox" onClick={() => onToggle(order.id)}>
                   <Checkbox checked={selectedIds.includes(order.id)} size="small" />
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={() => onToggle(order.id)}>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Typography variant="body2" fontWeight={600} color="primary.main">
+                      {order.bindId}
+                    </Typography>
+                    {order.isVip && (
+                      <Chip label="VIP" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />
+                    )}
+                  </Stack>
+                </TableCell>
+                <TableCell onClick={() => onToggle(order.id)}>
                   <Typography variant="caption" color="text.secondary">
                     {formatDate(order.createdAt)}
                   </Typography>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={() => onToggle(order.id)}>
+                  <Tooltip title={order.clientRfc || ''}>
+                    <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>
+                      {order.clientName}
+                    </Typography>
+                  </Tooltip>
+                </TableCell>
+                <TableCell onClick={() => onToggle(order.id)}>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 180, display: 'block' }}>
+                    {formatAddress(order.addressRaw)}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right" onClick={() => onToggle(order.id)}>
                   <Typography variant="body2" fontWeight={500}>
-                    {order.bindId}
+                    ${order.totalAmount?.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'}
                   </Typography>
                 </TableCell>
-                <TableCell>
-                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
-                    {order.clientName}
-                  </Typography>
+                <TableCell onClick={() => onToggle(order.id)}>
+                  <Stack direction="row" spacing={0.5}>
+                    <Chip
+                      size="small"
+                      label={status.label}
+                      color={status.color}
+                      sx={{ height: 22, fontSize: 11 }}
+                    />
+                    {priority.color !== 'default' && (
+                      <Chip
+                        size="small"
+                        label={priority.label}
+                        color={priority.color}
+                        variant="outlined"
+                        sx={{ height: 22, fontSize: 11 }}
+                      />
+                    )}
+                  </Stack>
                 </TableCell>
-                <TableCell>
-                  <Typography variant="caption">{order.clientRfc || '-'}</Typography>
-                </TableCell>
-                <TableCell align="right">
-                  <Typography variant="body2">${order.totalAmount?.toLocaleString() || 0}</Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip size="small" label={priority.label} color={priority.color} sx={{ height: 20, fontSize: 11 }} />
-                </TableCell>
-                <TableCell>
-                  <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+                <TableCell align="center">
+                  <Tooltip title="Ver detalles">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailOrder(order);
+                      }}
+                    >
+                      <VisibilityIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             );
@@ -512,6 +605,208 @@ export default function ComprasPage() {
           </Paper>
         )}
       </Box>
+
+      {/* Order Detail Modal */}
+      <Dialog
+        open={!!detailOrder}
+        onClose={() => setDetailOrder(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 2 }
+        }}
+      >
+        {detailOrder && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="h6" fontWeight={600}>
+                    Pedido {detailOrder.bindId}
+                  </Typography>
+                  {detailOrder.isVip && (
+                    <Chip label="VIP" size="small" color="warning" />
+                  )}
+                </Stack>
+                <IconButton onClick={() => setDetailOrder(null)} size="small">
+                  <CloseIcon />
+                </IconButton>
+              </Stack>
+            </DialogTitle>
+            <Divider />
+            <DialogContent sx={{ pt: 2 }}>
+              <Grid container spacing={2}>
+                {/* Información del Cliente */}
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <PersonIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Cliente
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body1" fontWeight={500}>
+                      {detailOrder.clientName}
+                    </Typography>
+                    {detailOrder.clientRfc && (
+                      <Typography variant="caption" color="text.secondary">
+                        RFC: {detailOrder.clientRfc}
+                      </Typography>
+                    )}
+                    {detailOrder.clientEmail && (
+                      <Typography variant="body2" color="text.secondary">
+                        {detailOrder.clientEmail}
+                      </Typography>
+                    )}
+                    {detailOrder.clientPhone && (
+                      <Typography variant="body2" color="text.secondary">
+                        Tel: {detailOrder.clientPhone}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Destino */}
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <LocationOnIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Destino
+                      </Typography>
+                    </Stack>
+                    {detailOrder.addressRaw ? (
+                      <Box>
+                        <Typography variant="body2">
+                          {detailOrder.addressRaw.street} {detailOrder.addressRaw.number}
+                        </Typography>
+                        <Typography variant="body2">
+                          {detailOrder.addressRaw.neighborhood}
+                          {detailOrder.addressRaw.postalCode && ` CP ${detailOrder.addressRaw.postalCode}`}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {detailOrder.addressRaw.city}
+                          {detailOrder.addressRaw.state && `, ${detailOrder.addressRaw.state}`}
+                        </Typography>
+                        {detailOrder.addressRaw.reference && (
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            Ref: {detailOrder.addressRaw.reference}
+                          </Typography>
+                        )}
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        No especificado
+                      </Typography>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Datos del Pedido */}
+                <Grid item xs={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <AttachMoneyIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Total
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h5" fontWeight={700} color="primary.main">
+                      ${detailOrder.totalAmount?.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+
+                <Grid item xs={6}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                      <CalendarTodayIcon color="primary" fontSize="small" />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Fechas
+                      </Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Creado: {formatDate(detailOrder.createdAt)}
+                    </Typography>
+                    {detailOrder.promisedDate && (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        Prometido: {new Date(detailOrder.promisedDate).toLocaleDateString('es-MX')}
+                      </Typography>
+                    )}
+                  </Paper>
+                </Grid>
+
+                {/* Estado */}
+                <Grid item xs={12}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Estado:
+                    </Typography>
+                    <Chip
+                      label={statusConfig[detailOrder.status]?.label || detailOrder.status}
+                      color={statusConfig[detailOrder.status]?.color || 'default'}
+                    />
+                    {detailOrder.priorityLevel > 1 && (
+                      <Chip
+                        label={priorityConfig[detailOrder.priorityLevel]?.label || 'Normal'}
+                        color={priorityConfig[detailOrder.priorityLevel]?.color || 'default'}
+                        variant="outlined"
+                      />
+                    )}
+                  </Stack>
+                </Grid>
+
+                {/* Notas */}
+                {detailOrder.internalNotes && (
+                  <Grid item xs={12}>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'warning.50' }}>
+                      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+                        <NotesIcon color="warning" fontSize="small" />
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Comentarios
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2">
+                        {detailOrder.internalNotes}
+                      </Typography>
+                    </Paper>
+                  </Grid>
+                )}
+              </Grid>
+            </DialogContent>
+            <Divider />
+            <DialogActions sx={{ p: 2 }}>
+              <Button onClick={() => setDetailOrder(null)} variant="outlined">
+                Cerrar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  if (detailOrder.status === 'DRAFT') {
+                    setSelectedDraftIds((prev) =>
+                      prev.includes(detailOrder.id)
+                        ? prev.filter((id) => id !== detailOrder.id)
+                        : [...prev, detailOrder.id]
+                    );
+                  } else if (detailOrder.status === 'READY') {
+                    setSelectedReadyIds((prev) =>
+                      prev.includes(detailOrder.id)
+                        ? prev.filter((id) => id !== detailOrder.id)
+                        : [...prev, detailOrder.id]
+                    );
+                  }
+                  setDetailOrder(null);
+                }}
+              >
+                {(detailOrder.status === 'DRAFT' && selectedDraftIds.includes(detailOrder.id)) ||
+                 (detailOrder.status === 'READY' && selectedReadyIds.includes(detailOrder.id))
+                  ? 'Deseleccionar'
+                  : 'Seleccionar'}
+              </Button>
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
 
       {/* Snackbar */}
       <Snackbar
