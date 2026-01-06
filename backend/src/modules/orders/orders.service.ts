@@ -53,6 +53,11 @@ export class OrdersService {
 
         if (existingOrder) {
           await this.orderRepository.update(existingOrder.id, {
+            orderNumber: bindOrder.orderNumber,
+            warehouseName: bindOrder.warehouseName,
+            employeeName: bindOrder.employeeName,
+            clientNumber: bindOrder.clientNumber,
+            purchaseOrder: bindOrder.purchaseOrder,
             clientName: bindOrder.clientName,
             clientEmail: bindOrder.clientEmail,
             clientPhone: bindOrder.clientPhone,
@@ -61,7 +66,6 @@ export class OrdersService {
             totalAmount: bindOrder.totalAmount,
             isVip: bindOrder.isVip,
             promisedDate: bindOrder.promisedDate,
-            invoiceNumber: bindOrder.invoiceNumber,
           });
           updated++;
         } else {

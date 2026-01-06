@@ -26,8 +26,20 @@ export class Order {
   @Column({ name: 'bind_id', type: 'varchar', length: 50, unique: true })
   bindId: string;
 
-  @Column({ name: 'invoice_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de factura visible (ej: FAC-A1234)' })
-  invoiceNumber: string | null;
+  @Column({ name: 'order_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de pedido Bind (ej: PE2945)' })
+  orderNumber: string | null;
+
+  @Column({ name: 'warehouse_name', type: 'varchar', length: 100, nullable: true, comment: 'Almacén de origen' })
+  warehouseName: string | null;
+
+  @Column({ name: 'employee_name', type: 'varchar', length: 100, nullable: true, comment: 'Vendedor/Empleado asignado' })
+  employeeName: string | null;
+
+  @Column({ name: 'client_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de cliente en Bind' })
+  clientNumber: string | null;
+
+  @Column({ name: 'purchase_order', type: 'varchar', length: 100, nullable: true, comment: 'Orden de compra del cliente' })
+  purchaseOrder: string | null;
 
   @Column({ name: 'client_name', type: 'varchar', length: 200 })
   clientName: string;

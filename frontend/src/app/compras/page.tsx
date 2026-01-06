@@ -76,7 +76,11 @@ const ITEMS_PER_PAGE = 15;
 interface Order {
   id: string;
   bindId: string;
-  invoiceNumber?: string;
+  orderNumber?: string;
+  warehouseName?: string;
+  employeeName?: string;
+  clientNumber?: string;
+  purchaseOrder?: string;
   clientName: string;
   clientEmail?: string;
   clientPhone?: string;
@@ -319,7 +323,7 @@ export default function ComprasPage() {
                 <TableCell onClick={() => onToggle(order.id)}>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Typography variant="body2" fontWeight={600} color="primary.main">
-                      {order.invoiceNumber || order.bindId}
+                      {order.orderNumber || order.bindId?.substring(0, 8)}
                     </Typography>
                     {order.isVip && (
                       <Chip label="VIP" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />
@@ -623,7 +627,7 @@ export default function ComprasPage() {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Typography variant="h6" fontWeight={600}>
-                    Pedido {detailOrder.invoiceNumber || detailOrder.bindId}
+                    Pedido {detailOrder.orderNumber || detailOrder.bindId?.substring(0, 8)}
                   </Typography>
                   {detailOrder.isVip && (
                     <Chip label="VIP" size="small" color="warning" />
@@ -637,20 +641,44 @@ export default function ComprasPage() {
             <Divider />
             <DialogContent sx={{ pt: 2 }}>
               <Grid container spacing={2}>
+                {/* Información del Pedido */}
+                <Grid item xs={12}>
+                  <Paper variant="outlined" sx={{ p: 2, bgcolor: 'primary.50' }}>
+                    <Grid container spacing={2}>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" color="text.secondary">No. Pedido</Typography>
+                        <Typography variant="body2" fontWeight={600}>{detailOrder.orderNumber || '-'}</Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" color="text.secondary">Almacén</Typography>
+                        <Typography variant="body2" fontWeight={500}>{detailOrder.warehouseName || '-'}</Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" color="text.secondary">Vendedor</Typography>
+                        <Typography variant="body2" fontWeight={500}>{detailOrder.employeeName || '-'}</Typography>
+                      </Grid>
+                      <Grid item xs={6} sm={3}>
+                        <Typography variant="caption" color="text.secondary">O.C. Cliente</Typography>
+                        <Typography variant="body2" fontWeight={500}>{detailOrder.purchaseOrder || '-'}</Typography>
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                </Grid>
+
                 {/* Información del Cliente */}
                 <Grid item xs={12}>
                   <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
                     <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
                       <PersonIcon color="primary" fontSize="small" />
                       <Typography variant="subtitle2" fontWeight={600}>
-                        Cliente
+                        Cliente {detailOrder.clientNumber ? `#${detailOrder.clientNumber}` : ''}
                       </Typography>
                     </Stack>
                     <Typography variant="body1" fontWeight={500}>
                       {detailOrder.clientName}
                     </Typography>
                     {detailOrder.clientRfc && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" display="block">
                         RFC: {detailOrder.clientRfc}
                       </Typography>
                     )}

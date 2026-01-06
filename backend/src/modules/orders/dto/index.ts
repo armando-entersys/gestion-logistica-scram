@@ -35,14 +35,34 @@ export class AddressDto {
 }
 
 export class CreateOrderDto {
-  @ApiProperty({ description: 'ID único del ERP Bind (UUID de factura)' })
+  @ApiProperty({ description: 'ID único del ERP Bind (UUID del pedido)' })
   @IsString()
   bindId: string;
 
-  @ApiPropertyOptional({ description: 'Número de factura visible (ej: FAC-A1234)' })
+  @ApiPropertyOptional({ description: 'Número de pedido visible (ej: PE2945)' })
   @IsOptional()
   @IsString()
-  invoiceNumber?: string;
+  orderNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Almacén de origen' })
+  @IsOptional()
+  @IsString()
+  warehouseName?: string;
+
+  @ApiPropertyOptional({ description: 'Vendedor/Empleado asignado' })
+  @IsOptional()
+  @IsString()
+  employeeName?: string;
+
+  @ApiPropertyOptional({ description: 'Número de cliente en Bind' })
+  @IsOptional()
+  @IsString()
+  clientNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Orden de compra del cliente' })
+  @IsOptional()
+  @IsString()
+  purchaseOrder?: string;
 
   @ApiProperty()
   @IsString()

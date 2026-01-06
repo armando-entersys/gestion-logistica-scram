@@ -6,47 +6,45 @@ import { firstValueFrom } from 'rxjs';
 import { CreateOrderDto } from '@/modules/orders/dto';
 
 /**
- * Estructura de Factura según API de Bind ERP (campos en PascalCase)
- * Documentación: https://developers.bind.com.mx/api-details#api=bind-erp-api
+ * Estructura de Pedido según API de Bind ERP (GET /Orders)
  *
- * Status codes:
- * 0 = Vigente (pending/active)
- * 1 = Pagada (paid)
- * 2 = Cancelada (cancelled)
+ * StatusCode:
+ * 0 = Pendiente
+ * 1 = Surtido
+ * 2 = Cancelado
  */
-interface BindInvoice {
+interface BindOrder {
   ID: string;
-  UUID?: string;
   Number: number;
   Serie?: string;
-  Date: string;
-  ExpirationDate?: string;
+  OrderDate: string;
   ClientID: string;
   ClientName: string;
   RFC?: string;
-  Cost: number;
-  Subtotal: number;
-  Discount: number;
-  VAT: number;
-  IEPS: number;
-  ISRRet: number;
-  VATRet: number;
-  Total: number;
-  Payments: number;
-  CreditNotes: number;
-  CurrencyID?: string;
-  LocationID?: string;
-  WarehouseID?: string;
-  PriceListID?: string;
-  CFDIUse?: number;
-  ExchangeRate: number;
-  VATRetRate: number;
+  PhoneNumber?: string;
+  Address?: string;
   Comments?: string;
-  VATRate: number;
+  WarehouseID?: string;
+  WarehouseName?: string;
+  EmployeeID?: string;
+  EmployeeName?: string;
   PurchaseOrder?: string;
-  IsFiscalInvoice: boolean;
-  ShowIEPS: boolean;
-  Status: number; // 0=Vigente, 1=Pagada, 2=Cancelada
+  Total: number;
+  StatusCode: number;
+  Status?: string;
+}
+
+/**
+ * Detalle completo de un Pedido (GET /Orders/{id})
+ */
+interface BindOrderDetail extends BindOrder {
+  Products?: Array<{
+    ProductID: string;
+    Name: string;
+    Code: string;
+    Qty: number;
+    Price: number;
+  }>;
 }
 
 /**
@@ -59,21 +57,9 @@ interface BindClient {
   CommercialName?: string;
   Email?: string;
   Telephones?: string;
-  Addresses?: BindClientAddress[];
-  CreditDays?: number;
-  Comments?: string;
-}
-
-interface BindClientAddress {
-  ID: string;
-  Street?: string;
-  ExteriorNumber?: string;
-  InteriorNumber?: string;
-  Neighborhood?: string;
+  Number?: number;
   City?: string;
   State?: string;
-  ZipCode?: string;
-  Country?: string;
 }
 
 /**
@@ -101,12 +87,10 @@ export class BindAdapter {
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
-   * Obtiene facturas con status "Vigente" (pendientes de entrega)
-   *
-   * Documentación: https://developers.bind.com.mx/api-details#api=bind-erp-api&operation=Invoices_Get
+   * Obtiene pedidos pendientes (StatusCode=0) desde /Orders
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching invoices from Bind ERP...');
+    this.logger.log('Fetching orders from Bind ERP...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -114,48 +98,80 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener facturas con Status=0 (Vigente/pendientes de cobro/entrega)
+      // Obtener pedidos con StatusCode=0 (Pendiente)
       const response = await firstValueFrom(
-        this.httpService.get<BindApiResponse<BindInvoice>>(`${this.apiUrl}/api/Invoices`, {
+        this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
           },
           params: {
-            // Filtrar por Status=0 (Vigente - facturas pendientes)
-            '$filter': 'Status eq 0',
-            // Ordenar por fecha descendente
-            '$orderby': 'Date desc',
-            // Limitar a últimas 100 facturas
+            '$filter': 'StatusCode eq 0',
+            '$orderby': 'OrderDate desc',
             '$top': 100,
           },
         }),
       );
 
-      const invoices = response.data.value || [];
-      this.logger.log(`Fetched ${invoices.length} pending invoices from Bind`);
+      const bindOrders = response.data.value || [];
+      this.logger.log(`Fetched ${bindOrders.length} pending orders from Bind`);
 
-      // Transformar facturas al formato interno
+      // Cache para clientes (evitar llamadas duplicadas)
+      const clientCache: Map<string, BindClient> = new Map();
+
+      // Transformar pedidos al formato interno
       const orders: CreateOrderDto[] = [];
 
-      for (const invoice of invoices) {
+      for (const bindOrder of bindOrders) {
         try {
-          const order = this.transformInvoice(invoice);
+          // Obtener detalle del pedido para tener la dirección
+          const orderDetail = await this.getOrderDetail(bindOrder.ID);
+
+          // Obtener datos del cliente (email, número de cliente)
+          let client = clientCache.get(bindOrder.ClientID);
+          if (!client) {
+            client = await this.getClientDetails(bindOrder.ClientID);
+            if (client) {
+              clientCache.set(bindOrder.ClientID, client);
+            }
+          }
+
+          const order = this.transformOrder(orderDetail || bindOrder, client);
           orders.push(order);
         } catch (error) {
-          this.logger.warn(`Failed to transform invoice ${invoice.ID}: ${error.message}`);
+          this.logger.warn(`Failed to transform order ${bindOrder.ID}: ${error.message}`);
         }
       }
 
       return orders;
     } catch (error) {
-      this.logger.error('Failed to fetch invoices from Bind:', error.response?.data || error.message);
+      this.logger.error('Failed to fetch orders from Bind:', error.response?.data || error.message);
       throw error;
     }
   }
 
   /**
-   * Obtiene detalles de un cliente específico para obtener dirección completa
+   * Obtiene el detalle completo de un pedido (incluye dirección)
+   */
+  async getOrderDetail(orderId: string): Promise<BindOrderDetail | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<BindOrderDetail>(`${this.apiUrl}/api/Orders/${orderId}`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch order detail ${orderId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene detalles de un cliente específico
    */
   async getClientDetails(clientId: string): Promise<BindClient | null> {
     try {
@@ -175,52 +191,52 @@ export class BindAdapter {
   }
 
   /**
-   * Transforma una factura de Bind al formato interno de SCRAM
-   * Implementa el Anti-Corruption Layer (ACL) del patrón DDD
-   * Nota: No hacemos llamadas adicionales por cliente para evitar timeouts
+   * Transforma un pedido de Bind al formato interno de SCRAM
    */
-  private transformInvoice(invoice: BindInvoice): CreateOrderDto {
+  private transformOrder(order: BindOrder | BindOrderDetail, client?: BindClient | null): CreateOrderDto {
     // RF-02: Detectar VIP/Urgente en comentarios
-    const comments = (invoice.Comments || '').toUpperCase();
+    const comments = (order.Comments || '').toUpperCase();
     const isVip = comments.includes('VIP') ||
                   comments.includes('URGENTE') ||
                   comments.includes('PRIORITARIO');
 
-    // Generar ID único basado en UUID o número de factura (para identificar duplicados)
-    const bindId = invoice.UUID || `FAC-${invoice.Serie || ''}${invoice.Number}`;
+    // Número de pedido visible (ej: PE2945)
+    const orderNumber = `${order.Serie || 'PE'}${order.Number}`;
 
-    // Número de factura visible para el usuario (ej: FAC-A1234)
-    const invoiceNumber = `${invoice.Serie || 'FAC'}${invoice.Number}`;
-
-    // Extraer información de dirección de los comentarios si existe
-    const addressInfo = this.extractAddressFromComments(invoice.Comments || '');
+    // Parsear la dirección del pedido
+    const addressInfo = this.parseAddress(order.Address || '');
 
     return {
-      bindId,
-      invoiceNumber,
-      clientName: this.cleanString(invoice.ClientName),
-      clientEmail: '',
-      clientPhone: undefined,
-      clientRfc: invoice.RFC,
+      bindId: order.ID,
+      orderNumber,
+      warehouseName: order.WarehouseName,
+      employeeName: order.EmployeeName,
+      clientNumber: client?.Number?.toString(),
+      purchaseOrder: order.PurchaseOrder,
+      clientName: this.cleanString(order.ClientName),
+      clientEmail: client?.Email || '',
+      clientPhone: order.PhoneNumber || client?.Telephones,
+      clientRfc: order.RFC,
       addressRaw: {
-        street: addressInfo.street || 'Por confirmar',
-        number: addressInfo.number || '',
-        neighborhood: addressInfo.neighborhood || '',
-        postalCode: addressInfo.postalCode || '',
-        city: addressInfo.city || 'CDMX',
-        state: addressInfo.state || '',
-        reference: invoice.Comments?.substring(0, 200),
+        street: addressInfo.street,
+        number: addressInfo.number,
+        neighborhood: addressInfo.neighborhood,
+        postalCode: addressInfo.postalCode,
+        city: addressInfo.city || client?.City || '',
+        state: addressInfo.state || client?.State || '',
+        reference: order.Comments?.substring(0, 200),
       },
-      totalAmount: invoice.Total || 0,
+      totalAmount: order.Total || 0,
       isVip,
-      promisedDate: invoice.ExpirationDate ? new Date(invoice.ExpirationDate) : undefined,
+      promisedDate: order.OrderDate ? new Date(order.OrderDate) : undefined,
     };
   }
 
   /**
-   * Intenta extraer información de dirección de los comentarios
+   * Parsea una dirección de texto completo a campos estructurados
+   * Ejemplo: "ALEJANDRO DUMAS No. 139 Col. Polanco IV Sección, Miguel Hidalgo, Ciudad de México C.P 11550 México"
    */
-  private extractAddressFromComments(comments: string): {
+  private parseAddress(address: string): {
     street: string;
     number: string;
     neighborhood: string;
@@ -237,21 +253,48 @@ export class BindAdapter {
       state: '',
     };
 
-    if (!comments) return result;
+    if (!address) return result;
 
-    // Buscar código postal
-    const cpMatch = comments.match(/(?:CP|C\.P\.?)?\s*(\d{5})/i);
+    // Extraer código postal
+    const cpMatch = address.match(/C\.?P\.?\s*(\d{5})/i);
     if (cpMatch) {
       result.postalCode = cpMatch[1];
     }
 
-    // Buscar ciudades comunes
-    const cities = ['CDMX', 'Ciudad de México', 'Guadalajara', 'Monterrey', 'Manzanillo', 'Tuxpan', 'Veracruz'];
-    for (const city of cities) {
-      if (comments.toUpperCase().includes(city.toUpperCase())) {
-        result.city = city;
-        break;
+    // Extraer colonia (Col. o Colonia)
+    const colMatch = address.match(/Col(?:onia)?\.?\s+([^,]+)/i);
+    if (colMatch) {
+      result.neighborhood = colMatch[1].trim();
+    }
+
+    // Extraer número exterior
+    const numMatch = address.match(/(?:No\.?|#|Num\.?)\s*(\d+[A-Z]?)/i);
+    if (numMatch) {
+      result.number = numMatch[1];
+    }
+
+    // La calle es típicamente lo que está antes del número o colonia
+    const streetMatch = address.match(/^([^,]+?)(?:\s+(?:No\.?|#|Num\.?)\s*\d|,|\s+Col)/i);
+    if (streetMatch) {
+      result.street = streetMatch[1].trim();
+    }
+
+    // Buscar ciudad en la dirección
+    const parts = address.split(',').map(p => p.trim());
+    if (parts.length >= 2) {
+      // Típicamente: calle, delegación/municipio, ciudad
+      const cityPart = parts.find(p =>
+        p.includes('Ciudad de México') || p.includes('CDMX') ||
+        p.includes('Guadalajara') || p.includes('Monterrey')
+      );
+      if (cityPart) {
+        result.city = cityPart.replace(/C\.?P\.?\s*\d{5}/i, '').replace(/México$/i, '').trim();
       }
+    }
+
+    // Si no se pudo parsear la calle, usar la dirección completa
+    if (!result.street && address) {
+      result.street = address.split(',')[0].trim();
     }
 
     return result;
