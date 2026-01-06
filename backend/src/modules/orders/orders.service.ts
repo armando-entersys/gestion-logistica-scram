@@ -198,6 +198,8 @@ export class OrdersService {
     dispatched: number;
     emailsQueued: number;
   }> {
+    this.logger.log(`Dispatch request: driver=${dto.driverId}, orders=${dto.orderIds.length}, startTime=${dto.startTime}`);
+
     const startTime = dto.startTime || this.configService.get('business.defaultRouteStartTime') || '09:00';
     const avgStopTime = this.configService.get<number>('business.averageStopTimeMinutes') || 30;
     const bufferPercent = this.configService.get<number>('business.trafficBufferPercent') || 15;
@@ -206,8 +208,13 @@ export class OrdersService {
       where: { id: In(dto.orderIds) },
     });
 
+    this.logger.log(`Found ${orders.length} orders for dispatch (requested: ${dto.orderIds.length})`);
+
     if (orders.length !== dto.orderIds.length) {
-      throw new BadRequestException('Algunos pedidos no fueron encontrados');
+      const foundIds = orders.map(o => o.id);
+      const missingIds = dto.orderIds.filter(id => !foundIds.includes(id));
+      this.logger.warn(`Missing orders: ${missingIds.join(', ')}`);
+      throw new BadRequestException(`Algunos pedidos no fueron encontrados: ${missingIds.join(', ')}`);
     }
 
     let emailsQueued = 0;
@@ -230,13 +237,14 @@ export class OrdersService {
       const etaStart = new Date(baseTime.getTime() + minutesToAdd * 60000);
       const etaEnd = new Date(etaStart.getTime() + (avgStopTime + bufferMinutes) * 60000);
 
-      await this.orderRepository.update(orderId, {
+      const updateResult = await this.orderRepository.update(orderId, {
         status: OrderStatus.IN_TRANSIT,
         routePosition: position,
         estimatedArrivalStart: etaStart,
         estimatedArrivalEnd: etaEnd,
         assignedDriverId: dto.driverId,
       });
+      this.logger.log(`Updated order ${orderId} to IN_TRANSIT (affected: ${updateResult.affected})`);
 
       // Encolar email de notificación
       if (order.clientEmail && !order.dispatchEmailSent) {

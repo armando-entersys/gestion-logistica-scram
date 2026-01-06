@@ -227,7 +227,10 @@ export default function PlanningPage() {
       if (!selectedDriverId || selectedOrderIds.length === 0) {
         throw new Error('Selecciona chofer y pedidos');
       }
-      return ordersApi.dispatch(selectedDriverId, selectedOrderIds, startTime);
+      console.log('Dispatching:', { driverId: selectedDriverId, orderIds: selectedOrderIds, startTime });
+      const response = await ordersApi.dispatch(selectedDriverId, selectedOrderIds, startTime);
+      console.log('Dispatch response:', response.data);
+      return response;
     },
     onSuccess: (response) => {
       setSnackbar({
@@ -238,12 +241,17 @@ export default function PlanningPage() {
       setSelectedOrderIds([]);
       setSelectedDriverId('');
       setDispatchDialogOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+      // Force refetch
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+        refetch();
+      }, 500);
     },
     onError: (error: any) => {
+      console.error('Dispatch error:', error.response?.data || error);
       setSnackbar({
         open: true,
-        message: error.response?.data?.message || 'Error al despachar ruta',
+        message: error.response?.data?.message || error.message || 'Error al despachar ruta',
         severity: 'error',
       });
     },
@@ -463,18 +471,53 @@ export default function PlanningPage() {
 
         {/* Right Panel - Map */}
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <Paper sx={{ p: 1.5, borderRadius: 0 }} elevation={0}>
+          <Paper sx={{ p: 1.5, borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} elevation={0}>
             <Typography variant="subtitle1" fontWeight={600}>
               Mapa de Pedidos
             </Typography>
+            <Stack direction="row" spacing={2} sx={{ fontSize: 11 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#1976d2' }} />
+                <Typography variant="caption">Seleccionado</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#0288d1' }} />
+                <Typography variant="caption">Listo</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#7b1fa2' }} />
+                <Typography variant="caption">En Ruta</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#d32f2f' }} />
+                <Typography variant="caption">Urgente</Typography>
+              </Box>
+            </Stack>
           </Paper>
           <Divider />
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ flex: 1, position: 'relative' }}>
             <OrdersMap
               orders={filteredOrders}
               selectedIds={selectedOrderIds}
               onOrderClick={toggleOrderSelection}
             />
+            {selectedOrderIds.length > 0 && (
+              <Paper
+                sx={{
+                  position: 'absolute',
+                  bottom: 16,
+                  left: 16,
+                  p: 1.5,
+                  zIndex: 1000,
+                  bgcolor: 'rgba(255,255,255,0.95)',
+                }}
+                elevation={3}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  Ruta: {selectedOrderIds.length} paradas
+                </Typography>
+              </Paper>
+            )}
           </Box>
         </Box>
       </Box>
