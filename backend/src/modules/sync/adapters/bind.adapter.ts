@@ -204,7 +204,30 @@ export class BindAdapter {
     const orderNumber = `${order.Serie || 'PE'}${order.Number}`;
 
     // Parsear la dirección del pedido
-    const addressInfo = this.parseAddress(order.Address || '');
+    let addressInfo = this.parseAddress(order.Address || '');
+
+    // Si no hay dirección en el campo Address, buscar en comentarios
+    if (!addressInfo.street && order.Comments) {
+      const commentsAddress = this.parseAddress(order.Comments);
+      // Solo usar la dirección de comentarios si encontramos algo útil
+      if (commentsAddress.street || commentsAddress.postalCode || commentsAddress.neighborhood) {
+        addressInfo = commentsAddress;
+        this.logger.log(`Using address from comments for order ${order.Number}`);
+      }
+    }
+
+    // Buscar también direcciones en formato específico en comentarios
+    // Ej: "Entregar en: Calle X #123, Col. Y, Ciudad Z"
+    if (!addressInfo.street && order.Comments) {
+      const deliveryMatch = order.Comments.match(/(?:entregar en|enviar a|direcci[oó]n)[:\s]+(.+?)(?:\.|$)/i);
+      if (deliveryMatch) {
+        const extractedAddress = this.parseAddress(deliveryMatch[1]);
+        if (extractedAddress.street) {
+          addressInfo = extractedAddress;
+          this.logger.log(`Found delivery address in comments for order ${order.Number}`);
+        }
+      }
+    }
 
     return {
       bindId: order.ID,
@@ -224,7 +247,7 @@ export class BindAdapter {
         postalCode: addressInfo.postalCode,
         city: addressInfo.city || client?.City || '',
         state: addressInfo.state || client?.State || '',
-        reference: order.Comments?.substring(0, 200),
+        reference: order.Comments?.substring(0, 300),
       },
       totalAmount: order.Total || 0,
       isVip,
