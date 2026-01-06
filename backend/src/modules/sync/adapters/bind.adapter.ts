@@ -186,14 +186,18 @@ export class BindAdapter {
                   comments.includes('URGENTE') ||
                   comments.includes('PRIORITARIO');
 
-    // Generar ID único basado en UUID o número de factura
+    // Generar ID único basado en UUID o número de factura (para identificar duplicados)
     const bindId = invoice.UUID || `FAC-${invoice.Serie || ''}${invoice.Number}`;
+
+    // Número de factura visible para el usuario (ej: FAC-A1234)
+    const invoiceNumber = `${invoice.Serie || 'FAC'}${invoice.Number}`;
 
     // Extraer información de dirección de los comentarios si existe
     const addressInfo = this.extractAddressFromComments(invoice.Comments || '');
 
     return {
       bindId,
+      invoiceNumber,
       clientName: this.cleanString(invoice.ClientName),
       clientEmail: '',
       clientPhone: undefined,

@@ -61,6 +61,7 @@ export class OrdersService {
             totalAmount: bindOrder.totalAmount,
             isVip: bindOrder.isVip,
             promisedDate: bindOrder.promisedDate,
+            invoiceNumber: bindOrder.invoiceNumber,
           });
           updated++;
         } else {

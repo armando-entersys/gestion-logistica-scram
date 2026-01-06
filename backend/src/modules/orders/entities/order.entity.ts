@@ -26,6 +26,9 @@ export class Order {
   @Column({ name: 'bind_id', type: 'varchar', length: 50, unique: true })
   bindId: string;
 
+  @Column({ name: 'invoice_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de factura visible (ej: FAC-A1234)' })
+  invoiceNumber: string | null;
+
   @Column({ name: 'client_name', type: 'varchar', length: 200 })
   clientName: string;
 

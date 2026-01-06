@@ -76,6 +76,7 @@ const ITEMS_PER_PAGE = 15;
 interface Order {
   id: string;
   bindId: string;
+  invoiceNumber?: string;
   clientName: string;
   clientEmail?: string;
   clientPhone?: string;
@@ -318,7 +319,7 @@ export default function ComprasPage() {
                 <TableCell onClick={() => onToggle(order.id)}>
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Typography variant="body2" fontWeight={600} color="primary.main">
-                      {order.bindId}
+                      {order.invoiceNumber || order.bindId}
                     </Typography>
                     {order.isVip && (
                       <Chip label="VIP" size="small" color="warning" sx={{ height: 18, fontSize: 10 }} />
@@ -622,7 +623,7 @@ export default function ComprasPage() {
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Stack direction="row" alignItems="center" spacing={1}>
                   <Typography variant="h6" fontWeight={600}>
-                    Pedido {detailOrder.bindId}
+                    Pedido {detailOrder.invoiceNumber || detailOrder.bindId}
                   </Typography>
                   {detailOrder.isVip && (
                     <Chip label="VIP" size="small" color="warning" />
