@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -27,6 +27,9 @@ import {
   Checkbox,
   Tabs,
   Tab,
+  TextField,
+  InputAdornment,
+  Pagination,
 } from '@mui/material';
 import SyncIcon from '@mui/icons-material/Sync';
 import LogoutIcon from '@mui/icons-material/Logout';
@@ -36,6 +39,7 @@ import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import SendIcon from '@mui/icons-material/Send';
 import UndoIcon from '@mui/icons-material/Undo';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import SearchIcon from '@mui/icons-material/Search';
 
 import { ordersApi, syncApi } from '@/lib/api';
 
@@ -52,12 +56,17 @@ const priorityConfig: Record<number, { label: string; color: 'default' | 'warnin
   3: { label: 'Urgente', color: 'error' },
 };
 
+const ITEMS_PER_PAGE = 5;
+
 export default function ComprasPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedDraftIds, setSelectedDraftIds] = useState<string[]>([]);
   const [selectedReadyIds, setSelectedReadyIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState(0);
+  const [search, setSearch] = useState('');
+  const [draftPage, setDraftPage] = useState(1);
+  const [readyPage, setReadyPage] = useState(1);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
@@ -75,7 +84,7 @@ export default function ComprasPage() {
   const { data: orders, isLoading } = useQuery({
     queryKey: ['compras-orders'],
     queryFn: async () => {
-      const response = await ordersApi.getAll({ status: 'DRAFT,READY' });
+      const response = await ordersApi.getAll({ status: 'DRAFT,READY', limit: 100 });
       return response.data.data || response.data;
     },
   });
@@ -164,12 +173,44 @@ export default function ComprasPage() {
     );
   };
 
-  const draftOrders = orders?.filter((o: any) => o.status === 'DRAFT') || [];
-  const readyOrders = orders?.filter((o: any) => o.status === 'READY') || [];
+  // Filter orders by search
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    if (!search) return orders;
+    const searchLower = search.toLowerCase();
+    return orders.filter(
+      (o: any) =>
+        o.clientName?.toLowerCase().includes(searchLower) ||
+        o.bindId?.toLowerCase().includes(searchLower) ||
+        o.clientRfc?.toLowerCase().includes(searchLower)
+    );
+  }, [orders, search]);
+
+  const draftOrders = filteredOrders.filter((o: any) => o.status === 'DRAFT') || [];
+  const readyOrders = filteredOrders.filter((o: any) => o.status === 'READY') || [];
+
+  // Pagination
+  const draftTotalPages = Math.ceil(draftOrders.length / ITEMS_PER_PAGE);
+  const readyTotalPages = Math.ceil(readyOrders.length / ITEMS_PER_PAGE);
+
+  const paginatedDraftOrders = draftOrders.slice(
+    (draftPage - 1) * ITEMS_PER_PAGE,
+    draftPage * ITEMS_PER_PAGE
+  );
+  const paginatedReadyOrders = readyOrders.slice(
+    (readyPage - 1) * ITEMS_PER_PAGE,
+    readyPage * ITEMS_PER_PAGE
+  );
+
+  // Reset page when search changes
+  useEffect(() => {
+    setDraftPage(1);
+    setReadyPage(1);
+  }, [search]);
 
   const renderOrdersTable = (orderList: any[], selectedIds: string[], onToggle: (id: string) => void) => (
     <TableContainer>
-      <Table>
+      <Table size="small">
         <TableHead>
           <TableRow>
             <TableCell padding="checkbox"></TableCell>
@@ -194,23 +235,29 @@ export default function ComprasPage() {
                 sx={{ cursor: 'pointer' }}
               >
                 <TableCell padding="checkbox">
-                  <Checkbox checked={selectedIds.includes(order.id)} />
+                  <Checkbox checked={selectedIds.includes(order.id)} size="small" />
                 </TableCell>
                 <TableCell>
                   <Typography variant="body2" fontWeight={500}>
                     {order.bindId}
                   </Typography>
                 </TableCell>
-                <TableCell>{order.clientName}</TableCell>
-                <TableCell>{order.clientRfc || '-'}</TableCell>
+                <TableCell>
+                  <Typography variant="body2" noWrap sx={{ maxWidth: 150 }}>
+                    {order.clientName}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="caption">{order.clientRfc || '-'}</Typography>
+                </TableCell>
                 <TableCell align="right">
-                  ${order.totalAmount?.toLocaleString() || 0}
+                  <Typography variant="body2">${order.totalAmount?.toLocaleString() || 0}</Typography>
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={priority.label} color={priority.color} />
+                  <Chip size="small" label={priority.label} color={priority.color} sx={{ height: 20, fontSize: 11 }} />
                 </TableCell>
                 <TableCell>
-                  <Chip size="small" label={status.label} color={status.color} variant="outlined" />
+                  <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, fontSize: 11 }} />
                 </TableCell>
               </TableRow>
             );
@@ -246,6 +293,7 @@ export default function ComprasPage() {
             </Button>
             <Button
               variant="outlined"
+              color="error"
               startIcon={<LogoutIcon />}
               onClick={handleLogout}
             >
@@ -256,36 +304,54 @@ export default function ComprasPage() {
       </AppBar>
 
       {/* Stats Cards */}
-      <Box sx={{ p: 3 }}>
-        <Stack direction="row" spacing={3} sx={{ mb: 3 }}>
-          <Card sx={{ flex: 1, cursor: 'pointer', border: activeTab === 0 ? 2 : 0, borderColor: 'warning.main' }} onClick={() => setActiveTab(0)}>
-            <CardContent>
+      <Box sx={{ p: 2, bgcolor: 'grey.50' }}>
+        <Stack direction="row" spacing={2}>
+          <Card
+            sx={{
+              flex: 1,
+              cursor: 'pointer',
+              border: activeTab === 0 ? 2 : 0,
+              borderColor: 'warning.main',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => setActiveTab(0)}
+          >
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: 'warning.light' }}>
-                  <WarningIcon color="warning" />
+                <Avatar sx={{ bgcolor: 'warning.light', width: 40, height: 40 }}>
+                  <WarningIcon color="warning" fontSize="small" />
                 </Avatar>
                 <Box>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {draftOrders.length}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary">
                     Pendientes de Validar
                   </Typography>
                 </Box>
               </Stack>
             </CardContent>
           </Card>
-          <Card sx={{ flex: 1, cursor: 'pointer', border: activeTab === 1 ? 2 : 0, borderColor: 'info.main' }} onClick={() => setActiveTab(1)}>
-            <CardContent>
+          <Card
+            sx={{
+              flex: 1,
+              cursor: 'pointer',
+              border: activeTab === 1 ? 2 : 0,
+              borderColor: 'info.main',
+              transition: 'all 0.2s'
+            }}
+            onClick={() => setActiveTab(1)}
+          >
+            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: 'info.light' }}>
-                  <CheckCircleIcon color="info" />
+                <Avatar sx={{ bgcolor: 'info.light', width: 40, height: 40 }}>
+                  <CheckCircleIcon color="info" fontSize="small" />
                 </Avatar>
                 <Box>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {readyOrders.length}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary">
                     Listos para Trafico
                   </Typography>
                 </Box>
@@ -293,29 +359,50 @@ export default function ComprasPage() {
             </CardContent>
           </Card>
         </Stack>
+      </Box>
 
-        {/* Tabs */}
+      {/* Search and Tabs */}
+      <Box sx={{ px: 2 }}>
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Buscar por cliente, ID Bind o RFC..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon color="action" />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ mb: 2 }}
+        />
+
         <Paper sx={{ mb: 2 }}>
           <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
             <Tab label={`Pendientes (${draftOrders.length})`} />
             <Tab label={`Liberados (${readyOrders.length})`} />
           </Tabs>
         </Paper>
+      </Box>
 
-        {/* Tab Content */}
+      {/* Tab Content */}
+      <Box sx={{ flex: 1, px: 2, pb: 2 }}>
         {activeTab === 0 && (
           <Paper sx={{ p: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6">
+              <Typography variant="subtitle1" fontWeight={600}>
                 Pedidos Pendientes de Validar
               </Typography>
               <Button
                 variant="contained"
-                startIcon={releaseMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+                size="small"
+                startIcon={releaseMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SendIcon />}
                 disabled={selectedDraftIds.length === 0 || releaseMutation.isPending}
                 onClick={() => releaseMutation.mutate()}
               >
-                Liberar a Trafico ({selectedDraftIds.length})
+                Liberar ({selectedDraftIds.length})
               </Button>
             </Stack>
 
@@ -323,15 +410,28 @@ export default function ComprasPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress />
               </Box>
-            ) : draftOrders.length === 0 ? (
+            ) : paginatedDraftOrders.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <LocalShippingIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                 <Typography color="text.secondary">
-                  No hay pedidos pendientes. Sincroniza con Bind para obtener nuevos pedidos.
+                  {search ? 'No se encontraron pedidos' : 'No hay pedidos pendientes. Sincroniza con Bind.'}
                 </Typography>
               </Box>
             ) : (
-              renderOrdersTable(draftOrders, selectedDraftIds, toggleDraftSelection)
+              <>
+                {renderOrdersTable(paginatedDraftOrders, selectedDraftIds, toggleDraftSelection)}
+                {draftTotalPages > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                    <Pagination
+                      count={draftTotalPages}
+                      page={draftPage}
+                      onChange={(_, p) => setDraftPage(p)}
+                      size="small"
+                      color="primary"
+                    />
+                  </Box>
+                )}
+              </>
             )}
           </Paper>
         )}
@@ -339,17 +439,18 @@ export default function ComprasPage() {
         {activeTab === 1 && (
           <Paper sx={{ p: 2 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Typography variant="h6">
+              <Typography variant="subtitle1" fontWeight={600}>
                 Pedidos Liberados a Trafico
               </Typography>
               <Button
                 variant="outlined"
                 color="warning"
-                startIcon={revertMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <UndoIcon />}
+                size="small"
+                startIcon={revertMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <UndoIcon />}
                 disabled={selectedReadyIds.length === 0 || revertMutation.isPending}
                 onClick={() => revertMutation.mutate()}
               >
-                Revertir a Borrador ({selectedReadyIds.length})
+                Revertir ({selectedReadyIds.length})
               </Button>
             </Stack>
 
@@ -357,15 +458,28 @@ export default function ComprasPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress />
               </Box>
-            ) : readyOrders.length === 0 ? (
+            ) : paginatedReadyOrders.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
                 <CheckCircleIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
                 <Typography color="text.secondary">
-                  No hay pedidos liberados a trafico.
+                  {search ? 'No se encontraron pedidos' : 'No hay pedidos liberados a trafico.'}
                 </Typography>
               </Box>
             ) : (
-              renderOrdersTable(readyOrders, selectedReadyIds, toggleReadySelection)
+              <>
+                {renderOrdersTable(paginatedReadyOrders, selectedReadyIds, toggleReadySelection)}
+                {readyTotalPages > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                    <Pagination
+                      count={readyTotalPages}
+                      page={readyPage}
+                      onChange={(_, p) => setReadyPage(p)}
+                      size="small"
+                      color="primary"
+                    />
+                  </Box>
+                )}
+              </>
             )}
           </Paper>
         )}
