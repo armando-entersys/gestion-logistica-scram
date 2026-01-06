@@ -53,7 +53,7 @@ export const ordersApi = {
     api.get(`/orders/${id}`),
 
   getStats: () =>
-    api.get('/orders/stats'),
+    api.get('/orders/stats/dashboard'),
 
   assign: (driverId: string, orderIds: string[]) =>
     api.post('/orders/assign', { driverId, orderIds }),
@@ -78,6 +78,12 @@ export const ordersApi = {
 
   revert: (orderIds: string[]) =>
     api.post('/orders/revert', { orderIds }),
+
+  getCarrierTypes: () =>
+    api.get('/orders/carrier-types'),
+
+  assignCarrier: (orderIds: string[], carrierType: string, carrierName?: string, trackingNumber?: string) =>
+    api.post('/orders/assign-carrier', { orderIds, carrierType, carrierName, trackingNumber }),
 };
 
 // Users API

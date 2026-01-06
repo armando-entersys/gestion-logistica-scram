@@ -51,6 +51,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import AssignmentIndIcon from '@mui/icons-material/AssignmentInd';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import InventoryIcon from '@mui/icons-material/Inventory';
+import BusinessIcon from '@mui/icons-material/Business';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi } from '@/lib/api';
@@ -88,6 +89,14 @@ interface Order {
     firstName: string;
     lastName: string;
   };
+  carrierType?: string;
+  carrierName?: string;
+  carrierTrackingNumber?: string;
+}
+
+interface CarrierType {
+  value: string;
+  label: string;
 }
 
 interface Driver {
@@ -109,7 +118,7 @@ const statusConfig: Record<string, { label: string; color: 'default' | 'primary'
   DELIVERED: { label: 'Entregado', color: 'success' },
 };
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10;
 
 export default function PlanningPage() {
   const router = useRouter();
@@ -123,6 +132,10 @@ export default function PlanningPage() {
   const [page, setPage] = useState(1);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [carrierDialogOpen, setCarrierDialogOpen] = useState(false);
+  const [selectedCarrierType, setSelectedCarrierType] = useState('');
+  const [carrierName, setCarrierName] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -161,6 +174,15 @@ export default function PlanningPage() {
     queryFn: async () => {
       const response = await usersApi.getDrivers();
       return response.data as Driver[];
+    },
+  });
+
+  // Fetch carrier types
+  const { data: carrierTypes } = useQuery({
+    queryKey: ['carrier-types'],
+    queryFn: async () => {
+      const response = await ordersApi.getCarrierTypes();
+      return response.data as CarrierType[];
     },
   });
 
@@ -270,6 +292,41 @@ export default function PlanningPage() {
     },
   });
 
+  // Carrier assignment mutation
+  const carrierMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedCarrierType || selectedOrderIds.length === 0) {
+        throw new Error('Selecciona paquetería y pedidos');
+      }
+      return ordersApi.assignCarrier(
+        selectedOrderIds,
+        selectedCarrierType,
+        selectedCarrierType === 'OTHER' ? carrierName : undefined,
+        trackingNumber || undefined
+      );
+    },
+    onSuccess: (response) => {
+      setSnackbar({
+        open: true,
+        message: `${response.data.assigned} pedidos asignados a paquetería`,
+        severity: 'success',
+      });
+      setSelectedOrderIds([]);
+      setSelectedCarrierType('');
+      setCarrierName('');
+      setTrackingNumber('');
+      setCarrierDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al asignar paquetería',
+        severity: 'error',
+      });
+    },
+  });
+
   const toggleOrderSelection = (id: string) => {
     setSelectedOrderIds((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
@@ -295,13 +352,18 @@ export default function PlanningPage() {
       {/* Header */}
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
-          <LocalShippingIcon sx={{ mr: 2, color: 'primary.main' }} />
+          <Box
+            component="img"
+            src="/scram-logo.png"
+            alt="SCRAM"
+            sx={{ height: 36, mr: 2 }}
+          />
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" component="h1" fontWeight={600}>
-              Panel de Trafico
+            <Typography variant="h6" component="h1" fontWeight={600} color="text.primary">
+              Panel de Tráfico
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Planificacion y despacho de rutas
+              Planificación y despacho de rutas
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
@@ -416,16 +478,15 @@ export default function PlanningPage() {
         )}
       </Box>
 
-      {/* Main Content */}
+      {/* Main Content - Responsive layout */}
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Left Panel - Order List */}
-        <Box sx={{ width: 450, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider' }}>
-          {/* Search and Filters */}
-          <Paper sx={{ p: 2, borderRadius: 0 }} elevation={0}>
+        {/* Left Panel - Order List (60% width) */}
+        <Box sx={{ flex: '0 0 55%', minWidth: 500, maxWidth: 800, display: 'flex', flexDirection: 'column', borderRight: 1, borderColor: 'divider' }}>
+          {/* Search and Selection Controls */}
+          <Paper sx={{ p: 2.5, borderRadius: 0, bgcolor: 'grey.50' }} elevation={0}>
             <TextField
               fullWidth
-              size="small"
-              placeholder="Buscar por cliente, ID o RFC..."
+              placeholder="Buscar por cliente, ID, RFC o chofer..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               InputProps={{
@@ -435,21 +496,26 @@ export default function PlanningPage() {
                   </InputAdornment>
                 ),
               }}
-              sx={{ mb: 2 }}
+              sx={{ mb: 2, bgcolor: 'white' }}
             />
 
             <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="body2" color="text.secondary">
-                {selectedOrderIds.length} seleccionados
-              </Typography>
+              <Box>
+                <Typography variant="body1" fontWeight={600}>
+                  {filteredOrders.length} pedidos
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {selectedOrderIds.length} seleccionados
+                </Typography>
+              </Box>
               <Stack direction="row" spacing={1}>
                 {selectedOrderIds.length > 0 && (
-                  <Button size="small" onClick={clearSelection}>
+                  <Button size="small" variant="outlined" onClick={clearSelection}>
                     Limpiar
                   </Button>
                 )}
-                <Button size="small" onClick={selectAllVisible}>
-                  Sel. pagina
+                <Button size="small" variant="contained" onClick={selectAllVisible}>
+                  Sel. página
                 </Button>
               </Stack>
             </Stack>
@@ -458,20 +524,23 @@ export default function PlanningPage() {
           <Divider />
 
           {/* Orders List */}
-          <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
+          <Box sx={{ flex: 1, overflow: 'auto', p: 2.5, bgcolor: 'background.paper' }}>
             {isLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress />
               </Box>
             ) : paginatedOrders.length === 0 ? (
               <Box sx={{ textAlign: 'center', py: 8 }}>
-                <LocalShippingIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-                <Typography color="text.secondary">
-                  No hay pedidos para planificar
+                <LocalShippingIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  No hay pedidos
+                </Typography>
+                <Typography variant="body2" color="text.disabled">
+                  {statusFilter ? `No hay pedidos con estado "${statusConfig[statusFilter]?.label}"` : 'No hay pedidos para planificar'}
                 </Typography>
               </Box>
             ) : (
-              <Stack spacing={1.5}>
+              <Stack spacing={2}>
                 {paginatedOrders.map((order) => (
                   <OrderCard
                     key={order.id}
@@ -486,37 +555,57 @@ export default function PlanningPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', borderTop: 1, borderColor: 'divider' }}>
+            <Box sx={{ p: 2, display: 'flex', justifyContent: 'center', borderTop: 1, borderColor: 'divider', bgcolor: 'grey.50' }}>
               <Pagination
                 count={totalPages}
                 page={page}
                 onChange={(_, p) => setPage(p)}
-                size="small"
+                size="medium"
                 color="primary"
+                showFirstButton
+                showLastButton
               />
             </Box>
           )}
 
           {/* Action Buttons */}
-          <Paper sx={{ p: 2, borderRadius: 0 }} elevation={2}>
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                fullWidth
-                disabled={selectedOrderIds.length === 0}
-                onClick={() => setAssignDialogOpen(true)}
-                startIcon={<AssignmentIndIcon />}
-              >
-                Asignar ({selectedOrderIds.length})
-              </Button>
+          <Paper sx={{ p: 2.5, borderRadius: 0, bgcolor: 'grey.100' }} elevation={3}>
+            <Stack spacing={1.5}>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  size="large"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setAssignDialogOpen(true)}
+                  startIcon={<AssignmentIndIcon />}
+                  sx={{ py: 1.5 }}
+                >
+                  Chofer ({selectedOrderIds.length})
+                </Button>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  size="large"
+                  color="secondary"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setCarrierDialogOpen(true)}
+                  startIcon={<BusinessIcon />}
+                  sx={{ py: 1.5 }}
+                >
+                  Paquetería ({selectedOrderIds.length})
+                </Button>
+              </Stack>
               <Button
                 variant="contained"
                 fullWidth
+                size="large"
                 disabled={selectedOrderIds.length === 0}
                 onClick={() => setDispatchDialogOpen(true)}
                 startIcon={<PlayArrowIcon />}
+                sx={{ py: 1.5 }}
               >
-                Despachar ({selectedOrderIds.length})
+                Despachar Ruta ({selectedOrderIds.length})
               </Button>
             </Stack>
           </Paper>
@@ -692,6 +781,81 @@ export default function PlanningPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Carrier Assignment Dialog */}
+      <Dialog open={carrierDialogOpen} onClose={() => setCarrierDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Asignar Paquetería Externa</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Asigna una paquetería externa para {selectedOrderIds.length} pedido(s)
+          </Typography>
+          <Stack spacing={2}>
+            <FormControl fullWidth>
+              <InputLabel>Paquetería</InputLabel>
+              <Select
+                value={selectedCarrierType}
+                label="Paquetería"
+                onChange={(e) => setSelectedCarrierType(e.target.value)}
+              >
+                {carrierTypes?.filter(ct => ct.value !== 'INTERNAL').map((carrier) => (
+                  <MenuItem key={carrier.value} value={carrier.value}>
+                    {carrier.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {selectedCarrierType === 'OTHER' && (
+              <TextField
+                fullWidth
+                label="Nombre de la paquetería"
+                value={carrierName}
+                onChange={(e) => setCarrierName(e.target.value)}
+                placeholder="Ej: Mensajería Local XYZ"
+              />
+            )}
+            <TextField
+              fullWidth
+              label="Número de guía (opcional)"
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value)}
+              placeholder="Ej: 794644790301"
+            />
+          </Stack>
+          {selectedOrders.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Pedidos a enviar:</Typography>
+              <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
+                {selectedOrders.map((order) => (
+                  <ListItem key={order.id} sx={{ py: 0.5 }}>
+                    <ListItemAvatar>
+                      <Avatar sx={{ width: 24, height: 24, bgcolor: 'secondary.main', fontSize: 10 }}>
+                        <BusinessIcon sx={{ fontSize: 14 }} />
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={order.clientName}
+                      secondary={order.bindId}
+                      primaryTypographyProps={{ variant: 'body2' }}
+                      secondaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCarrierDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => carrierMutation.mutate()}
+            disabled={!selectedCarrierType || (selectedCarrierType === 'OTHER' && !carrierName) || carrierMutation.isPending}
+          >
+            {carrierMutation.isPending ? <CircularProgress size={20} /> : 'Asignar Paquetería'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
@@ -711,7 +875,7 @@ export default function PlanningPage() {
   );
 }
 
-// Order Card Component
+// Order Card Component - Enhanced for better UX
 function OrderCard({
   order,
   isSelected,
@@ -723,6 +887,9 @@ function OrderCard({
 }) {
   const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
   const status = statusConfig[order.status] || statusConfig.DRAFT;
+  const fullAddress = order.addressRaw
+    ? `${order.addressRaw.street || ''} ${order.addressRaw.number || ''}, ${order.addressRaw.neighborhood || ''}, ${order.addressRaw.city || ''}`
+    : 'Sin dirección';
 
   return (
     <Card
@@ -732,56 +899,85 @@ function OrderCard({
         ...(isSelected && {
           borderColor: 'primary.main',
           borderWidth: 2,
-          bgcolor: 'primary.50',
+          bgcolor: 'action.selected',
+          boxShadow: 2,
         }),
-        ...(order.status === 'IN_TRANSIT' && {
-          opacity: 0.7,
+        ...(order.status === 'IN_TRANSIT' && !isSelected && {
+          bgcolor: 'grey.50',
         }),
+        '&:hover': {
+          boxShadow: 2,
+        },
       }}
     >
-      <CardActionArea onClick={onToggle} disabled={order.status === 'IN_TRANSIT'}>
-        <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1}>
-            <Stack direction="row" spacing={1} alignItems="center">
+      <CardActionArea onClick={onToggle} disabled={order.status === 'DELIVERED'}>
+        <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+          {/* Header row: Checkbox + Name + Chips */}
+          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flex: 1 }}>
               <Checkbox
                 checked={isSelected}
-                size="small"
-                disabled={order.status === 'IN_TRANSIT'}
+                size="medium"
+                disabled={order.status === 'DELIVERED'}
                 onClick={(e) => e.stopPropagation()}
                 onChange={onToggle}
+                sx={{ p: 0.5 }}
               />
-              <Box>
-                <Typography variant="body2" fontWeight={600}>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body1" fontWeight={600} noWrap>
                   {order.clientName}
                 </Typography>
-                <Typography variant="caption" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" fontFamily="monospace">
                   {order.bindId}
                 </Typography>
               </Box>
             </Stack>
-            <Stack direction="row" spacing={0.5}>
-              <Chip size="small" label={priority.label} color={priority.color} sx={{ height: 20, fontSize: 11 }} />
-              <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+            <Stack direction="row" spacing={0.5} flexShrink={0}>
+              <Chip size="small" label={priority.label} color={priority.color} sx={{ height: 24, fontWeight: 500 }} />
+              <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 24, fontWeight: 500 }} />
             </Stack>
           </Stack>
 
-          <Stack direction="row" spacing={2} sx={{ pl: 4 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <LocationOnIcon sx={{ fontSize: 14 }} />
-              {order.addressRaw?.neighborhood || 'Sin ubicacion'}
+          {/* Address row */}
+          <Box sx={{ pl: 5, mb: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+              <LocationOnIcon sx={{ fontSize: 18, mt: 0.2, color: 'primary.main' }} />
+              <span style={{ lineHeight: 1.4 }}>{fullAddress}</span>
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <AttachMoneyIcon sx={{ fontSize: 14 }} />
-              ${order.totalAmount?.toLocaleString() || 0}
-            </Typography>
-          </Stack>
+          </Box>
 
-          {order.assignedDriver && (
-            <Typography variant="caption" color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, pl: 4, mt: 0.5 }}>
-              <PersonIcon sx={{ fontSize: 14 }} />
-              {order.assignedDriver.firstName} {order.assignedDriver.lastName}
+          {/* Bottom row: Amount + Driver/Carrier */}
+          <Stack direction="row" spacing={2} sx={{ pl: 5 }} alignItems="center" flexWrap="wrap">
+            <Typography variant="body2" fontWeight={600} color="success.dark" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <AttachMoneyIcon sx={{ fontSize: 18 }} />
+              {order.totalAmount?.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'}
             </Typography>
-          )}
+            {order.assignedDriver && (
+              <Chip
+                size="small"
+                icon={<PersonIcon sx={{ fontSize: '16px !important' }} />}
+                label={`${order.assignedDriver.firstName} ${order.assignedDriver.lastName}`}
+                color="primary"
+                variant="outlined"
+                sx={{ height: 24 }}
+              />
+            )}
+            {order.carrierType && order.carrierType !== 'INTERNAL' && (
+              <Chip
+                size="small"
+                icon={<BusinessIcon sx={{ fontSize: '16px !important' }} />}
+                label={order.carrierName || order.carrierType}
+                color="secondary"
+                variant="filled"
+                sx={{ height: 24 }}
+              />
+            )}
+            {order.carrierTrackingNumber && (
+              <Typography variant="caption" color="text.secondary" fontFamily="monospace">
+                # {order.carrierTrackingNumber}
+              </Typography>
+            )}
+          </Stack>
         </CardContent>
       </CardActionArea>
     </Card>

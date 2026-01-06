@@ -24,3 +24,14 @@ export enum EvidenceType {
   PHOTO = 'PHOTO',
   SIGNATURE = 'SIGNATURE',
 }
+
+export enum CarrierType {
+  INTERNAL = 'INTERNAL',       // Chofer interno de la empresa
+  FEDEX = 'FEDEX',
+  DHL = 'DHL',
+  ESTAFETA = 'ESTAFETA',
+  PAQUETE_EXPRESS = 'PAQUETE_EXPRESS',
+  REDPACK = 'REDPACK',
+  UPS = 'UPS',
+  OTHER = 'OTHER',             // Otra paquetería (especificar nombre)
+}

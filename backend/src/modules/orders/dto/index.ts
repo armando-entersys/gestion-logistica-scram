@@ -1,7 +1,7 @@
 import { IsString, IsOptional, IsNumber, IsEnum, IsBoolean, IsArray, IsUUID, ValidateNested, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { OrderStatus, PriorityLevel } from '@/common/enums';
+import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
 
 export class AddressDto {
   @ApiProperty()
@@ -156,6 +156,27 @@ export class SubmitCsatDto {
   @IsOptional()
   @IsString()
   feedback?: string;
+}
+
+export class AssignCarrierDto {
+  @ApiProperty({ description: 'Lista de UUIDs de órdenes', type: [String] })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  orderIds: string[];
+
+  @ApiProperty({ enum: CarrierType, description: 'Tipo de carrier/paquetería' })
+  @IsEnum(CarrierType)
+  carrierType: CarrierType;
+
+  @ApiPropertyOptional({ description: 'Nombre personalizado del carrier (para tipo OTHER)' })
+  @IsOptional()
+  @IsString()
+  carrierName?: string;
+
+  @ApiPropertyOptional({ description: 'Número de guía de la paquetería' })
+  @IsOptional()
+  @IsString()
+  trackingNumber?: string;
 }
 
 export class OrderFilterDto {

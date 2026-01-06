@@ -7,11 +7,12 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 import { Order, ShipmentEvidence } from './entities';
-import { OrderStatus, PriorityLevel, EvidenceType, UserRole } from '@/common/enums';
+import { OrderStatus, PriorityLevel, EvidenceType, UserRole, CarrierType } from '@/common/enums';
 import {
   CreateOrderDto,
   DispatchRouteDto,
   AssignDriverDto,
+  AssignCarrierDto,
   UpdateLocationDto,
   SubmitCsatDto,
   OrderFilterDto,
@@ -189,6 +190,52 @@ export class OrdersService {
     );
 
     return { assigned: dto.orderIds.length, warning };
+  }
+
+  /**
+   * Asignar paquetería externa a pedidos
+   * RF-03: Gestión de Flota - Paqueterías externas
+   */
+  async assignCarrier(dto: AssignCarrierDto): Promise<{ assigned: number }> {
+    // Para tipo OTHER, validar que se proporcione nombre
+    if (dto.carrierType === CarrierType.OTHER && !dto.carrierName) {
+      throw new BadRequestException('Se requiere nombre del carrier para tipo OTHER');
+    }
+
+    const carrierName = dto.carrierType === CarrierType.OTHER
+      ? dto.carrierName
+      : this.getCarrierDisplayName(dto.carrierType);
+
+    await this.orderRepository.update(
+      { id: In(dto.orderIds) },
+      {
+        carrierType: dto.carrierType,
+        carrierName: carrierName,
+        carrierTrackingNumber: dto.trackingNumber || null,
+        status: OrderStatus.IN_TRANSIT, // Cambiar a En Ruta cuando se asigna paquetería
+        assignedDriverId: null, // No hay chofer interno
+      },
+    );
+
+    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders`);
+    return { assigned: dto.orderIds.length };
+  }
+
+  /**
+   * Obtener nombre de display del carrier
+   */
+  private getCarrierDisplayName(carrierType: CarrierType): string {
+    const names: Record<CarrierType, string> = {
+      [CarrierType.INTERNAL]: 'Chofer Interno',
+      [CarrierType.FEDEX]: 'FedEx',
+      [CarrierType.DHL]: 'DHL',
+      [CarrierType.ESTAFETA]: 'Estafeta',
+      [CarrierType.PAQUETE_EXPRESS]: 'Paquete Express',
+      [CarrierType.REDPACK]: 'Redpack',
+      [CarrierType.UPS]: 'UPS',
+      [CarrierType.OTHER]: 'Otro',
+    };
+    return names[carrierType] || carrierType;
   }
 
   /**

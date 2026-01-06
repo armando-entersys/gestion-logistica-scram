@@ -2,116 +2,111 @@
 
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 
-// Material Design 3 Color Tokens for SCRAM Logistics
-// Primary: Blue (logistics/tracking)
-// Secondary: Teal (operations)
-// Tertiary: Orange (alerts/priority)
+// SCRAM Brand Colors from design-tokens-colores-scram.csv
+// Primary: #ff9900 (Orange) - CTAs, active links
+// Secondary: #44ce6f (Green) - Accents, success states
+// Text: #0e314c (Dark blue) - Headers, main text
+// Typography: Cabin (Headers) + Asap (Body)
 
-const md3Tokens = {
+const scramTokens = {
   light: {
     primary: {
-      main: '#0061A4',
-      light: '#D1E4FF',
-      dark: '#001D36',
+      main: '#ff9900',      // brand-primary
+      light: '#ffb84d',
+      dark: '#cc7a00',      // brand-primary-hover adjusted
       contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#006874',
-      light: '#97F0FF',
-      dark: '#001F24',
-      contrastText: '#FFFFFF',
-    },
-    tertiary: {
-      main: '#BA5D07',
-      light: '#FFDCC2',
-      dark: '#2E1500',
+      main: '#44ce6f',      // brand-secondary
+      light: '#76e097',
+      dark: '#2ea855',
       contrastText: '#FFFFFF',
     },
     error: {
-      main: '#BA1A1A',
-      light: '#FFDAD6',
-      dark: '#410002',
+      main: '#eb6b3d',      // error-color
+      light: '#ff9a6f',
+      dark: '#c94d22',
       contrastText: '#FFFFFF',
     },
     success: {
-      main: '#006D3B',
-      light: '#9CF6B6',
-      dark: '#00210E',
+      main: '#44ce6f',      // Same as secondary (brand-secondary)
+      light: '#76e097',
+      dark: '#2ea855',
       contrastText: '#FFFFFF',
     },
     warning: {
-      main: '#7D5700',
-      light: '#FFDEA3',
-      dark: '#271900',
+      main: '#ff9900',      // warning-color (same as primary)
+      light: '#ffb84d',
+      dark: '#cc7a00',
+      contrastText: '#FFFFFF',
+    },
+    info: {
+      main: '#4a6f8a',      // neutral-navlink / info-color
+      light: '#7a9db5',
+      dark: '#2d4a5c',
       contrastText: '#FFFFFF',
     },
     background: {
-      default: '#FDFCFF',
+      default: '#f7fafd',   // neutral-bg-light
       paper: '#FFFFFF',
     },
-    surface: {
-      main: '#FDFCFF',
-      variant: '#E1E2EC',
+    text: {
+      primary: '#0e314c',   // neutral-black
+      secondary: '#6084a4', // neutral-paragraph
     },
-    outline: {
-      main: '#74777F',
-      variant: '#C4C6D0',
-    },
+    divider: '#e0e0e0',     // neutral-border-light
   },
   dark: {
     primary: {
-      main: '#9ECAFF',
-      light: '#004A77',
-      dark: '#D1E4FF',
-      contrastText: '#003258',
+      main: '#ffb84d',
+      light: '#ffd699',
+      dark: '#ff9900',
+      contrastText: '#1a1a1a',
     },
     secondary: {
-      main: '#4FD8EB',
-      light: '#004F58',
-      dark: '#97F0FF',
-      contrastText: '#00363D',
-    },
-    tertiary: {
-      main: '#FFB871',
-      light: '#6F4000',
-      dark: '#FFDCC2',
-      contrastText: '#4A2800',
+      main: '#76e097',
+      light: '#a8f0b8',
+      dark: '#44ce6f',
+      contrastText: '#1a1a1a',
     },
     error: {
-      main: '#FFB4AB',
-      light: '#93000A',
-      dark: '#FFDAD6',
-      contrastText: '#690005',
+      main: '#ff9a6f',
+      light: '#ffbda3',
+      dark: '#eb6b3d',
+      contrastText: '#1a1a1a',
     },
     success: {
-      main: '#81D99B',
-      light: '#005226',
-      dark: '#9CF6B6',
-      contrastText: '#00391C',
+      main: '#76e097',
+      light: '#a8f0b8',
+      dark: '#44ce6f',
+      contrastText: '#1a1a1a',
     },
     warning: {
-      main: '#F5BF48',
-      light: '#5D4100',
-      dark: '#FFDEA3',
-      contrastText: '#422C00',
+      main: '#ffb84d',
+      light: '#ffd699',
+      dark: '#ff9900',
+      contrastText: '#1a1a1a',
+    },
+    info: {
+      main: '#7a9db5',
+      light: '#a5c4d6',
+      dark: '#4a6f8a',
+      contrastText: '#1a1a1a',
     },
     background: {
-      default: '#1A1C1E',
-      paper: '#1A1C1E',
+      default: '#0e1f2f',
+      paper: '#152636',
     },
-    surface: {
-      main: '#1A1C1E',
-      variant: '#43474E',
+    text: {
+      primary: '#FFFFFF',
+      secondary: '#b0c4d8',
     },
-    outline: {
-      main: '#8E9099',
-      variant: '#43474E',
-    },
+    divider: '#3a5068',
   },
 };
 
 const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
-  const tokens = md3Tokens[mode];
+  const tokens = scramTokens[mode];
 
   return {
     palette: {
@@ -121,91 +116,110 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
       error: tokens.error,
       success: tokens.success,
       warning: tokens.warning,
+      info: tokens.info,
       background: tokens.background,
-      divider: tokens.outline.variant,
+      text: tokens.text,
+      divider: tokens.divider,
     },
     typography: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      // Cabin for headers, Asap for body (SCRAM brand fonts)
+      fontFamily: '"Asap", "Roboto", "Helvetica", "Arial", sans-serif',
       h1: {
-        fontSize: '32px',
-        fontWeight: 500,
-        lineHeight: 1.25,
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '42px',       // font-size-5xl
+        fontWeight: 700,        // font-weight-bold
+        lineHeight: 1.2,        // line-height-tight
+        color: tokens.text.primary,
       },
       h2: {
-        fontSize: '28px',
-        fontWeight: 500,
-        lineHeight: 1.29,
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '32px',       // font-size-4xl
+        fontWeight: 700,
+        lineHeight: 1.2,
+        color: tokens.text.primary,
       },
       h3: {
-        fontSize: '24px',
-        fontWeight: 500,
-        lineHeight: 1.33,
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '28px',       // font-size-3xl
+        fontWeight: 500,        // font-weight-medium
+        lineHeight: 1.2,
+        color: tokens.text.primary,
       },
       h4: {
-        fontSize: '22px',
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '24px',       // font-size-2xl
         fontWeight: 500,
-        lineHeight: 1.27,
+        lineHeight: 1.33,
+        color: tokens.text.primary,
       },
       h5: {
-        fontSize: '16px',
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '20px',       // font-size-lg
         fontWeight: 500,
         lineHeight: 1.5,
-        letterSpacing: '0.15px',
+        color: tokens.text.primary,
       },
       h6: {
-        fontSize: '14px',
+        fontFamily: '"Cabin", "Roboto", "Helvetica", "Arial", sans-serif',
+        fontSize: '18px',       // font-size-md
         fontWeight: 500,
         lineHeight: 1.43,
-        letterSpacing: '0.1px',
+        color: tokens.text.primary,
       },
       subtitle1: {
-        fontSize: '16px',
+        fontSize: '16px',       // font-size-base
         fontWeight: 500,
         lineHeight: 1.5,
-        letterSpacing: '0.15px',
+        color: tokens.text.primary,
       },
       subtitle2: {
-        fontSize: '14px',
+        fontSize: '14px',       // font-size-sm
         fontWeight: 500,
         lineHeight: 1.43,
-        letterSpacing: '0.1px',
+        color: tokens.text.secondary,
       },
       body1: {
-        fontSize: '16px',
-        fontWeight: 400,
-        lineHeight: 1.5,
-        letterSpacing: '0.5px',
+        fontSize: '16px',       // font-size-base
+        fontWeight: 400,        // font-weight-normal
+        lineHeight: 1.8,        // line-height-relaxed
+        color: tokens.text.secondary,
       },
       body2: {
-        fontSize: '14px',
+        fontSize: '14px',       // font-size-sm
         fontWeight: 400,
-        lineHeight: 1.43,
-        letterSpacing: '0.25px',
+        lineHeight: 1.5,
+        color: tokens.text.secondary,
       },
       button: {
         fontSize: '14px',
         fontWeight: 500,
         lineHeight: 1.43,
-        letterSpacing: '0.1px',
         textTransform: 'none',
       },
       caption: {
-        fontSize: '12px',
+        fontSize: '12px',       // font-size-xs
         fontWeight: 400,
         lineHeight: 1.33,
-        letterSpacing: '0.4px',
+        color: tokens.text.secondary,
       },
       overline: {
         fontSize: '11px',
         fontWeight: 500,
         lineHeight: 1.45,
-        letterSpacing: '0.5px',
         textTransform: 'uppercase',
+        letterSpacing: '0.5px',
       },
     },
     shape: {
-      borderRadius: 16, // MD3 uses larger border radius
+      borderRadius: 10,         // border-radius-md
     },
+    shadows: [
+      'none',
+      '0 5px 15px rgba(0,0,0,0.08)',   // shadow-card
+      '0 10px 25px rgba(0,0,0,0.12)',  // shadow-card-hover
+      '0 13px 27px 0 rgba(68, 206, 111, 0.25)', // shadow-primary
+      ...Array(21).fill('0 5px 15px rgba(0,0,0,0.08)'),
+    ] as any,
     components: {
       MuiCssBaseline: {
         styleOverrides: {
@@ -216,7 +230,7 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
               height: '8px',
             },
             '&::-webkit-scrollbar-thumb': {
-              backgroundColor: tokens.outline.main,
+              backgroundColor: mode === 'light' ? '#c4c6d0' : '#43474e',
               borderRadius: '4px',
             },
           },
@@ -225,19 +239,30 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: '20px', // MD3 pill-shaped buttons
+            borderRadius: '5px',    // border-radius-sm
             padding: '10px 24px',
             textTransform: 'none',
             fontWeight: 500,
+            transition: 'all 0.3s', // transition-standard
           },
           contained: {
             boxShadow: 'none',
             '&:hover': {
-              boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15)',
+              boxShadow: '0 13px 27px 0 rgba(68, 206, 111, 0.25)',
+              transform: 'translateY(-2px)',
+            },
+          },
+          containedPrimary: {
+            background: `linear-gradient(135deg, #23bdb8 0%, #43e794 100%)`,
+            '&:hover': {
+              background: `linear-gradient(135deg, #1fa8a3 0%, #38d480 100%)`,
             },
           },
           outlined: {
             borderWidth: '1px',
+            '&:hover': {
+              borderWidth: '1px',
+            },
           },
         },
         defaultProps: {
@@ -247,10 +272,12 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: '12px',
-            boxShadow: mode === 'light'
-              ? '0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15)'
-              : '0px 1px 3px 1px rgba(0, 0, 0, 0.3)',
+            borderRadius: '10px',   // border-radius-md
+            boxShadow: '0 5px 15px rgba(0,0,0,0.08)',
+            transition: 'all 0.3s',
+            '&:hover': {
+              boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+            },
           },
         },
       },
@@ -260,7 +287,10 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
             backgroundImage: 'none',
           },
           elevation1: {
-            boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15)',
+            boxShadow: '0 5px 15px rgba(0,0,0,0.08)',
+          },
+          elevation2: {
+            boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
           },
         },
       },
@@ -268,17 +298,18 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
         styleOverrides: {
           root: {
             backgroundImage: 'none',
+            backgroundColor: mode === 'light' ? '#FFFFFF' : '#152636',
           },
         },
         defaultProps: {
-          elevation: 0,
+          elevation: 1,
         },
       },
       MuiTextField: {
         styleOverrides: {
           root: {
             '& .MuiOutlinedInput-root': {
-              borderRadius: '8px',
+              borderRadius: '5px',  // border-radius-sm
             },
           },
         },
@@ -286,7 +317,7 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
       MuiFab: {
         styleOverrides: {
           root: {
-            borderRadius: '16px', // MD3 FAB shape
+            borderRadius: '15px',   // border-radius-lg
             textTransform: 'none',
           },
         },
@@ -294,59 +325,49 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: '8px',
+            borderRadius: '5px',    // border-radius-sm
           },
         },
       },
       MuiDialog: {
         styleOverrides: {
           paper: {
-            borderRadius: '28px', // MD3 dialog radius
+            borderRadius: '15px',   // border-radius-lg
           },
         },
       },
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            borderRadius: '0 16px 16px 0',
+            borderRadius: '0 15px 15px 0',
           },
         },
       },
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: '28px',
+            borderRadius: '10px',
             margin: '2px 12px',
             '&.Mui-selected': {
-              backgroundColor: mode === 'light' ? tokens.primary.light : tokens.primary.dark,
+              backgroundColor: mode === 'light'
+                ? 'rgba(255, 153, 0, 0.12)'
+                : 'rgba(255, 184, 77, 0.2)',
             },
           },
         },
       },
-      MuiSwitch: {
+      MuiAvatar: {
         styleOverrides: {
           root: {
-            width: 52,
-            height: 32,
-            padding: 0,
+            backgroundColor: tokens.primary.main,
           },
-          switchBase: {
-            padding: 4,
-            '&.Mui-checked': {
-              transform: 'translateX(20px)',
-              '& + .MuiSwitch-track': {
-                opacity: 1,
-              },
-            },
-          },
-          thumb: {
-            width: 24,
-            height: 24,
-          },
-          track: {
-            borderRadius: 16,
-            opacity: 1,
-            backgroundColor: tokens.surface.variant,
+        },
+      },
+      MuiLinearProgress: {
+        styleOverrides: {
+          root: {
+            borderRadius: '5px',
+            backgroundColor: mode === 'light' ? '#e0e0e0' : '#3a5068',
           },
         },
       },

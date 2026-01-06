@@ -25,10 +25,11 @@ import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
-import { UserRole, EvidenceType } from '@/common/enums';
+import { UserRole, EvidenceType, CarrierType } from '@/common/enums';
 import {
   DispatchRouteDto,
   AssignDriverDto,
+  AssignCarrierDto,
   UpdateLocationDto,
   SubmitCsatDto,
   OrderFilterDto,
@@ -127,6 +128,36 @@ export class OrdersController {
   }
 
   /**
+   * Get available carrier types for dropdown
+   * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
+   */
+  @Get('carrier-types')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get available carrier types for assignment' })
+  getCarrierTypes() {
+    return Object.entries(CarrierType).map(([key, value]) => ({
+      value,
+      label: this.getCarrierLabel(value),
+    }));
+  }
+
+  private getCarrierLabel(type: CarrierType): string {
+    const labels: Record<CarrierType, string> = {
+      [CarrierType.INTERNAL]: 'Chofer Interno',
+      [CarrierType.FEDEX]: 'FedEx',
+      [CarrierType.DHL]: 'DHL',
+      [CarrierType.ESTAFETA]: 'Estafeta',
+      [CarrierType.PAQUETE_EXPRESS]: 'Paquete Express',
+      [CarrierType.REDPACK]: 'Redpack',
+      [CarrierType.UPS]: 'UPS',
+      [CarrierType.OTHER]: 'Otra Paquetería',
+    };
+    return labels[type] || type;
+  }
+
+  /**
    * Get single order details
    * - Todos los roles autenticados pueden ver detalles
    * - DRIVER: Solo puede ver órdenes asignadas a él
@@ -193,6 +224,20 @@ export class OrdersController {
   @ApiOperation({ summary: 'Assign driver to orders' })
   assignDriver(@Body() dto: AssignDriverDto) {
     return this.ordersService.assignDriver(dto);
+  }
+
+  /**
+   * Assign external carrier to orders
+   * RF-03: Gestión de Flota - Paqueterías externas (FedEx, DHL, etc.)
+   */
+  @Post('assign-carrier')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Assign external carrier (courier) to orders' })
+  assignCarrier(@Body() dto: AssignCarrierDto) {
+    return this.ordersService.assignCarrier(dto);
   }
 
   /**

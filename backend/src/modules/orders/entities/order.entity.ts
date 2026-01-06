@@ -9,7 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { OrderStatus, PriorityLevel } from '@/common/enums';
+import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
 import { ShipmentEvidence } from './shipment-evidence.entity';
 
@@ -186,6 +186,33 @@ export class Order {
 
   @Column({ name: 'assigned_driver_id', type: 'uuid', nullable: true })
   assignedDriverId: string | null;
+
+  @Column({
+    name: 'carrier_type',
+    type: 'varchar',
+    length: 20,
+    default: CarrierType.INTERNAL,
+    comment: 'Tipo de transportista: interno o paquetería externa',
+  })
+  carrierType: CarrierType;
+
+  @Column({
+    name: 'carrier_name',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    comment: 'Nombre del carrier (para tipo OTHER)',
+  })
+  carrierName: string | null;
+
+  @Column({
+    name: 'carrier_tracking_number',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    comment: 'Número de guía de la paquetería externa',
+  })
+  carrierTrackingNumber: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

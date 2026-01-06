@@ -13,10 +13,7 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
-  Avatar,
-  useTheme,
 } from '@mui/material';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
 import LoginIcon from '@mui/icons-material/Login';
@@ -24,7 +21,6 @@ import LoginIcon from '@mui/icons-material/Login';
 import { authApi } from '@/lib/api';
 
 export default function LoginPage() {
-  const theme = useTheme();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,31 +66,20 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+        // SCRAM gradient: gradient-primary from design tokens
+        background: 'linear-gradient(135deg, #23bdb8 0%, #43e794 100%)',
         px: 2,
       }}
     >
       <Container maxWidth="xs">
         <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Avatar
-            sx={{
-              width: 72,
-              height: 72,
-              bgcolor: 'white',
-              mx: 'auto',
-              mb: 2,
-            }}
-          >
-            <LocalShippingIcon sx={{ fontSize: 40, color: 'primary.main' }} />
-          </Avatar>
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{ fontWeight: 700, color: 'white' }}
-          >
-            SCRAM
-          </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+          <Box
+            component="img"
+            src="/scram-logo-white.png"
+            alt="SCRAM"
+            sx={{ height: 60, mb: 2, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+          />
+          <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem' }}>
             Sistema de Gestión Logística
           </Typography>
         </Box>
