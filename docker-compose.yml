@@ -208,10 +208,12 @@ networks:
     driver: bridge
 
 # ============================================
-# Volumes
+# Volumes (using existing volumes from previous deployment)
 # ============================================
 volumes:
   pg_data:
-    driver: local
+    external: true
+    name: scram-apps_pg_data
   redis_data:
-    driver: local
+    external: true
+    name: scram-apps_redis_data
