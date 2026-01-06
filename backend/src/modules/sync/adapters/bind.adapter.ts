@@ -117,7 +117,7 @@ export class BindAdapter {
       this.logger.log(`Fetched ${bindOrders.length} pending orders from Bind`);
 
       // Cache para clientes (evitar llamadas duplicadas)
-      const clientCache: Map<string, BindClient> = new Map();
+      const clientCache: Map<string, BindClient | null> = new Map();
 
       // Transformar pedidos al formato interno
       const orders: CreateOrderDto[] = [];
@@ -128,12 +128,12 @@ export class BindAdapter {
           const orderDetail = await this.getOrderDetail(bindOrder.ID);
 
           // Obtener datos del cliente (email, número de cliente)
-          let client = clientCache.get(bindOrder.ClientID);
-          if (!client) {
+          let client: BindClient | null = null;
+          if (clientCache.has(bindOrder.ClientID)) {
+            client = clientCache.get(bindOrder.ClientID) || null;
+          } else {
             client = await this.getClientDetails(bindOrder.ClientID);
-            if (client) {
-              clientCache.set(bindOrder.ClientID, client);
-            }
+            clientCache.set(bindOrder.ClientID, client);
           }
 
           const order = this.transformOrder(orderDetail || bindOrder, client);
