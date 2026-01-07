@@ -32,6 +32,11 @@ export class AddressDto {
   @IsOptional()
   @IsString()
   reference?: string;
+
+  @ApiPropertyOptional({ description: 'Dirección original de Bind sin parsear' })
+  @IsOptional()
+  @IsString()
+  original?: string;
 }
 
 export class CreateOrderDto {
@@ -202,6 +207,22 @@ export class AssignCarrierDto {
   @IsOptional()
   @IsString()
   trackingNumber?: string;
+}
+
+export class UpdateAddressDto {
+  @ApiProperty()
+  @IsUUID()
+  orderId: string;
+
+  @ApiProperty({ type: AddressDto })
+  @ValidateNested()
+  @Type(() => AddressDto)
+  addressRaw: AddressDto;
+
+  @ApiPropertyOptional({ description: 'Re-geocode address after update', default: true })
+  @IsOptional()
+  @IsBoolean()
+  geocode?: boolean;
 }
 
 export class OrderFilterDto {

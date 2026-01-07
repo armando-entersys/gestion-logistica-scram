@@ -63,6 +63,41 @@ interface BindClient {
 }
 
 /**
+ * Estructura de Factura según API de Bind ERP (GET /Invoices)
+ */
+interface BindInvoice {
+  ID: string;
+  Number: number;
+  Serie?: string;
+  InvoiceDate: string;
+  ClientID: string;
+  ClientName: string;
+  RFC?: string;
+  Total: number;
+  Subtotal: number;
+  OrderID?: string;
+  OrderNumber?: number;
+  EmployeeID?: string;
+  EmployeeName?: string;
+  Status?: string;
+}
+
+/**
+ * DTO para facturas huérfanas (sin pedido)
+ */
+export interface OrphanInvoiceDto {
+  id: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  clientId: string;
+  clientName: string;
+  employeeName: string;
+  total: number;
+  hasOrder: boolean;
+  orderId?: string;
+}
+
+/**
  * Respuesta paginada de la API de Bind
  */
 interface BindApiResponse<T> {
@@ -115,27 +150,13 @@ export class BindAdapter {
       const bindOrders = response.data.value || [];
       this.logger.log(`Fetched ${bindOrders.length} pending orders from Bind`);
 
-      // Cache para clientes (evitar llamadas duplicadas)
-      const clientCache: Map<string, BindClient | null> = new Map();
-
-      // Transformar pedidos al formato interno
+      // Transformar pedidos al formato interno (sin llamadas adicionales para evitar timeout)
       const orders: CreateOrderDto[] = [];
 
       for (const bindOrder of bindOrders) {
         try {
-          // Obtener detalle del pedido para tener la dirección
-          const orderDetail = await this.getOrderDetail(bindOrder.ID);
-
-          // Obtener datos del cliente (email, número de cliente)
-          let client: BindClient | null = null;
-          if (clientCache.has(bindOrder.ClientID)) {
-            client = clientCache.get(bindOrder.ClientID) || null;
-          } else {
-            client = await this.getClientDetails(bindOrder.ClientID);
-            clientCache.set(bindOrder.ClientID, client);
-          }
-
-          const order = this.transformOrder(orderDetail || bindOrder, client);
+          // Usar datos directamente de la lista (sin llamadas adicionales)
+          const order = this.transformOrder(bindOrder, null);
           orders.push(order);
         } catch (error) {
           this.logger.warn(`Failed to transform order ${bindOrder.ID}: ${error.message}`);
@@ -247,6 +268,7 @@ export class BindAdapter {
         city: addressInfo.city || client?.City || '',
         state: addressInfo.state || client?.State || '',
         reference: order.Comments?.substring(0, 300),
+        original: order.Address || '', // Dirección original de Bind sin parsear
       },
       totalAmount: order.Total || 0,
       isVip,
@@ -352,6 +374,111 @@ export class BindAdapter {
         success: false,
         message: `Failed to connect to Bind ERP: ${error.response?.data?.message || error.message}`,
       };
+    }
+  }
+
+  /**
+   * Obtiene facturas de Bind ERP
+   */
+  async fetchInvoices(): Promise<BindInvoice[]> {
+    this.logger.log('Fetching invoices from Bind ERP...');
+
+    if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
+      this.logger.warn('Bind API Key not configured');
+      throw new Error('Bind API Key not configured');
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<BindApiResponse<BindInvoice>>(`${this.apiUrl}/api/Invoices`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            '$top': 100,
+          },
+        }),
+      );
+
+      const invoices = response.data.value || [];
+      this.logger.log(`Fetched ${invoices.length} invoices from Bind`);
+      return invoices;
+    } catch (error) {
+      this.logger.error('Failed to fetch invoices from Bind:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene lista básica de pedidos (sin detalles) para comparación
+   * Más ligero que fetchOrders para evitar rate limiting
+   */
+  async fetchOrdersBasic(): Promise<{ ID: string; OrderID?: string }[]> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<BindApiResponse<{ ID: string }>>(`${this.apiUrl}/api/Orders`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            '$top': 200,
+            '$select': 'ID',
+          },
+        }),
+      );
+      return response.data.value || [];
+    } catch (error) {
+      this.logger.warn('Failed to fetch basic orders:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Identifica facturas huérfanas (sin pedido asociado)
+   * @param dismissedIds IDs de facturas que el usuario ha descartado
+   */
+  async getOrphanInvoices(dismissedIds: string[] = []): Promise<OrphanInvoiceDto[]> {
+    this.logger.log('Identifying orphan invoices...');
+
+    try {
+      // Solo obtener facturas (las facturas ya tienen OrderID si están vinculadas)
+      const invoices = await this.fetchInvoices();
+
+      // Filtrar facturas huérfanas (sin OrderID)
+      const orphanInvoices: OrphanInvoiceDto[] = [];
+
+      for (const invoice of invoices) {
+        // Si la factura tiene OrderID, no es huérfana
+        if (invoice.OrderID) {
+          continue;
+        }
+
+        // Si ya fue descartada, no mostrar
+        if (dismissedIds.includes(invoice.ID)) {
+          continue;
+        }
+
+        const invoiceNumber = `${invoice.Serie || 'FA'}${invoice.Number}`;
+
+        orphanInvoices.push({
+          id: invoice.ID,
+          invoiceNumber,
+          invoiceDate: invoice.InvoiceDate || '',
+          clientId: invoice.ClientID,
+          clientName: this.cleanString(invoice.ClientName),
+          employeeName: invoice.EmployeeName || 'No asignado',
+          total: invoice.Total || 0,
+          hasOrder: false,
+        });
+      }
+
+      this.logger.log(`Found ${orphanInvoices.length} orphan invoices`);
+      return orphanInvoices;
+    } catch (error) {
+      this.logger.error('Failed to get orphan invoices:', error.message);
+      throw error;
     }
   }
 }

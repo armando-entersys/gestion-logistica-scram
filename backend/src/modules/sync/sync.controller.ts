@@ -1,5 +1,5 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Get, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
 
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -37,5 +37,80 @@ export class SyncController {
   @ApiResponse({ status: 200, description: 'Upload completed' })
   syncFromExcel(@Body() body: { orders: any[] }) {
     return this.syncService.syncFromExcel(body.orders);
+  }
+
+  /**
+   * Obtiene facturas sin pedido asociado (huérfanas)
+   */
+  @Get('orphan-invoices')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get invoices without associated orders' })
+  @ApiResponse({ status: 200, description: 'Orphan invoices retrieved' })
+  getOrphanInvoices() {
+    return this.syncService.getOrphanInvoices();
+  }
+
+  /**
+   * Descarta una factura (no se requiere pedido)
+   */
+  @Post('dismiss-invoice')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Dismiss an invoice (mark as not needing an order)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        bindInvoiceId: { type: 'string' },
+        invoiceNumber: { type: 'string' },
+        clientName: { type: 'string' },
+        total: { type: 'number' },
+        reason: { type: 'string', nullable: true },
+      },
+      required: ['bindInvoiceId', 'invoiceNumber', 'clientName', 'total'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Invoice dismissed' })
+  dismissInvoice(
+    @Body() body: {
+      bindInvoiceId: string;
+      invoiceNumber: string;
+      clientName: string;
+      total: number;
+      reason?: string;
+    },
+    @Request() req: any,
+  ) {
+    return this.syncService.dismissInvoice(
+      body.bindInvoiceId,
+      body.invoiceNumber,
+      body.clientName,
+      body.total,
+      body.reason || null,
+      req.user.id,
+    );
+  }
+
+  /**
+   * Obtiene lista de facturas descartadas
+   */
+  @Get('dismissed-invoices')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get list of dismissed invoices' })
+  @ApiResponse({ status: 200, description: 'Dismissed invoices retrieved' })
+  getDismissedInvoices() {
+    return this.syncService.getDismissedInvoices();
+  }
+
+  /**
+   * Restaura una factura descartada
+   */
+  @Delete('dismissed-invoice/:bindInvoiceId')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Restore a dismissed invoice' })
+  @ApiResponse({ status: 204, description: 'Invoice restored' })
+  restoreInvoice(@Param('bindInvoiceId') bindInvoiceId: string) {
+    return this.syncService.restoreInvoice(bindInvoiceId);
   }
 }

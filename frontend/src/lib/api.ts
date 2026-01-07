@@ -84,6 +84,20 @@ export const ordersApi = {
 
   assignCarrier: (orderIds: string[], carrierType: string, carrierName?: string, trackingNumber?: string) =>
     api.post('/orders/assign-carrier', { orderIds, carrierType, carrierName, trackingNumber }),
+
+  geocodePending: () =>
+    api.post('/orders/geocode-pending'),
+
+  updateAddress: (orderId: string, addressRaw: {
+    street: string;
+    number: string;
+    neighborhood: string;
+    postalCode: string;
+    city: string;
+    state: string;
+    reference?: string;
+  }, geocode: boolean = true) =>
+    api.patch('/orders/address', { orderId, addressRaw, geocode }),
 };
 
 // Users API
@@ -102,6 +116,18 @@ export const syncApi = {
 
   syncExcel: (orders: any[]) =>
     api.post('/sync/excel', { orders }),
+
+  getOrphanInvoices: () =>
+    api.get('/sync/orphan-invoices'),
+
+  dismissInvoice: (bindInvoiceId: string, invoiceNumber: string, clientName: string, total: number, reason?: string) =>
+    api.post('/sync/dismiss-invoice', { bindInvoiceId, invoiceNumber, clientName, total, reason }),
+
+  getDismissedInvoices: () =>
+    api.get('/sync/dismissed-invoices'),
+
+  restoreInvoice: (bindInvoiceId: string) =>
+    api.delete(`/sync/dismissed-invoice/${bindInvoiceId}`),
 };
 
 // Routes API

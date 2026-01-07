@@ -31,6 +31,7 @@ import {
   AssignDriverDto,
   AssignCarrierDto,
   UpdateLocationDto,
+  UpdateAddressDto,
   SubmitCsatDto,
   OrderFilterDto,
 } from './dto';
@@ -141,6 +142,21 @@ export class OrdersController {
       value,
       label: this.getCarrierLabel(value),
     }));
+  }
+
+  /**
+   * Geocode pending orders that don't have coordinates
+   * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
+   */
+  @Post('geocode-pending')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Geocode orders without coordinates' })
+  @ApiResponse({ status: 200, description: 'Geocoding completed' })
+  geocodePending() {
+    return this.ordersService.geocodePendingOrders();
   }
 
   private getCarrierLabel(type: CarrierType): string {
@@ -265,6 +281,18 @@ export class OrdersController {
   @ApiOperation({ summary: 'Manually correct order location on map' })
   updateLocation(@Body() dto: UpdateLocationDto) {
     return this.ordersService.updateLocation(dto);
+  }
+
+  /**
+   * Update order address and re-geocode
+   */
+  @Patch('address')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update order address and re-geocode' })
+  updateAddress(@Body() dto: UpdateAddressDto) {
+    return this.ordersService.updateAddress(dto);
   }
 
   // =============================================

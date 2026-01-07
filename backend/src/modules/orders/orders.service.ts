@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, IsNull } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
@@ -14,9 +14,11 @@ import {
   AssignDriverDto,
   AssignCarrierDto,
   UpdateLocationDto,
+  UpdateAddressDto,
   SubmitCsatDto,
   OrderFilterDto,
 } from './dto';
+import { GeocodingService } from '@/common/services/geocoding.service';
 
 @Injectable()
 export class OrdersService {
@@ -30,6 +32,7 @@ export class OrdersService {
     @InjectQueue('notifications')
     private readonly notificationQueue: Queue,
     private readonly configService: ConfigService,
+    private readonly geocodingService: GeocodingService,
   ) {}
 
   /**
@@ -39,10 +42,12 @@ export class OrdersService {
   async syncWithBind(bindOrders: CreateOrderDto[]): Promise<{
     created: number;
     updated: number;
+    geocoded: number;
     errors: Array<{ bindId: string; error: string }>;
   }> {
     let created = 0;
     let updated = 0;
+    let geocoded = 0;
     const errors: Array<{ bindId: string; error: string }> = [];
 
     for (const bindOrder of bindOrders) {
@@ -72,11 +77,27 @@ export class OrdersService {
           const priorityLevel = this.calculatePriority(bindOrder);
           const trackingHash = this.generateTrackingHash();
 
+          // Geocodificar dirección para nuevos pedidos
+          let latitude: number | null = null;
+          let longitude: number | null = null;
+
+          if (bindOrder.addressRaw) {
+            const geoResult = await this.geocodingService.geocodeAddress(bindOrder.addressRaw);
+            if (geoResult) {
+              latitude = geoResult.latitude;
+              longitude = geoResult.longitude;
+              geocoded++;
+              this.logger.log(`Geocoded order ${bindOrder.bindId}: ${latitude}, ${longitude}`);
+            }
+          }
+
           const newOrder = this.orderRepository.create({
             ...bindOrder,
             priorityLevel,
             trackingHash,
             status: OrderStatus.DRAFT,
+            latitude,
+            longitude,
           });
 
           await this.orderRepository.save(newOrder);
@@ -91,8 +112,58 @@ export class OrdersService {
       }
     }
 
-    this.logger.log(`Sync completed: ${created} created, ${updated} updated, ${errors.length} errors`);
-    return { created, updated, errors };
+    this.logger.log(`Sync completed: ${created} created, ${updated} updated, ${geocoded} geocoded, ${errors.length} errors`);
+    return { created, updated, geocoded, errors };
+  }
+
+  /**
+   * Geocodifica pedidos existentes que no tienen coordenadas
+   */
+  async geocodePendingOrders(): Promise<{ geocoded: number; failed: number }> {
+    const ordersWithoutCoords = await this.orderRepository.find({
+      where: {
+        latitude: IsNull(),
+        status: In([OrderStatus.DRAFT, OrderStatus.READY]),
+      },
+      take: 50, // Procesar en batches para evitar timeout
+    });
+
+    this.logger.log(`Found ${ordersWithoutCoords.length} orders without coordinates`);
+
+    let geocoded = 0;
+    let failed = 0;
+
+    for (const order of ordersWithoutCoords) {
+      try {
+        if (!order.addressRaw) {
+          failed++;
+          continue;
+        }
+
+        const geoResult = await this.geocodingService.geocodeAddress(order.addressRaw);
+
+        if (geoResult) {
+          await this.orderRepository.update(order.id, {
+            latitude: geoResult.latitude,
+            longitude: geoResult.longitude,
+            addressGeo: () => `ST_SetSRID(ST_MakePoint(${geoResult.longitude}, ${geoResult.latitude}), 4326)`,
+          });
+          geocoded++;
+          this.logger.log(`Geocoded order ${order.bindId}: ${geoResult.latitude}, ${geoResult.longitude}`);
+        } else {
+          failed++;
+        }
+
+        // Pequeño delay para evitar rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch (error) {
+        this.logger.error(`Error geocoding order ${order.bindId}:`, error);
+        failed++;
+      }
+    }
+
+    this.logger.log(`Geocoding completed: ${geocoded} geocoded, ${failed} failed`);
+    return { geocoded, failed };
   }
 
   /**
@@ -437,6 +508,45 @@ export class OrdersService {
       longitude: dto.longitude,
       addressGeo: () => `ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326)`,
     });
+
+    return this.orderRepository.findOne({ where: { id: dto.orderId } }) as Promise<Order>;
+  }
+
+  /**
+   * Actualizar dirección de un pedido y re-geocodificar
+   */
+  async updateAddress(dto: UpdateAddressDto): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: dto.orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Pedido ${dto.orderId} no encontrado`);
+    }
+
+    // Update address
+    const updateData: any = {
+      addressRaw: dto.addressRaw,
+    };
+
+    // Geocode if requested (default true)
+    if (dto.geocode !== false) {
+      const geoResult = await this.geocodingService.geocodeAddress(dto.addressRaw);
+      if (geoResult) {
+        updateData.latitude = geoResult.latitude;
+        updateData.longitude = geoResult.longitude;
+        this.logger.log(`Geocoded updated address for order ${dto.orderId}: ${geoResult.latitude}, ${geoResult.longitude}`);
+      }
+    }
+
+    await this.orderRepository.update(dto.orderId, updateData);
+
+    // If we got coordinates, also update the geo column
+    if (updateData.latitude && updateData.longitude) {
+      await this.orderRepository.update(dto.orderId, {
+        addressGeo: () => `ST_SetSRID(ST_MakePoint(${updateData.longitude}, ${updateData.latitude}), 4326)`,
+      });
+    }
 
     return this.orderRepository.findOne({ where: { id: dto.orderId } }) as Promise<Order>;
   }

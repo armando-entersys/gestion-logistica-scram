@@ -58,6 +58,9 @@ import SelectAllIcon from '@mui/icons-material/SelectAll';
 import MapIcon from '@mui/icons-material/Map';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import EditIcon from '@mui/icons-material/Edit';
+import SaveIcon from '@mui/icons-material/Save';
+import CloseIcon from '@mui/icons-material/Close';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi } from '@/lib/api';
@@ -76,12 +79,16 @@ interface Order {
   bindId: string;
   clientName: string;
   clientRfc?: string;
+  clientPhone?: string;
   addressRaw: {
     street?: string;
     number?: string;
     neighborhood?: string;
     city?: string;
+    state?: string;
     postalCode?: string;
+    reference?: string;
+    original?: string; // Dirección original de Bind sin parsear
   };
   latitude?: number;
   longitude?: number;
@@ -144,6 +151,19 @@ export default function PlanningPage() {
     open: false,
     message: '',
     severity: 'success',
+  });
+
+  // Address edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editAddress, setEditAddress] = useState({
+    street: '',
+    number: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    reference: '',
   });
 
   useEffect(() => {
@@ -295,6 +315,243 @@ export default function PlanningPage() {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error', severity: 'error' });
     },
   });
+
+  const addressMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingOrder) throw new Error('No hay pedido seleccionado');
+      return ordersApi.updateAddress(editingOrder.id, editAddress, true);
+    },
+    onSuccess: () => {
+      setSnackbar({ open: true, message: 'Dirección actualizada y geocodificada', severity: 'success' });
+      setEditDialogOpen(false);
+      setEditingOrder(null);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al actualizar dirección', severity: 'error' });
+    },
+  });
+
+  // Type for address option
+  interface AddressOption {
+    label: string;
+    address: typeof editAddress;
+  }
+
+  // Parse a single address block from text
+  const parseAddressBlock = (text: string): Omit<typeof editAddress, 'reference'> | null => {
+    if (!text || text.length < 10) return null;
+
+    const result = {
+      street: '',
+      number: '',
+      neighborhood: '',
+      city: '',
+      state: '',
+      postalCode: '',
+    };
+
+    // Extract postal code
+    const cpMatch = text.match(/C\.?P\.?\s*(\d{5})/i);
+    if (cpMatch) result.postalCode = cpMatch[1];
+
+    // Extract neighborhood (Col. or Colonia)
+    const colMatch = text.match(/Col(?:onia)?\.?\s+([^,\d]+)/i);
+    if (colMatch) result.neighborhood = colMatch[1].trim();
+
+    // Extract number
+    const numMatch = text.match(/(?:No\.?|#|Num\.?)\s*(\d+[A-Z]?)/i);
+    if (numMatch) result.number = numMatch[1];
+
+    // Extract street (before number or Col)
+    const streetMatch = text.match(/^([^,]+?)(?:\s+(?:No\.?|#|Num\.?)\s*\d|,|\s+Col)/i);
+    if (streetMatch) result.street = streetMatch[1].trim();
+
+    // Look for city names
+    const cities = ['Ciudad de México', 'CDMX', 'Guadalajara', 'Monterrey', 'Puebla', 'Querétaro', 'León', 'Mérida', 'Tijuana', 'Cancún'];
+    for (const city of cities) {
+      if (text.toLowerCase().includes(city.toLowerCase())) {
+        result.city = city;
+        break;
+      }
+    }
+
+    // If we found at least street or neighborhood or postal code, return the result
+    if (result.street || result.neighborhood || result.postalCode) {
+      return result;
+    }
+    return null;
+  };
+
+  // Extract ALL possible addresses from order
+  const extractAddressOptions = (order: Order): AddressOption[] => {
+    const options: AddressOption[] = [];
+    const reference = order.addressRaw?.reference || '';
+    const originalAddress = order.addressRaw?.original || '';
+
+    // 0. Original Bind address (if exists and different from parsed)
+    if (originalAddress && originalAddress.length > 5) {
+      const parsedOriginal = parseAddressBlock(originalAddress);
+      if (parsedOriginal) {
+        options.push({
+          label: 'Dirección de Bind (original)',
+          address: {
+            ...parsedOriginal,
+            reference: reference,
+          },
+        });
+      } else {
+        // If we couldn't parse it well, still show the original as street
+        options.push({
+          label: 'Dirección de Bind (original)',
+          address: {
+            street: originalAddress.split(',')[0]?.trim() || originalAddress,
+            number: '',
+            neighborhood: '',
+            city: '',
+            state: '',
+            postalCode: '',
+            reference: reference,
+          },
+        });
+      }
+    }
+
+    // 1. Current address (if exists and different from original)
+    if (order.addressRaw?.street || order.addressRaw?.neighborhood) {
+      const currentAddr = {
+        street: order.addressRaw?.street || '',
+        number: order.addressRaw?.number || '',
+        neighborhood: order.addressRaw?.neighborhood || '',
+        city: order.addressRaw?.city || '',
+        state: order.addressRaw?.state || '',
+        postalCode: order.addressRaw?.postalCode || '',
+        reference: reference,
+      };
+
+      // Check if it's different from the original option
+      const isDuplicate = options.some(
+        (opt) =>
+          opt.address.street === currentAddr.street &&
+          opt.address.neighborhood === currentAddr.neighborhood &&
+          opt.address.postalCode === currentAddr.postalCode
+      );
+
+      if (!isDuplicate) {
+        options.push({
+          label: 'Dirección actual del pedido',
+          address: currentAddr,
+        });
+      }
+    }
+
+    // 2. Look for "Entregar en:" pattern
+    const deliveryPatterns = [
+      /(?:entregar en|enviar a|direcci[oó]n de entrega)[:\s]+([^.]+)/gi,
+      /(?:domicilio)[:\s]+([^.]+)/gi,
+    ];
+
+    for (const pattern of deliveryPatterns) {
+      let match;
+      while ((match = pattern.exec(reference)) !== null) {
+        const parsed = parseAddressBlock(match[1]);
+        if (parsed) {
+          const isDuplicate = options.some(
+            (opt) => opt.address.street === parsed.street && opt.address.neighborhood === parsed.neighborhood
+          );
+          if (!isDuplicate) {
+            options.push({
+              label: 'Dirección de entrega (comentarios)',
+              address: { ...parsed, reference },
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Look for addresses with postal codes in comments
+    const cpMatches = Array.from(reference.matchAll(/([^.;]+C\.?P\.?\s*\d{5}[^.;]*)/gi));
+    for (const match of cpMatches) {
+      const parsed = parseAddressBlock(match[1]);
+      if (parsed) {
+        const isDuplicate = options.some(
+          (opt) =>
+            (opt.address.postalCode === parsed.postalCode && opt.address.neighborhood === parsed.neighborhood) ||
+            (opt.address.street === parsed.street && opt.address.number === parsed.number)
+        );
+        if (!isDuplicate) {
+          options.push({
+            label: `Dirección con C.P. ${parsed.postalCode}`,
+            address: { ...parsed, reference },
+          });
+        }
+      }
+    }
+
+    // 4. Look for addresses with Colonia mentions
+    const colMatches = Array.from(reference.matchAll(/([^.;]*Col(?:onia)?\.?\s+[A-Za-záéíóúñÁÉÍÓÚÑ\s]+[^.;]*)/gi));
+    for (const match of colMatches) {
+      const parsed = parseAddressBlock(match[1]);
+      if (parsed && parsed.neighborhood) {
+        const isDuplicate = options.some(
+          (opt) => opt.address.neighborhood?.toLowerCase() === parsed.neighborhood?.toLowerCase()
+        );
+        if (!isDuplicate) {
+          options.push({
+            label: `Colonia ${parsed.neighborhood}`,
+            address: { ...parsed, reference },
+          });
+        }
+      }
+    }
+
+    // 5. Try parsing the entire reference as an address
+    if (options.length <= 1 && reference) {
+      const fullParsed = parseAddressBlock(reference);
+      if (fullParsed) {
+        const isDuplicate = options.some(
+          (opt) => opt.address.street === fullParsed.street && opt.address.neighborhood === fullParsed.neighborhood
+        );
+        if (!isDuplicate) {
+          options.push({
+            label: 'Dirección extraída de comentarios',
+            address: { ...fullParsed, reference },
+          });
+        }
+      }
+    }
+
+    return options;
+  };
+
+  const [addressOptions, setAddressOptions] = useState<AddressOption[]>([]);
+
+  const openEditDialog = (order: Order) => {
+    setEditingOrder(order);
+    const currentAddress = {
+      street: order.addressRaw?.street || '',
+      number: order.addressRaw?.number || '',
+      neighborhood: order.addressRaw?.neighborhood || '',
+      city: order.addressRaw?.city || '',
+      state: order.addressRaw?.state || '',
+      postalCode: order.addressRaw?.postalCode || '',
+      reference: order.addressRaw?.reference || '',
+    };
+    setEditAddress(currentAddress);
+
+    // Extract all possible addresses from the order
+    const options = extractAddressOptions(order);
+    setAddressOptions(options);
+
+    setEditDialogOpen(true);
+  };
+
+  const selectAddressOption = (option: AddressOption) => {
+    setEditAddress({
+      ...option.address,
+      reference: editAddress.reference, // Keep original reference
+    });
+  };
 
   const toggleOrderSelection = (id: string) => {
     setSelectedOrderIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
@@ -456,6 +713,7 @@ export default function PlanningPage() {
                     order={order}
                     isSelected={selectedOrderIds.includes(order.id)}
                     onToggle={() => toggleOrderSelection(order.id)}
+                    onEdit={() => openEditDialog(order)}
                   />
                 ))}
               </Stack>
@@ -677,6 +935,213 @@ export default function PlanningPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Address Edit Dialog */}
+      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <EditIcon color="primary" />
+              <Typography variant="h6">Editar Dirección</Typography>
+            </Stack>
+            <IconButton size="small" onClick={() => setEditDialogOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          {editingOrder && (
+            <Stack spacing={2}>
+              {/* Order info header */}
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
+                <Typography variant="subtitle2" fontWeight={600}>{editingOrder.clientName}</Typography>
+                <Typography variant="caption" color="text.secondary">ID: {editingOrder.bindId}</Typography>
+                {editingOrder.clientPhone && (
+                  <Typography variant="caption" color="text.secondary" display="block">Tel: {editingOrder.clientPhone}</Typography>
+                )}
+                {editingOrder.latitude && editingOrder.longitude ? (
+                  <Chip size="small" icon={<LocationOnIcon />} label="Con coordenadas" color="success" sx={{ mt: 0.5, height: 20 }} />
+                ) : (
+                  <Chip size="small" icon={<WarningAmberIcon />} label="Sin coordenadas" color="warning" sx={{ mt: 0.5, height: 20 }} />
+                )}
+              </Paper>
+
+              {/* Address options list */}
+              {addressOptions.length > 1 && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
+                  <Typography variant="caption" fontWeight={600} color="text.secondary" gutterBottom display="block">
+                    Seleccionar dirección de entrega:
+                  </Typography>
+                  <Stack spacing={1} sx={{ mt: 1 }}>
+                    {addressOptions.map((option, index) => {
+                      const addr = option.address;
+                      const displayAddr = [
+                        [addr.street, addr.number].filter(Boolean).join(' '),
+                        addr.neighborhood && `Col. ${addr.neighborhood}`,
+                        addr.city,
+                        addr.postalCode && `C.P. ${addr.postalCode}`,
+                      ].filter(Boolean).join(', ');
+
+                      const isSelected =
+                        editAddress.street === addr.street &&
+                        editAddress.neighborhood === addr.neighborhood &&
+                        editAddress.postalCode === addr.postalCode;
+
+                      return (
+                        <Paper
+                          key={index}
+                          variant="outlined"
+                          onClick={() => selectAddressOption(option)}
+                          sx={{
+                            p: 1.5,
+                            cursor: 'pointer',
+                            bgcolor: isSelected ? 'primary.50' : 'white',
+                            borderColor: isSelected ? 'primary.main' : 'divider',
+                            borderWidth: isSelected ? 2 : 1,
+                            '&:hover': {
+                              bgcolor: isSelected ? 'primary.50' : 'grey.100',
+                              borderColor: 'primary.light',
+                            },
+                          }}
+                        >
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <Box
+                              sx={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                border: '2px solid',
+                                borderColor: isSelected ? 'primary.main' : 'grey.400',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isSelected && (
+                                <Box
+                                  sx={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    bgcolor: 'primary.main',
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography variant="caption" fontWeight={600} color={isSelected ? 'primary.main' : 'text.secondary'}>
+                                {option.label}
+                              </Typography>
+                              <Typography variant="body2" sx={{ mt: 0.25 }}>
+                                {displayAddr || 'Sin dirección completa'}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                </Paper>
+              )}
+
+              {/* Show original Bind address */}
+              {editingOrder.addressRaw?.original && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'info.50', borderColor: 'info.light' }}>
+                  <Typography variant="caption" fontWeight={600} color="info.dark" gutterBottom display="block">
+                    Dirección original de Bind:
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>
+                    {editingOrder.addressRaw.original}
+                  </Typography>
+                </Paper>
+              )}
+
+              {/* Show reference/comments if available */}
+              {editAddress.reference && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'warning.50', borderColor: 'warning.light' }}>
+                  <Typography variant="caption" fontWeight={600} color="warning.dark" gutterBottom display="block">
+                    Comentarios del pedido:
+                  </Typography>
+                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.8125rem' }}>
+                    {editAddress.reference}
+                  </Typography>
+                </Paper>
+              )}
+
+              {/* Address fields */}
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  size="small"
+                  label="Calle"
+                  value={editAddress.street}
+                  onChange={(e) => setEditAddress({ ...editAddress, street: e.target.value })}
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="Número"
+                  value={editAddress.number}
+                  onChange={(e) => setEditAddress({ ...editAddress, number: e.target.value })}
+                  sx={{ width: 120 }}
+                />
+              </Stack>
+              <TextField
+                size="small"
+                label="Colonia"
+                value={editAddress.neighborhood}
+                onChange={(e) => setEditAddress({ ...editAddress, neighborhood: e.target.value })}
+                fullWidth
+              />
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  size="small"
+                  label="Ciudad"
+                  value={editAddress.city}
+                  onChange={(e) => setEditAddress({ ...editAddress, city: e.target.value })}
+                  fullWidth
+                />
+                <TextField
+                  size="small"
+                  label="Estado"
+                  value={editAddress.state}
+                  onChange={(e) => setEditAddress({ ...editAddress, state: e.target.value })}
+                  fullWidth
+                />
+              </Stack>
+              <TextField
+                size="small"
+                label="Código Postal"
+                value={editAddress.postalCode}
+                onChange={(e) => setEditAddress({ ...editAddress, postalCode: e.target.value })}
+                sx={{ width: 150 }}
+              />
+              <TextField
+                size="small"
+                label="Referencia / Notas"
+                value={editAddress.reference}
+                onChange={(e) => setEditAddress({ ...editAddress, reference: e.target.value })}
+                multiline
+                rows={2}
+                fullWidth
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setEditDialogOpen(false)} variant="outlined">
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => addressMutation.mutate()}
+            disabled={addressMutation.isPending || !editAddress.street}
+            startIcon={addressMutation.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
+          >
+            Guardar y Geocodificar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
       </Snackbar>
@@ -708,14 +1173,15 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 // Compact Order Card
-function OrderCard({ order, isSelected, onToggle }: { order: Order; isSelected: boolean; onToggle: () => void }) {
+function OrderCard({ order, isSelected, onToggle, onEdit }: { order: Order; isSelected: boolean; onToggle: () => void; onEdit: () => void }) {
   const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
   const status = statusConfig[order.status] || statusConfig.DRAFT;
   const isDelivered = order.status === 'DELIVERED';
   const isUrgent = order.priorityLevel === 3;
+  const hasCoords = order.latitude && order.longitude;
 
   const address = order.addressRaw
-    ? `${order.addressRaw.neighborhood || ''}, ${order.addressRaw.city || ''}`
+    ? `${order.addressRaw.street || ''} ${order.addressRaw.number || ''}, ${order.addressRaw.neighborhood || ''}, ${order.addressRaw.city || ''}`.trim().replace(/^,\s*/, '').replace(/,\s*,/g, ',')
     : 'Sin dirección';
 
   return (
@@ -730,32 +1196,43 @@ function OrderCard({ order, isSelected, onToggle }: { order: Order; isSelected: 
         '&:hover': { borderColor: isSelected ? 'primary.main' : 'primary.light' },
       }}
     >
-      <CardActionArea onClick={onToggle} disabled={isDelivered}>
-        <CardContent sx={{ py: 1.25, px: 1.5, '&:last-child': { pb: 1.25 } }}>
-          <Stack direction="row" alignItems="flex-start" spacing={1}>
-            <Checkbox
-              checked={isSelected}
-              size="small"
-              disabled={isDelivered}
-              onClick={(e) => e.stopPropagation()}
-              onChange={onToggle}
-              sx={{ p: 0, mt: 0.25 }}
-            />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
-                <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Typography variant="body2" fontWeight={600} noWrap>{order.clientName}</Typography>
-                  <Typography variant="caption" color="text.secondary" fontFamily="monospace">{order.bindId}</Typography>
-                </Box>
-                <Stack direction="row" spacing={0.5} flexShrink={0}>
-                  {isUrgent && <Chip size="small" label="Urgente" color="error" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />}
-                  <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />
-                </Stack>
+      <CardContent sx={{ py: 1.25, px: 1.5, '&:last-child': { pb: 1.25 } }}>
+        <Stack direction="row" alignItems="flex-start" spacing={1}>
+          <Checkbox
+            checked={isSelected}
+            size="small"
+            disabled={isDelivered}
+            onClick={(e) => e.stopPropagation()}
+            onChange={onToggle}
+            sx={{ p: 0, mt: 0.25 }}
+          />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" fontWeight={600} noWrap>{order.clientName}</Typography>
+                <Typography variant="caption" color="text.secondary" fontFamily="monospace">{order.bindId}</Typography>
+              </Box>
+              <Stack direction="row" spacing={0.5} flexShrink={0} alignItems="center">
+                {isUrgent && <Chip size="small" label="Urgente" color="error" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />}
+                <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />
+                <Tooltip title="Editar dirección">
+                  <IconButton size="small" onClick={(e) => { e.stopPropagation(); onEdit(); }} sx={{ p: 0.25 }}>
+                    <EditIcon sx={{ fontSize: 16 }} color={hasCoords ? 'action' : 'warning'} />
+                  </IconButton>
+                </Tooltip>
               </Stack>
-              <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 0.5 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-                  <LocationOnIcon sx={{ fontSize: 14 }} /> {address}
+            </Stack>
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 0.5 }}>
+              <Tooltip title={address}>
+                <Typography
+                  variant="caption"
+                  color={hasCoords ? 'text.secondary' : 'warning.main'}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                >
+                  <LocationOnIcon sx={{ fontSize: 14 }} /> {address || 'Sin dirección'}
                 </Typography>
+              </Tooltip>
                 <Typography variant="caption" fontWeight={600} color="success.dark">
                   ${order.totalAmount?.toLocaleString('es-MX', { minimumFractionDigits: 0 }) || '0'}
                 </Typography>
@@ -780,7 +1257,6 @@ function OrderCard({ order, isSelected, onToggle }: { order: Order; isSelected: 
             </Box>
           </Stack>
         </CardContent>
-      </CardActionArea>
     </Card>
   );
 }
