@@ -223,6 +223,22 @@ export class OrdersController {
     return this.ordersService.revertToDraft(body.orderIds);
   }
 
+  /**
+   * Delete all DRAFT orders
+   * Solo PURCHASING puede eliminar pedidos en borrador
+   * Pedidos liberados a tráfico (READY+) no pueden eliminarse
+   */
+  @Post('delete-all-draft')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete all draft orders (only PURCHASING)' })
+  @ApiResponse({ status: 200, description: 'Draft orders deleted' })
+  deleteAllDraft() {
+    return this.ordersService.deleteAllDraft();
+  }
+
   // =============================================
   // ENDPOINTS ROL: ADMIN (Jefe de Tráfico)
   // Permisos: Mapa, Asignar Choferes, Despachar, Gestión

@@ -238,6 +238,20 @@ export class OrdersService {
   }
 
   /**
+   * Eliminar todos los pedidos en DRAFT
+   * Solo PURCHASING puede ejecutar esta acción
+   * Pedidos liberados (READY, IN_TRANSIT, DELIVERED) no se pueden eliminar
+   */
+  async deleteAllDraft(): Promise<{ deleted: number }> {
+    const result = await this.orderRepository.delete({
+      status: OrderStatus.DRAFT,
+    });
+
+    this.logger.log(`Deleted ${result.affected} draft orders`);
+    return { deleted: result.affected || 0 };
+  }
+
+  /**
    * RF-03: Asignación de Recursos y Gestión de Flota
    */
   async assignDriver(dto: AssignDriverDto): Promise<{ assigned: number; warning?: string }> {

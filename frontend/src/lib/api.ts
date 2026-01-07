@@ -79,6 +79,9 @@ export const ordersApi = {
   revert: (orderIds: string[]) =>
     api.post('/orders/revert', { orderIds }),
 
+  deleteAllDraft: () =>
+    api.post('/orders/delete-all-draft'),
+
   getCarrierTypes: () =>
     api.get('/orders/carrier-types'),
 

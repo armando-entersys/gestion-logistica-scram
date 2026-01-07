@@ -281,6 +281,31 @@ export default function ComprasPage() {
     },
   });
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const deleteAllDraftMutation = useMutation({
+    mutationFn: async () => {
+      return ordersApi.deleteAllDraft();
+    },
+    onSuccess: (response) => {
+      const data = response.data;
+      setSnackbar({
+        open: true,
+        message: `${data.deleted || 0} pedidos en borrador eliminados`,
+        severity: 'success',
+      });
+      setDeleteConfirmOpen(false);
+      queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al eliminar pedidos',
+        severity: 'error',
+      });
+    },
+  });
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -504,6 +529,17 @@ export default function ComprasPage() {
                 disabled={geocodeMutation.isPending}
               >
                 Geocodificar
+              </Button>
+            </Tooltip>
+            <Tooltip title="Elimina todos los pedidos en borrador para volver a sincronizar">
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={deleteAllDraftMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <DeleteOutlineIcon />}
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={deleteAllDraftMutation.isPending || draftOrders.length === 0}
+              >
+                Limpiar Borradores
               </Button>
             </Tooltip>
             <Button
@@ -1150,6 +1186,44 @@ export default function ComprasPage() {
             startIcon={dismissInvoiceMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
           >
             Descartar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+          <ErrorOutlineIcon />
+          Confirmar Eliminacion
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Esta accion eliminara <strong>{draftOrders.length}</strong> pedidos en estado <strong>Borrador</strong>.
+          </Typography>
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Los pedidos liberados a Trafico (Listos, En Ruta, Entregados) NO seran eliminados.
+          </Alert>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Despues de eliminar, puede volver a sincronizar con Bind para obtener los pedidos actualizados.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => deleteAllDraftMutation.mutate()}
+            disabled={deleteAllDraftMutation.isPending}
+            startIcon={deleteAllDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+          >
+            Eliminar {draftOrders.length} Borradores
           </Button>
         </DialogActions>
       </Dialog>
