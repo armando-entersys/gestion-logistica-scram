@@ -61,6 +61,10 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CloseIcon from '@mui/icons-material/Close';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import GestureIcon from '@mui/icons-material/Gesture';
+import ImageIcon from '@mui/icons-material/Image';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi } from '@/lib/api';
@@ -74,6 +78,14 @@ const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
   ),
 });
 
+interface ShipmentEvidence {
+  id: string;
+  type: 'PHOTO' | 'SIGNATURE';
+  storageKey: string;
+  capturedAt?: string;
+  createdAt: string;
+}
+
 interface Order {
   id: string;
   bindId: string;
@@ -82,6 +94,7 @@ interface Order {
   clientRfc?: string;
   clientPhone?: string;
   promisedDate?: string;
+  deliveredAt?: string;
   addressRaw: {
     street?: string;
     number?: string;
@@ -106,6 +119,7 @@ interface Order {
   carrierType?: string;
   carrierName?: string;
   carrierTrackingNumber?: string;
+  evidences?: ShipmentEvidence[];
 }
 
 interface CarrierType {
@@ -154,6 +168,42 @@ export default function PlanningPage() {
     message: '',
     severity: 'success',
   });
+
+  // POD viewer dialog state
+  const [podDialogOpen, setPodDialogOpen] = useState(false);
+  const [podOrder, setPodOrder] = useState<Order | null>(null);
+
+  // Format date helper
+  const formatDateShort = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+  };
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Open POD viewer
+  const openPodViewer = (order: Order) => {
+    setPodOrder(order);
+    setPodDialogOpen(true);
+  };
+
+  // Get evidence URL
+  const getEvidenceUrl = (storageKey: string) => {
+    // Assuming storage is relative to API URL or a CDN
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    return `${apiUrl.replace('/api/v1', '')}/storage/${storageKey}`;
+  };
 
   // Address edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -717,6 +767,7 @@ export default function PlanningPage() {
                     isSelected={selectedOrderIds.includes(order.id)}
                     onToggle={() => toggleOrderSelection(order.id)}
                     onEdit={() => openEditDialog(order)}
+                    onViewPod={() => openPodViewer(order)}
                   />
                 ))}
               </Stack>
@@ -1149,6 +1200,114 @@ export default function PlanningPage() {
         </DialogActions>
       </Dialog>
 
+      {/* POD Viewer Dialog */}
+      <Dialog open={podDialogOpen} onClose={() => setPodDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <ImageIcon color="primary" />
+              <Typography variant="h6">Prueba de Entrega (POD)</Typography>
+            </Stack>
+            <IconButton size="small" onClick={() => setPodDialogOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          {podOrder && (
+            <Stack spacing={3}>
+              {/* Order info */}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+                      {podOrder.orderNumber || podOrder.bindId?.substring(0, 8)}
+                    </Typography>
+                    <Typography variant="body2">{podOrder.clientName}</Typography>
+                  </Box>
+                  <Box textAlign="right">
+                    <Typography variant="caption" color="text.secondary">Entregado</Typography>
+                    <Typography variant="body2" fontWeight={500}>
+                      {formatDateTime(podOrder.deliveredAt)}
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+
+              {/* Evidences */}
+              {podOrder.evidences && podOrder.evidences.length > 0 ? (
+                <Box>
+                  <Typography variant="subtitle2" gutterBottom color="text.secondary">
+                    Evidencias capturadas:
+                  </Typography>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    {podOrder.evidences.map((evidence) => (
+                      <Paper key={evidence.id} variant="outlined" sx={{ p: 2, flex: 1 }}>
+                        <Stack spacing={1} alignItems="center">
+                          {evidence.type === 'PHOTO' ? (
+                            <PhotoCameraIcon sx={{ fontSize: 40, color: 'primary.main' }} />
+                          ) : (
+                            <GestureIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
+                          )}
+                          <Typography variant="body2" fontWeight={500}>
+                            {evidence.type === 'PHOTO' ? 'Fotografía' : 'Firma'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDateTime(evidence.capturedAt || evidence.createdAt)}
+                          </Typography>
+                          <Box
+                            component="img"
+                            src={getEvidenceUrl(evidence.storageKey)}
+                            alt={evidence.type}
+                            sx={{
+                              width: '100%',
+                              maxHeight: 300,
+                              objectFit: 'contain',
+                              borderRadius: 1,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              bgcolor: 'white',
+                            }}
+                            onError={(e: any) => {
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <Box
+                            sx={{
+                              display: 'none',
+                              width: '100%',
+                              height: 150,
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              bgcolor: 'grey.100',
+                              borderRadius: 1,
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              Imagen no disponible
+                            </Typography>
+                          </Box>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
+              ) : (
+                <Alert severity="info">
+                  No hay evidencias registradas para este pedido.
+                </Alert>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setPodDialogOpen(false)} variant="outlined">
+            Cerrar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>
       </Snackbar>
@@ -1180,12 +1339,22 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 // Compact Order Card
-function OrderCard({ order, isSelected, onToggle, onEdit }: { order: Order; isSelected: boolean; onToggle: () => void; onEdit: () => void }) {
+function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: Order; isSelected: boolean; onToggle: () => void; onEdit: () => void; onViewPod?: () => void }) {
   const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
   const status = statusConfig[order.status] || statusConfig.DRAFT;
   const isDelivered = order.status === 'DELIVERED';
   const isUrgent = order.priorityLevel === 3;
   const hasCoords = order.latitude && order.longitude;
+  const hasEvidence = order.evidences && order.evidences.length > 0;
+
+  // Format promised date
+  const formatPromisedDate = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+  };
+
+  const promisedDateStr = formatPromisedDate(order.promisedDate);
 
   const address = order.addressRaw
     ? `${order.addressRaw.street || ''} ${order.addressRaw.number || ''}, ${order.addressRaw.neighborhood || ''}, ${order.addressRaw.city || ''}`.trim().replace(/^,\s*/, '').replace(/,\s*,/g, ',')
@@ -1220,12 +1389,31 @@ function OrderCard({ order, isSelected, onToggle, onEdit }: { order: Order; isSe
                   <Typography variant="body2" fontWeight={700} color="primary.main">
                     {order.orderNumber || order.bindId?.substring(0, 8)}
                   </Typography>
+                  {promisedDateStr && (
+                    <Tooltip title={`Fecha de entrega: ${promisedDateStr}`}>
+                      <Chip
+                        size="small"
+                        icon={<CalendarTodayIcon sx={{ fontSize: '10px !important' }} />}
+                        label={promisedDateStr}
+                        sx={{ height: 16, '& .MuiChip-label': { px: 0.5, fontSize: '0.6rem' }, '& .MuiChip-icon': { ml: 0.25 } }}
+                        color="info"
+                        variant="outlined"
+                      />
+                    </Tooltip>
+                  )}
                   <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>{order.clientName}</Typography>
                 </Stack>
               </Box>
               <Stack direction="row" spacing={0.5} flexShrink={0} alignItems="center">
                 {isUrgent && <Chip size="small" label="Urgente" color="error" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />}
                 <Chip size="small" label={status.label} color={status.color} variant="outlined" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />
+                {isDelivered && hasEvidence && onViewPod && (
+                  <Tooltip title="Ver prueba de entrega">
+                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); onViewPod(); }} sx={{ p: 0.25 }} color="success">
+                      <PhotoCameraIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
+                )}
                 <Tooltip title="Editar dirección">
                   <IconButton size="small" onClick={(e) => { e.stopPropagation(); onEdit(); }} sx={{ p: 0.25 }}>
                     <EditIcon sx={{ fontSize: 16 }} color={hasCoords ? 'action' : 'warning'} />
@@ -1238,7 +1426,7 @@ function OrderCard({ order, isSelected, onToggle, onEdit }: { order: Order; isSe
                 <Typography
                   variant="caption"
                   color={hasCoords ? 'text.secondary' : 'warning.main'}
-                  sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 >
                   <LocationOnIcon sx={{ fontSize: 14 }} /> {address || 'Sin dirección'}
