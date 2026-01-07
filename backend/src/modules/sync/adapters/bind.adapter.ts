@@ -8,7 +8,11 @@ import { CreateOrderDto } from '@/modules/orders/dto';
 /**
  * Estructura de Pedido según API de Bind ERP (GET /Orders)
  *
- * StatusCode:
+ * Status (en lista):
+ * 1 = Surtido (listo para entregar)
+ * 2 = Cancelado
+ *
+ * StatusCode (en detalle):
  * 0 = Pendiente
  * 1 = Surtido
  * 2 = Cancelado
@@ -17,12 +21,12 @@ interface BindOrder {
   ID: string;
   Number: number;
   Serie?: string;
-  OrderDate: string;
+  OrderDate: string; // Fecha prometida de entrega
   ClientID: string;
   ClientName: string;
   RFC?: string;
   PhoneNumber?: string;
-  Address?: string;
+  Address?: string; // Solo viene en el detalle del pedido
   Comments?: string;
   WarehouseID?: string;
   WarehouseName?: string;
@@ -30,8 +34,8 @@ interface BindOrder {
   EmployeeName?: string;
   PurchaseOrder?: string;
   Total: number;
-  StatusCode: number;
-  Status?: string;
+  StatusCode?: number;
+  Status?: number | string; // En lista es número, en detalle es string
 }
 
 /**
@@ -122,10 +126,11 @@ export class BindAdapter {
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
-   * Obtiene pedidos pendientes (StatusCode=0) desde /Orders
+   * Obtiene pedidos con Status=1 (Surtido) - listos para entregar
+   * Obtiene el detalle de cada pedido para conseguir la dirección de entrega
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching orders from Bind ERP...');
+    this.logger.log('Fetching orders from Bind ERP (Status=1 Surtido)...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -133,7 +138,7 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener pedidos pendientes (Status=0 o sin filtro para obtener todos)
+      // Obtener solo pedidos Surtidos (Status=1) - listos para entregar
       const response = await firstValueFrom(
         this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
           headers: {
@@ -141,6 +146,7 @@ export class BindAdapter {
             'Content-Type': 'application/json',
           },
           params: {
+            '$filter': 'Status eq 1',
             '$orderby': 'OrderDate desc',
             '$top': 100,
           },
@@ -148,21 +154,41 @@ export class BindAdapter {
       );
 
       const bindOrders = response.data.value || [];
-      this.logger.log(`Fetched ${bindOrders.length} pending orders from Bind`);
+      this.logger.log(`Fetched ${bindOrders.length} surtido orders from Bind`);
 
-      // Transformar pedidos al formato interno (sin llamadas adicionales para evitar timeout)
+      // Obtener detalles de cada pedido para conseguir la dirección
       const orders: CreateOrderDto[] = [];
+      const batchSize = 10; // Procesar en lotes para evitar rate limiting
 
-      for (const bindOrder of bindOrders) {
-        try {
-          // Usar datos directamente de la lista (sin llamadas adicionales)
-          const order = this.transformOrder(bindOrder, null);
-          orders.push(order);
-        } catch (error) {
-          this.logger.warn(`Failed to transform order ${bindOrder.ID}: ${error.message}`);
+      for (let i = 0; i < bindOrders.length; i += batchSize) {
+        const batch = bindOrders.slice(i, i + batchSize);
+
+        // Obtener detalles en paralelo dentro del lote
+        const detailPromises = batch.map(async (bindOrder) => {
+          try {
+            // Obtener el detalle del pedido para conseguir la dirección
+            const detail = await this.getOrderDetail(bindOrder.ID);
+            if (detail) {
+              return this.transformOrder(detail, null);
+            }
+            // Si falla el detalle, usar datos de la lista
+            return this.transformOrder(bindOrder, null);
+          } catch (error) {
+            this.logger.warn(`Failed to get detail for order ${bindOrder.ID}: ${error.message}`);
+            return this.transformOrder(bindOrder, null);
+          }
+        });
+
+        const batchResults = await Promise.all(detailPromises);
+        orders.push(...batchResults.filter(o => o !== null));
+
+        // Pequeña pausa entre lotes para evitar rate limiting
+        if (i + batchSize < bindOrders.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
       }
 
+      this.logger.log(`Processed ${orders.length} orders with details`);
       return orders;
     } catch (error) {
       this.logger.error('Failed to fetch orders from Bind:', error.response?.data || error.message);
