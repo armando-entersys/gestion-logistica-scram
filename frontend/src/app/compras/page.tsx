@@ -59,6 +59,9 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import SelectAllIcon from '@mui/icons-material/SelectAll';
 
 import { ordersApi, syncApi } from '@/lib/api';
 
@@ -140,6 +143,15 @@ export default function ComprasPage() {
     invoice: null,
     reason: '',
   });
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [bulkDismissOpen, setBulkDismissOpen] = useState(false);
+  const [bulkDismissReason, setBulkDismissReason] = useState('');
+
+  // Sorting state
+  type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
+  type SortDirection = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField>('promisedDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Check auth
   useEffect(() => {
@@ -259,6 +271,45 @@ export default function ComprasPage() {
     },
   });
 
+  const bulkDismissMutation = useMutation({
+    mutationFn: async ({ invoiceIds, reason }: { invoiceIds: string[]; reason: string }) => {
+      // Dismiss each invoice in sequence
+      const results = [];
+      for (const id of invoiceIds) {
+        const invoice = orphanInvoices?.find((inv: OrphanInvoice) => inv.id === id);
+        if (invoice) {
+          const result = await syncApi.dismissInvoice(
+            invoice.id,
+            invoice.invoiceNumber,
+            invoice.clientName,
+            invoice.total,
+            reason || undefined
+          );
+          results.push(result);
+        }
+      }
+      return { dismissed: results.length };
+    },
+    onSuccess: (data) => {
+      setSnackbar({
+        open: true,
+        message: `${data.dismissed} facturas descartadas correctamente`,
+        severity: 'success',
+      });
+      setBulkDismissOpen(false);
+      setBulkDismissReason('');
+      setSelectedInvoiceIds([]);
+      queryClient.invalidateQueries({ queryKey: ['orphan-invoices'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al descartar facturas',
+        severity: 'error',
+      });
+    },
+  });
+
   const geocodeMutation = useMutation({
     mutationFn: async () => {
       return ordersApi.geocodePending();
@@ -315,6 +366,21 @@ export default function ComprasPage() {
     }
   };
 
+  const toggleInvoiceSelection = (id: string) => {
+    setSelectedInvoiceIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllInvoices = () => {
+    if (!orphanInvoices) return;
+    if (selectedInvoiceIds.length === orphanInvoices.length) {
+      setSelectedInvoiceIds([]);
+    } else {
+      setSelectedInvoiceIds(orphanInvoices.map((inv: OrphanInvoice) => inv.id));
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -333,7 +399,17 @@ export default function ComprasPage() {
     );
   };
 
-  // Filter and sort orders by search and date
+  // Handle sort column click
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  // Filter and sort orders by search and selected column
   const filteredOrders = useMemo(() => {
     if (!orders) return [];
     let result = orders;
@@ -344,17 +420,47 @@ export default function ComprasPage() {
         (o: any) =>
           o.clientName?.toLowerCase().includes(searchLower) ||
           o.bindId?.toLowerCase().includes(searchLower) ||
+          o.orderNumber?.toLowerCase().includes(searchLower) ||
           o.clientRfc?.toLowerCase().includes(searchLower)
       );
     }
 
-    // Sort by createdAt descending (newest first)
-    return result.sort((a: any, b: any) => {
-      const dateA = new Date(a.createdAt || 0).getTime();
-      const dateB = new Date(b.createdAt || 0).getTime();
-      return dateB - dateA;
+    // Sort by selected field
+    return [...result].sort((a: any, b: any) => {
+      let valueA: any;
+      let valueB: any;
+
+      switch (sortField) {
+        case 'orderNumber':
+          valueA = a.orderNumber || a.bindId || '';
+          valueB = b.orderNumber || b.bindId || '';
+          break;
+        case 'promisedDate':
+          valueA = new Date(a.promisedDate || 0).getTime();
+          valueB = new Date(b.promisedDate || 0).getTime();
+          break;
+        case 'createdAt':
+          valueA = new Date(a.createdAt || 0).getTime();
+          valueB = new Date(b.createdAt || 0).getTime();
+          break;
+        case 'clientName':
+          valueA = (a.clientName || '').toLowerCase();
+          valueB = (b.clientName || '').toLowerCase();
+          break;
+        case 'totalAmount':
+          valueA = a.totalAmount || 0;
+          valueB = b.totalAmount || 0;
+          break;
+        default:
+          valueA = new Date(a.promisedDate || 0).getTime();
+          valueB = new Date(b.promisedDate || 0).getTime();
+      }
+
+      if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+      if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [orders, search]);
+  }, [orders, search, sortField, sortDirection]);
 
   const draftOrders = filteredOrders.filter((o: any) => o.status === 'DRAFT') || [];
   const readyOrders = filteredOrders.filter((o: any) => o.status === 'READY') || [];
@@ -398,6 +504,38 @@ export default function ComprasPage() {
     });
   };
 
+  const formatDateShort = (dateString: string) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-MX', {
+      day: '2-digit',
+      month: 'short',
+    });
+  };
+
+  // Render sortable header
+  const SortableHeader = ({ field, label, align = 'left' }: { field: SortField; label: string; align?: 'left' | 'right' }) => (
+    <TableCell
+      align={align}
+      sx={{
+        fontWeight: 600,
+        cursor: 'pointer',
+        userSelect: 'none',
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+      onClick={() => handleSort(field)}
+    >
+      <Stack direction="row" alignItems="center" spacing={0.5} justifyContent={align === 'right' ? 'flex-end' : 'flex-start'}>
+        <span>{label}</span>
+        {sortField === field && (
+          sortDirection === 'asc'
+            ? <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+            : <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+        )}
+      </Stack>
+    </TableCell>
+  );
+
   const formatAddress = (addressRaw: Order['addressRaw']) => {
     if (!addressRaw) return '-';
     const parts = [
@@ -415,11 +553,12 @@ export default function ComprasPage() {
         <TableHead>
           <TableRow sx={{ bgcolor: 'grey.50' }}>
             <TableCell padding="checkbox" sx={{ width: 40 }}></TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Número</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Cliente</TableCell>
+            <SortableHeader field="orderNumber" label="Número" />
+            <SortableHeader field="promisedDate" label="F. Pedido" />
+            <SortableHeader field="createdAt" label="F. Sync" />
+            <SortableHeader field="clientName" label="Cliente" />
             <TableCell sx={{ fontWeight: 600 }}>Destino</TableCell>
-            <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
+            <SortableHeader field="totalAmount" label="Total" align="right" />
             <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
             <TableCell align="center" sx={{ fontWeight: 600, width: 60 }}>Ver</TableCell>
           </TableRow>
@@ -452,13 +591,22 @@ export default function ComprasPage() {
                   </Stack>
                 </TableCell>
                 <TableCell onClick={() => onToggle(order.id)}>
-                  <Typography variant="caption" color="text.secondary">
-                    {formatDate(order.createdAt)}
-                  </Typography>
+                  <Tooltip title={order.promisedDate ? `Fecha de entrega prometida: ${formatDate(order.promisedDate)}` : 'Sin fecha prometida'}>
+                    <Typography variant="caption" color={order.promisedDate ? 'primary.main' : 'text.disabled'} fontWeight={500}>
+                      {formatDateShort(order.promisedDate || '')}
+                    </Typography>
+                  </Tooltip>
+                </TableCell>
+                <TableCell onClick={() => onToggle(order.id)}>
+                  <Tooltip title={`Sincronizado: ${formatDate(order.createdAt)}`}>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDateShort(order.createdAt)}
+                    </Typography>
+                  </Tooltip>
                 </TableCell>
                 <TableCell onClick={() => onToggle(order.id)}>
                   <Tooltip title={order.clientRfc || ''}>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>
+                    <Typography variant="body2" noWrap sx={{ maxWidth: 140 }}>
                       {order.clientName}
                     </Typography>
                   </Tooltip>
@@ -805,6 +953,29 @@ export default function ComprasPage() {
                   Reportar con asesores para que creen el pedido, o descartar si no requiere envio
                 </Typography>
               </Box>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<SelectAllIcon />}
+                  onClick={handleSelectAllInvoices}
+                  disabled={!orphanInvoices?.length}
+                >
+                  {selectedInvoiceIds.length === (orphanInvoices?.length || 0) && orphanInvoices?.length
+                    ? `Deseleccionar (${selectedInvoiceIds.length})`
+                    : `Seleccionar Todas (${orphanInvoices?.length || 0})`}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  startIcon={bulkDismissMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+                  onClick={() => setBulkDismissOpen(true)}
+                  disabled={selectedInvoiceIds.length === 0 || bulkDismissMutation.isPending}
+                >
+                  Descartar ({selectedInvoiceIds.length})
+                </Button>
+              </Stack>
             </Stack>
 
             {isLoadingOrphans ? (
@@ -824,18 +995,27 @@ export default function ComprasPage() {
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ bgcolor: 'grey.50' }}>
+                        <TableCell padding="checkbox" sx={{ width: 40 }}></TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Factura</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Cliente</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Asesor/Vendedor</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 600, width: 100 }}>Acciones</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>Acción</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {paginatedOrphanInvoices.map((invoice: OrphanInvoice) => (
-                        <TableRow key={invoice.id} hover>
-                          <TableCell>
+                        <TableRow
+                          key={invoice.id}
+                          hover
+                          selected={selectedInvoiceIds.includes(invoice.id)}
+                          sx={{ cursor: 'pointer' }}
+                        >
+                          <TableCell padding="checkbox" onClick={() => toggleInvoiceSelection(invoice.id)}>
+                            <Checkbox checked={selectedInvoiceIds.includes(invoice.id)} size="small" />
+                          </TableCell>
+                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
                             <Stack direction="row" alignItems="center" spacing={1}>
                               <ErrorOutlineIcon color="error" fontSize="small" />
                               <Typography variant="body2" fontWeight={600} color="error.main">
@@ -843,17 +1023,17 @@ export default function ComprasPage() {
                               </Typography>
                             </Stack>
                           </TableCell>
-                          <TableCell>
+                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
                             <Typography variant="caption" color="text.secondary">
-                              {formatDate(invoice.invoiceDate)}
+                              {formatDateShort(invoice.invoiceDate)}
                             </Typography>
                           </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
+                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
+                            <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
                               {invoice.clientName}
                             </Typography>
                           </TableCell>
-                          <TableCell>
+                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
                             <Chip
                               size="small"
                               icon={<PersonIcon />}
@@ -863,7 +1043,7 @@ export default function ComprasPage() {
                               sx={{ height: 24 }}
                             />
                           </TableCell>
-                          <TableCell align="right">
+                          <TableCell align="right" onClick={() => toggleInvoiceSelection(invoice.id)}>
                             <Typography variant="body2" fontWeight={500}>
                               ${invoice.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'}
                             </Typography>
@@ -1247,6 +1427,51 @@ export default function ComprasPage() {
             startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
           >
             Eliminar {selectedDraftIds.length} Pedido{selectedDraftIds.length !== 1 ? 's' : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Bulk Dismiss Invoices Dialog */}
+      <Dialog
+        open={bulkDismissOpen}
+        onClose={() => setBulkDismissOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+          <DeleteOutlineIcon />
+          Descartar Facturas en Bloque
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Esta accion descartara <strong>{selectedInvoiceIds.length}</strong> factura{selectedInvoiceIds.length !== 1 ? 's' : ''} seleccionada{selectedInvoiceIds.length !== 1 ? 's' : ''}.
+          </Typography>
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Las facturas descartadas no apareceran en la lista de facturas sin pedido.
+          </Alert>
+          <TextField
+            fullWidth
+            multiline
+            rows={2}
+            label="Motivo del descarte (opcional)"
+            placeholder="Ej: Servicios sin materiales, pedidos ya creados, etc."
+            value={bulkDismissReason}
+            onChange={(e) => setBulkDismissReason(e.target.value)}
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDismissOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => bulkDismissMutation.mutate({ invoiceIds: selectedInvoiceIds, reason: bulkDismissReason })}
+            disabled={bulkDismissMutation.isPending}
+            startIcon={bulkDismissMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+          >
+            Descartar {selectedInvoiceIds.length} Factura{selectedInvoiceIds.length !== 1 ? 's' : ''}
           </Button>
         </DialogActions>
       </Dialog>

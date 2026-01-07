@@ -77,9 +77,11 @@ const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
 interface Order {
   id: string;
   bindId: string;
+  orderNumber?: string;
   clientName: string;
   clientRfc?: string;
   clientPhone?: string;
+  promisedDate?: string;
   addressRaw: {
     street?: string;
     number?: string;
@@ -233,6 +235,7 @@ export default function PlanningPage() {
       result = result.filter(
         (o) =>
           o.clientName?.toLowerCase().includes(s) ||
+          o.orderNumber?.toLowerCase().includes(s) ||
           o.bindId?.toLowerCase().includes(s) ||
           o.clientRfc?.toLowerCase().includes(s) ||
           o.assignedDriver?.firstName?.toLowerCase().includes(s) ||
@@ -893,7 +896,7 @@ export default function PlanningPage() {
                 Ruta ({selectedOrders.length} paradas):
               </Typography>
               {selectedOrders.map((order, i) => (
-                <Chip key={order.id} size="small" label={`${i + 1}. ${order.clientName}`} sx={{ mr: 0.5, mb: 0.5 }} />
+                <Chip key={order.id} size="small" label={`${i + 1}. ${order.orderNumber || order.bindId?.substring(0, 6)} - ${order.clientName}`} sx={{ mr: 0.5, mb: 0.5 }} />
               ))}
             </Box>
           )}
@@ -953,8 +956,12 @@ export default function PlanningPage() {
             <Stack spacing={2}>
               {/* Order info header */}
               <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
-                <Typography variant="subtitle2" fontWeight={600}>{editingOrder.clientName}</Typography>
-                <Typography variant="caption" color="text.secondary">ID: {editingOrder.bindId}</Typography>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary.main">
+                    {editingOrder.orderNumber || editingOrder.bindId?.substring(0, 8)}
+                  </Typography>
+                  <Typography variant="subtitle2" fontWeight={600}>{editingOrder.clientName}</Typography>
+                </Stack>
                 {editingOrder.clientPhone && (
                   <Typography variant="caption" color="text.secondary" display="block">Tel: {editingOrder.clientPhone}</Typography>
                 )}
@@ -1209,8 +1216,12 @@ function OrderCard({ order, isSelected, onToggle, onEdit }: { order: Order; isSe
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1}>
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography variant="body2" fontWeight={600} noWrap>{order.clientName}</Typography>
-                <Typography variant="caption" color="text.secondary" fontFamily="monospace">{order.bindId}</Typography>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="body2" fontWeight={700} color="primary.main">
+                    {order.orderNumber || order.bindId?.substring(0, 8)}
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>{order.clientName}</Typography>
+                </Stack>
               </Box>
               <Stack direction="row" spacing={0.5} flexShrink={0} alignItems="center">
                 {isUrgent && <Chip size="small" label="Urgente" color="error" sx={{ height: 20, '& .MuiChip-label': { px: 0.75, fontSize: '0.6875rem' } }} />}
