@@ -39,7 +39,7 @@ export class GeocodingService {
    * Geocodifica una dirección estructurada a coordenadas
    */
   async geocodeAddress(address: {
-    street: string;
+    street?: string;
     number?: string;
     neighborhood?: string;
     postalCode?: string;
