@@ -224,19 +224,19 @@ export class OrdersController {
   }
 
   /**
-   * Delete all DRAFT orders
+   * Delete selected DRAFT orders
    * Solo PURCHASING puede eliminar pedidos en borrador
-   * Pedidos liberados a tráfico (READY+) no pueden eliminarse
+   * Solo elimina pedidos que estén en estado DRAFT
    */
-  @Post('delete-all-draft')
+  @Post('delete-draft')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.PURCHASING)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete all draft orders (only PURCHASING)' })
+  @ApiOperation({ summary: 'Delete selected draft orders (only PURCHASING)' })
   @ApiResponse({ status: 200, description: 'Draft orders deleted' })
-  deleteAllDraft() {
-    return this.ordersService.deleteAllDraft();
+  deleteDraft(@Body() body: { orderIds: string[] }) {
+    return this.ordersService.deleteDraftOrders(body.orderIds);
   }
 
   // =============================================

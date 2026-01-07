@@ -238,13 +238,14 @@ export class OrdersService {
   }
 
   /**
-   * Eliminar todos los pedidos en DRAFT
+   * Eliminar pedidos en DRAFT por IDs
    * Solo PURCHASING puede ejecutar esta acción
-   * Pedidos liberados (READY, IN_TRANSIT, DELIVERED) no se pueden eliminar
+   * Solo se eliminan pedidos en estado DRAFT
    */
-  async deleteAllDraft(): Promise<{ deleted: number }> {
+  async deleteDraftOrders(orderIds: string[]): Promise<{ deleted: number }> {
     const result = await this.orderRepository.delete({
-      status: OrderStatus.DRAFT,
+      id: In(orderIds),
+      status: OrderStatus.DRAFT, // Solo eliminar si están en DRAFT
     });
 
     this.logger.log(`Deleted ${result.affected} draft orders`);

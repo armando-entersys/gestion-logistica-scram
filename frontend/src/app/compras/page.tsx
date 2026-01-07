@@ -283,18 +283,19 @@ export default function ComprasPage() {
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
-  const deleteAllDraftMutation = useMutation({
+  const deleteDraftMutation = useMutation({
     mutationFn: async () => {
-      return ordersApi.deleteAllDraft();
+      return ordersApi.deleteDraft(selectedDraftIds);
     },
     onSuccess: (response) => {
       const data = response.data;
       setSnackbar({
         open: true,
-        message: `${data.deleted || 0} pedidos en borrador eliminados`,
+        message: `${data.deleted || 0} pedidos eliminados`,
         severity: 'success',
       });
       setDeleteConfirmOpen(false);
+      setSelectedDraftIds([]);
       queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
     },
     onError: (error: any) => {
@@ -305,6 +306,14 @@ export default function ComprasPage() {
       });
     },
   });
+
+  const handleSelectAllDrafts = () => {
+    if (selectedDraftIds.length === draftOrders.length) {
+      setSelectedDraftIds([]);
+    } else {
+      setSelectedDraftIds(draftOrders.map((o: Order) => o.id));
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -531,16 +540,30 @@ export default function ComprasPage() {
                 Geocodificar
               </Button>
             </Tooltip>
-            <Tooltip title="Elimina todos los pedidos en borrador para volver a sincronizar">
+            <Tooltip title={selectedDraftIds.length === draftOrders.length ? "Deseleccionar todos" : "Seleccionar todos los borradores"}>
               <Button
                 variant="outlined"
-                color="error"
-                startIcon={deleteAllDraftMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <DeleteOutlineIcon />}
-                onClick={() => setDeleteConfirmOpen(true)}
-                disabled={deleteAllDraftMutation.isPending || draftOrders.length === 0}
+                color="primary"
+                onClick={handleSelectAllDrafts}
+                disabled={draftOrders.length === 0}
               >
-                Limpiar Borradores
+                {selectedDraftIds.length === draftOrders.length && draftOrders.length > 0
+                  ? `Deseleccionar (${selectedDraftIds.length})`
+                  : `Seleccionar Todos (${draftOrders.length})`}
               </Button>
+            </Tooltip>
+            <Tooltip title="Eliminar los pedidos seleccionados">
+              <span>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={deleteDraftMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <DeleteOutlineIcon />}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={deleteDraftMutation.isPending || selectedDraftIds.length === 0}
+                >
+                  Eliminar ({selectedDraftIds.length})
+                </Button>
+              </span>
             </Tooltip>
             <Button
               variant="contained"
@@ -1203,10 +1226,10 @@ export default function ComprasPage() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body1" gutterBottom>
-            Esta accion eliminara <strong>{draftOrders.length}</strong> pedidos en estado <strong>Borrador</strong>.
+            Esta accion eliminara <strong>{selectedDraftIds.length}</strong> pedido{selectedDraftIds.length !== 1 ? 's' : ''} seleccionado{selectedDraftIds.length !== 1 ? 's' : ''}.
           </Typography>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            Los pedidos liberados a Trafico (Listos, En Ruta, Entregados) NO seran eliminados.
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Solo se eliminaran pedidos en estado Borrador. Los pedidos ya liberados a Trafico no pueden eliminarse.
           </Alert>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
             Despues de eliminar, puede volver a sincronizar con Bind para obtener los pedidos actualizados.
@@ -1219,11 +1242,11 @@ export default function ComprasPage() {
           <Button
             variant="contained"
             color="error"
-            onClick={() => deleteAllDraftMutation.mutate()}
-            disabled={deleteAllDraftMutation.isPending}
-            startIcon={deleteAllDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+            onClick={() => deleteDraftMutation.mutate()}
+            disabled={deleteDraftMutation.isPending}
+            startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
           >
-            Eliminar {draftOrders.length} Borradores
+            Eliminar {selectedDraftIds.length} Pedido{selectedDraftIds.length !== 1 ? 's' : ''}
           </Button>
         </DialogActions>
       </Dialog>
