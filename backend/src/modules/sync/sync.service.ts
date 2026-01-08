@@ -70,17 +70,22 @@ export class SyncService {
       let orderResult = { created: 0, updated: 0, errors: [] as Array<{ bindId: string; error: string }> };
       if (bindOrders && bindOrders.length > 0) {
         // Fix clientNumber in orders using the map
+        let fixedCount = 0;
         const fixedOrders = bindOrders.map(order => {
           // Check if clientNumber looks like a UUID (has dashes and 36 chars)
           if (order.clientNumber && order.clientNumber.includes('-') && order.clientNumber.length === 36) {
             const correctNumber = clientIdToNumberMap.get(order.clientNumber);
             if (correctNumber) {
-              this.logger.debug(`Fixed clientNumber for order ${order.bindId}: ${order.clientNumber} -> ${correctNumber}`);
+              fixedCount++;
+              this.logger.log(`Fixed clientNumber for order ${order.bindId}: ${order.clientNumber} -> ${correctNumber}`);
               return { ...order, clientNumber: correctNumber };
+            } else {
+              this.logger.warn(`Could not find client number for Bind ID: ${order.clientNumber}`);
             }
           }
           return order;
         });
+        this.logger.log(`Fixed ${fixedCount} order clientNumbers from UUID to real number`);
         orderResult = await this.ordersService.syncWithBind(fixedOrders);
       }
 
