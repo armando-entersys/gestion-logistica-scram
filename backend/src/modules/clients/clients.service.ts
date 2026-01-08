@@ -1,8 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Client } from './entities/client.entity';
 import { CreateClientDto, UpdateClientDto, ClientFilterDto } from './dto';
+import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
+import { SyncClientDto } from '@/modules/sync/adapters/bind.adapter';
 
 @Injectable()
 export class ClientsService {
@@ -11,6 +13,8 @@ export class ClientsService {
   constructor(
     @InjectRepository(Client)
     private readonly clientRepo: Repository<Client>,
+    @Inject(forwardRef(() => ClientAddressesService))
+    private readonly clientAddressesService: ClientAddressesService,
   ) {}
 
   /**
@@ -213,5 +217,52 @@ export class ClientsService {
     const client = await this.findOne(id);
     await this.clientRepo.delete(id);
     this.logger.log(`Deleted client ${client.clientNumber}`);
+  }
+
+  /**
+   * Sync clients from Bind ERP with their addresses
+   */
+  async syncClients(clients: SyncClientDto[]): Promise<{ synced: number; addresses: number }> {
+    let syncedCount = 0;
+    let addressCount = 0;
+
+    for (const syncClient of clients) {
+      try {
+        // Upsert the client
+        const client = await this.upsertClient({
+          clientNumber: syncClient.clientNumber,
+          name: syncClient.name,
+          email: syncClient.email,
+          phone: syncClient.phone,
+          rfc: syncClient.rfc,
+        }, 'SYNC');
+
+        syncedCount++;
+
+        // Process addresses if available
+        if (syncClient.addresses && syncClient.addresses.length > 0) {
+          for (const addressText of syncClient.addresses) {
+            if (!addressText || addressText.trim() === '') continue;
+
+            try {
+              // Parse the address text and save it
+              await this.clientAddressesService.upsertFromText(
+                syncClient.clientNumber,
+                addressText,
+                'SYNC',
+              );
+              addressCount++;
+            } catch (addrError) {
+              this.logger.warn(`Failed to save address for client ${syncClient.clientNumber}: ${addrError.message}`);
+            }
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Failed to sync client ${syncClient.clientNumber}: ${error.message}`);
+      }
+    }
+
+    this.logger.log(`Synced ${syncedCount} clients with ${addressCount} addresses from Bind`);
+    return { synced: syncedCount, addresses: addressCount };
   }
 }

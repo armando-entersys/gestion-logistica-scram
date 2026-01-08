@@ -52,7 +52,7 @@ interface BindOrderDetail extends BindOrder {
 }
 
 /**
- * Estructura de Cliente según API de Bind ERP
+ * Estructura de Cliente según API de Bind ERP (lista)
  */
 interface BindClient {
   ID: string;
@@ -64,6 +64,30 @@ interface BindClient {
   Number?: number;
   City?: string;
   State?: string;
+}
+
+/**
+ * Estructura de Cliente con detalle (GET /Clients/{id})
+ * Incluye campo addresses con lista de direcciones en texto
+ */
+interface BindClientDetails extends BindClient {
+  Addresses?: string[];
+}
+
+/**
+ * DTO para sincronización de clientes
+ */
+export interface SyncClientDto {
+  bindId: string;
+  clientNumber: string;
+  name: string;
+  commercialName?: string;
+  email?: string;
+  phone?: string;
+  rfc?: string;
+  city?: string;
+  state?: string;
+  addresses: string[];
 }
 
 /**
@@ -217,12 +241,12 @@ export class BindAdapter {
   }
 
   /**
-   * Obtiene detalles de un cliente específico
+   * Obtiene detalles de un cliente específico (incluye direcciones)
    */
-  async getClientDetails(clientId: string): Promise<BindClient | null> {
+  async getClientDetails(clientId: string): Promise<BindClientDetails | null> {
     try {
       const response = await firstValueFrom(
-        this.httpService.get<BindClient>(`${this.apiUrl}/api/Clients/${clientId}`, {
+        this.httpService.get<BindClientDetails>(`${this.apiUrl}/api/Clients/${clientId}`, {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
@@ -234,6 +258,86 @@ export class BindAdapter {
       this.logger.warn(`Failed to fetch client ${clientId}: ${error.message}`);
       return null;
     }
+  }
+
+  /**
+   * Obtiene todos los clientes de Bind con sus direcciones
+   */
+  async fetchClients(): Promise<SyncClientDto[]> {
+    this.logger.log('Fetching clients from Bind ERP...');
+
+    if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
+      this.logger.warn('Bind API Key not configured');
+      throw new Error('Bind API Key not configured');
+    }
+
+    try {
+      // Obtener lista de clientes
+      const response = await firstValueFrom(
+        this.httpService.get<BindApiResponse<BindClient>>(`${this.apiUrl}/api/Clients`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            '$top': 500,
+          },
+        }),
+      );
+
+      const bindClients = response.data.value || [];
+      this.logger.log(`Fetched ${bindClients.length} clients from Bind`);
+
+      // Obtener detalles de cada cliente (incluye direcciones)
+      const clients: SyncClientDto[] = [];
+      const batchSize = 10;
+
+      for (let i = 0; i < bindClients.length; i += batchSize) {
+        const batch = bindClients.slice(i, i + batchSize);
+
+        const detailPromises = batch.map(async (client) => {
+          try {
+            const detail = await this.getClientDetails(client.ID);
+            return this.transformClient(detail || client);
+          } catch (error) {
+            this.logger.warn(`Failed to get detail for client ${client.ID}: ${error.message}`);
+            return this.transformClient(client);
+          }
+        });
+
+        const batchResults = await Promise.all(detailPromises);
+        clients.push(...batchResults);
+
+        // Pausa entre lotes para evitar rate limiting
+        if (i + batchSize < bindClients.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      this.logger.log(`Processed ${clients.length} clients with details`);
+      return clients;
+    } catch (error) {
+      this.logger.error('Failed to fetch clients from Bind:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Transforma un cliente de Bind al formato interno
+   */
+  private transformClient(client: BindClient | BindClientDetails): SyncClientDto {
+    return {
+      bindId: client.ID,
+      clientNumber: client.Number?.toString() || client.ID,
+      name: this.cleanString(client.LegalName),
+      commercialName: client.CommercialName,
+      email: client.Email,
+      phone: client.Telephones,
+      rfc: client.RFC,
+      city: client.City,
+      state: client.State,
+      addresses: (client as BindClientDetails).Addresses || [],
+    };
   }
 
   /**

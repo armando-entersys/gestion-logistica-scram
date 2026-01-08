@@ -152,4 +152,110 @@ export class ClientAddressesService {
     await this.addressRepo.update(id, { label });
     return this.addressRepo.findOne({ where: { id } });
   }
+
+  /**
+   * Parse raw address text from Bind and upsert
+   * Address format varies but typically: "Street Number, Neighborhood, PostalCode City, State"
+   */
+  async upsertFromText(
+    clientNumber: string,
+    addressText: string,
+    source: 'SYNC' | 'MANUAL' = 'SYNC',
+  ): Promise<ClientAddress | null> {
+    if (!addressText || addressText.trim() === '') {
+      return null;
+    }
+
+    const parsed = this.parseAddressText(addressText);
+
+    return this.upsertAddress({
+      clientNumber,
+      street: parsed.street,
+      number: parsed.number,
+      neighborhood: parsed.neighborhood,
+      postalCode: parsed.postalCode,
+      city: parsed.city,
+      state: parsed.state,
+    }, source);
+  }
+
+  /**
+   * Parse raw address text into components
+   * Attempts to extract street, number, neighborhood, postal code, city, state
+   */
+  private parseAddressText(text: string): {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+  } {
+    // Clean up the text
+    const cleaned = text.trim().replace(/\s+/g, ' ');
+
+    // Split by commas first
+    const parts = cleaned.split(',').map(p => p.trim()).filter(p => p);
+
+    const result: {
+      street?: string;
+      number?: string;
+      neighborhood?: string;
+      postalCode?: string;
+      city?: string;
+      state?: string;
+    } = {};
+
+    // Try to extract postal code (5 digits in Mexico)
+    const postalCodeMatch = cleaned.match(/\b(\d{5})\b/);
+    if (postalCodeMatch) {
+      result.postalCode = postalCodeMatch[1];
+    }
+
+    // First part usually contains street and number
+    if (parts.length >= 1) {
+      const firstPart = parts[0];
+      // Try to extract number from end of first part
+      const numberMatch = firstPart.match(/^(.+?)\s+(?:#|No\.?|Num\.?)?\s*(\d+[A-Za-z]?)$/i);
+      if (numberMatch) {
+        result.street = numberMatch[1].trim();
+        result.number = numberMatch[2].trim();
+      } else {
+        result.street = firstPart;
+      }
+    }
+
+    // Second part is often neighborhood (Col., Colonia, Fracc., etc.)
+    if (parts.length >= 2) {
+      const secondPart = parts[1];
+      // Remove common prefixes
+      const neighborhoodClean = secondPart
+        .replace(/^(Col\.?|Colonia|Fracc\.?|Fraccionamiento|Barrio|Bo\.?)\s*/i, '')
+        .trim();
+      result.neighborhood = neighborhoodClean || secondPart;
+    }
+
+    // Third and fourth parts are city and state
+    if (parts.length >= 3) {
+      // Check if this part contains postal code
+      const thirdPart = parts[2].replace(/\d{5}/, '').trim();
+      if (thirdPart) {
+        result.city = thirdPart;
+      }
+    }
+
+    if (parts.length >= 4) {
+      result.state = parts[3];
+    }
+
+    // If city not found, try to extract from part with postal code
+    if (!result.city && result.postalCode) {
+      const cityMatch = cleaned.match(/\d{5}\s+([^,]+)/);
+      if (cityMatch) {
+        result.city = cityMatch[1].trim();
+      }
+    }
+
+    return result;
+  }
 }

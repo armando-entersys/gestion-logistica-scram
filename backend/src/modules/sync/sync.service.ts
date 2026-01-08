@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,6 +6,7 @@ import { Repository } from 'typeorm';
 import { BindAdapter, OrphanInvoiceDto } from './adapters/bind.adapter';
 import { DismissedInvoice } from './entities/dismissed-invoice.entity';
 import { OrdersService } from '../orders/orders.service';
+import { ClientsService } from '../clients/clients.service';
 
 @Injectable()
 export class SyncService {
@@ -18,6 +19,8 @@ export class SyncService {
     private readonly configService: ConfigService,
     @InjectRepository(DismissedInvoice)
     private readonly dismissedInvoiceRepository: Repository<DismissedInvoice>,
+    @Inject(forwardRef(() => ClientsService))
+    private readonly clientsService: ClientsService,
   ) {
     // Timeout de 2 minutos para sincronización completa
     this.timeout = this.configService.get('bind.timeout') || 120000;
@@ -33,35 +36,40 @@ export class SyncService {
     updated: number;
     errors: Array<{ bindId: string; error: string }>;
     message: string;
+    clients?: { synced: number; addresses: number };
   }> {
     this.logger.log('Starting manual sync from Bind ERP...');
 
     try {
-      // Fetch orders from Bind with timeout
-      const bindOrders = await Promise.race([
-        this.bindAdapter.fetchOrders(),
+      // Fetch orders and clients from Bind in parallel
+      const [bindOrders, bindClients] = await Promise.race([
+        Promise.all([
+          this.bindAdapter.fetchOrders(),
+          this.bindAdapter.fetchClients(),
+        ]),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Bind API timeout')), this.timeout),
         ),
       ]);
 
-      if (!bindOrders || bindOrders.length === 0) {
-        return {
-          success: true,
-          created: 0,
-          updated: 0,
-          errors: [],
-          message: 'No new orders to sync from Bind',
-        };
+      // Sync clients with their addresses first
+      let clientResult = { synced: 0, addresses: 0 };
+      if (bindClients && bindClients.length > 0) {
+        this.logger.log(`Syncing ${bindClients.length} clients with addresses...`);
+        clientResult = await this.clientsService.syncClients(bindClients);
       }
 
-      // Sync to local database using upsert logic
-      const result = await this.ordersService.syncWithBind(bindOrders);
+      // Sync orders
+      let orderResult = { created: 0, updated: 0, errors: [] as Array<{ bindId: string; error: string }> };
+      if (bindOrders && bindOrders.length > 0) {
+        orderResult = await this.ordersService.syncWithBind(bindOrders);
+      }
 
       return {
         success: true,
-        ...result,
-        message: `Sync completed: ${result.created} created, ${result.updated} updated`,
+        ...orderResult,
+        clients: clientResult,
+        message: `Sync completed: ${orderResult.created} orders created, ${orderResult.updated} updated, ${clientResult.synced} clients synced with ${clientResult.addresses} addresses`,
       };
     } catch (error) {
       this.logger.error('Sync failed:', error);
