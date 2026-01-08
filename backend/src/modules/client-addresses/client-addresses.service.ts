@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ClientAddress } from './entities/client-address.entity';
+import { Client } from '@/modules/clients/entities/client.entity';
 import { CreateClientAddressDto } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 
@@ -12,6 +13,8 @@ export class ClientAddressesService {
   constructor(
     @InjectRepository(ClientAddress)
     private readonly addressRepo: Repository<ClientAddress>,
+    @InjectRepository(Client)
+    private readonly clientRepo: Repository<Client>,
     private readonly geocodingService: GeocodingService,
   ) {}
 
@@ -71,9 +74,21 @@ export class ClientAddressesService {
     const count = await this.addressRepo.count({ where: { clientNumber: dto.clientNumber } });
     const isFirstAddress = count === 0;
 
+    // Look up client to get clientId for the relationship
+    let clientId: string | null = null;
+    try {
+      const client = await this.clientRepo.findOne({ where: { clientNumber: dto.clientNumber } });
+      if (client) {
+        clientId = client.id;
+      }
+    } catch (err) {
+      this.logger.warn(`Could not find client by number ${dto.clientNumber}: ${err.message}`);
+    }
+
     // Create new address
     const address = this.addressRepo.create({
       clientNumber: dto.clientNumber,
+      clientId,
       label: dto.label || null,
       street: dto.street || null,
       number: dto.number || null,
