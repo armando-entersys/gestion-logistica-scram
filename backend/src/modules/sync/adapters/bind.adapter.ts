@@ -280,7 +280,7 @@ export class BindAdapter {
       orderNumber,
       warehouseName: order.WarehouseName,
       employeeName: order.EmployeeName,
-      clientNumber: client?.Number?.toString(),
+      clientNumber: client?.Number?.toString() || order.ClientID,
       purchaseOrder: order.PurchaseOrder,
       clientName: this.cleanString(order.ClientName),
       clientEmail: client?.Email || '',

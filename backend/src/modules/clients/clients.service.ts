@@ -160,22 +160,29 @@ export class ClientsService {
    * Get client statistics
    */
   async getStats(): Promise<{
-    total: number;
-    vipCount: number;
-    avgOrdersPerClient: number;
+    totalClients: number;
+    vipClients: number;
+    totalRevenue: number;
+    averageOrderValue: number;
   }> {
-    const total = await this.clientRepo.count();
-    const vipCount = await this.clientRepo.count({ where: { isVip: true } });
+    const totalClients = await this.clientRepo.count();
+    const vipClients = await this.clientRepo.count({ where: { isVip: true } });
 
-    const avgResult = await this.clientRepo
+    const statsResult = await this.clientRepo
       .createQueryBuilder('client')
-      .select('AVG(client.totalOrders)', 'avg')
+      .select('SUM(client.totalAmount)', 'totalRevenue')
+      .addSelect('SUM(client.totalOrders)', 'totalOrders')
       .getRawOne();
 
+    const totalRevenue = parseFloat(statsResult?.totalRevenue || '0');
+    const totalOrders = parseInt(statsResult?.totalOrders || '0', 10);
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
     return {
-      total,
-      vipCount,
-      avgOrdersPerClient: parseFloat(avgResult?.avg || '0'),
+      totalClients,
+      vipClients,
+      totalRevenue,
+      averageOrderValue,
     };
   }
 

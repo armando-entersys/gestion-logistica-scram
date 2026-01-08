@@ -33,7 +33,7 @@ export class ClientsController {
   }
 
   @Get('stats')
-  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get client statistics' })
   getStats() {
     return this.service.getStats();

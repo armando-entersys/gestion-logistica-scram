@@ -60,8 +60,48 @@ export class OrdersService {
           where: { bindId: bindOrder.bindId },
         });
 
+        // Create or update client record for ALL orders (new and existing)
+        if (bindOrder.clientNumber) {
+          this.logger.log(`Upserting client ${bindOrder.clientNumber} for order ${bindOrder.bindId}`);
+          try {
+            const client = await this.clientsService.upsertClient({
+              clientNumber: bindOrder.clientNumber,
+              name: bindOrder.clientName,
+              email: bindOrder.clientEmail,
+              phone: bindOrder.clientPhone,
+              rfc: bindOrder.clientRfc,
+              isVip: bindOrder.isVip,
+            }, 'SYNC');
+            this.logger.log(`Client upserted: ${client.id} - ${client.clientNumber}`);
+          } catch (clientError) {
+            this.logger.error(`Failed to upsert client for order ${bindOrder.bindId}: ${clientError.message}`, clientError.stack);
+          }
+        } else {
+          this.logger.warn(`Order ${bindOrder.bindId} has no clientNumber`);
+        }
+
+        // Save address to client address book for ALL orders (new and existing)
+        if (bindOrder.clientNumber && bindOrder.addressRaw?.street) {
+          try {
+            await this.clientAddressesService.upsertAddress({
+              clientNumber: bindOrder.clientNumber,
+              street: bindOrder.addressRaw.street,
+              number: bindOrder.addressRaw.number,
+              neighborhood: bindOrder.addressRaw.neighborhood,
+              postalCode: bindOrder.addressRaw.postalCode,
+              city: bindOrder.addressRaw.city,
+              state: bindOrder.addressRaw.state,
+              reference: bindOrder.addressRaw.reference,
+            }, 'SYNC', bindOrder.bindId);
+            this.logger.log(`Saved address for client ${bindOrder.clientNumber}`);
+          } catch (addrError) {
+            this.logger.warn(`Failed to save client address for order ${bindOrder.bindId}: ${addrError.message}`);
+          }
+        }
+
         if (existingOrder) {
-          await this.orderRepository.update(existingOrder.id, {
+          // Base update data for all existing orders
+          const updateData: Partial<Order> = {
             orderNumber: bindOrder.orderNumber,
             warehouseName: bindOrder.warehouseName,
             employeeName: bindOrder.employeeName,
@@ -71,11 +111,20 @@ export class OrdersService {
             clientEmail: bindOrder.clientEmail,
             clientPhone: bindOrder.clientPhone,
             clientRfc: bindOrder.clientRfc,
-            addressRaw: bindOrder.addressRaw,
             totalAmount: bindOrder.totalAmount,
             isVip: bindOrder.isVip,
             promisedDate: bindOrder.promisedDate,
-          });
+          };
+
+          // Only update addressRaw if order is still in DRAFT status
+          // This protects addresses edited in traffic panel
+          if (existingOrder.status === OrderStatus.DRAFT && bindOrder.addressRaw) {
+            updateData.addressRaw = bindOrder.addressRaw as Order['addressRaw'];
+          } else if (existingOrder.status !== OrderStatus.DRAFT) {
+            this.logger.log(`Skipping address update for order ${bindOrder.bindId} (status: ${existingOrder.status})`);
+          }
+
+          await this.orderRepository.update(existingOrder.id, updateData);
           updated++;
         } else {
           const priorityLevel = this.calculatePriority(bindOrder);
@@ -107,45 +156,15 @@ export class OrdersService {
           await this.orderRepository.save(newOrder);
           created++;
 
-          // Create or update client record
+          // Update client order stats (only for new orders)
           if (bindOrder.clientNumber) {
             try {
-              await this.clientsService.upsertClient({
-                clientNumber: bindOrder.clientNumber,
-                name: bindOrder.clientName,
-                email: bindOrder.clientEmail,
-                phone: bindOrder.clientPhone,
-                rfc: bindOrder.clientRfc,
-                isVip: bindOrder.isVip,
-              }, 'SYNC');
-
-              // Update client order stats
               await this.clientsService.incrementOrderStats(
                 bindOrder.clientNumber,
                 bindOrder.totalAmount || 0,
               );
-            } catch (clientError) {
-              this.logger.warn(`Failed to upsert client for order ${bindOrder.bindId}: ${clientError.message}`);
-            }
-          }
-
-          // Save address to client address book
-          if (bindOrder.clientNumber && bindOrder.addressRaw?.street) {
-            try {
-              await this.clientAddressesService.upsertAddress({
-                clientNumber: bindOrder.clientNumber,
-                street: bindOrder.addressRaw.street,
-                number: bindOrder.addressRaw.number,
-                neighborhood: bindOrder.addressRaw.neighborhood,
-                postalCode: bindOrder.addressRaw.postalCode,
-                city: bindOrder.addressRaw.city,
-                state: bindOrder.addressRaw.state,
-                reference: bindOrder.addressRaw.reference,
-                latitude: latitude ?? undefined,
-                longitude: longitude ?? undefined,
-              }, 'SYNC', bindOrder.bindId);
-            } catch (addrError) {
-              this.logger.warn(`Failed to save client address for order ${bindOrder.bindId}: ${addrError.message}`);
+            } catch (statsError) {
+              this.logger.warn(`Failed to update client stats for order ${bindOrder.bindId}: ${statsError.message}`);
             }
           }
         }

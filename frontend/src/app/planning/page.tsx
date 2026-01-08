@@ -718,6 +718,11 @@ export default function PlanningPage() {
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
+            <Tooltip title="Clientes">
+              <IconButton onClick={() => router.push('/clientes')} size="small">
+                <BusinessIcon />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Usuarios">
               <IconButton onClick={() => router.push('/usuarios')} size="small">
                 <PeopleIcon />
