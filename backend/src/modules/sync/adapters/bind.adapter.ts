@@ -308,33 +308,11 @@ export class BindAdapter {
 
       this.logger.log(`Fetched ${allBindClients.length} total clients from Bind`);
 
-      // Obtener detalles de cada cliente (incluye direcciones)
-      const clients: SyncClientDto[] = [];
-      const batchSize = 10;
+      // Transformar clientes (sin obtener detalles individuales para evitar rate limiting)
+      // Las direcciones se poblarán desde los pedidos sincronizados
+      const clients = allBindClients.map(client => this.transformClient(client));
 
-      for (let i = 0; i < allBindClients.length; i += batchSize) {
-        const batch = allBindClients.slice(i, i + batchSize);
-
-        const detailPromises = batch.map(async (client) => {
-          try {
-            const detail = await this.getClientDetails(client.ID);
-            return this.transformClient(detail || client);
-          } catch (error) {
-            this.logger.warn(`Failed to get detail for client ${client.ID}: ${error.message}`);
-            return this.transformClient(client);
-          }
-        });
-
-        const batchResults = await Promise.all(detailPromises);
-        clients.push(...batchResults);
-
-        // Pausa entre lotes para evitar rate limiting
-        if (i + batchSize < allBindClients.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-      }
-
-      this.logger.log(`Processed ${clients.length} clients with details`);
+      this.logger.log(`Processed ${clients.length} clients`);
       return clients;
     } catch (error) {
       this.logger.error('Failed to fetch clients from Bind:', error.response?.data || error.message);
