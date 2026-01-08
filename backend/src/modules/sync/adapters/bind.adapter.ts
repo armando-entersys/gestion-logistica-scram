@@ -261,7 +261,7 @@ export class BindAdapter {
   }
 
   /**
-   * Obtiene todos los clientes de Bind con sus direcciones
+   * Obtiene todos los clientes de Bind con sus direcciones (con paginación)
    */
   async fetchClients(): Promise<SyncClientDto[]> {
     this.logger.log('Fetching clients from Bind ERP...');
@@ -272,28 +272,48 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener lista de clientes
-      const response = await firstValueFrom(
-        this.httpService.get<BindApiResponse<BindClient>>(`${this.apiUrl}/api/Clients`, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          params: {
-            '$top': 500,
-          },
-        }),
-      );
+      // Obtener lista de clientes con paginación (Bind limita a 100 por request)
+      const allBindClients: BindClient[] = [];
+      let skip = 0;
+      const pageSize = 100;
+      let hasMore = true;
 
-      const bindClients = response.data.value || [];
-      this.logger.log(`Fetched ${bindClients.length} clients from Bind`);
+      while (hasMore) {
+        const response = await firstValueFrom(
+          this.httpService.get<BindApiResponse<BindClient>>(`${this.apiUrl}/api/Clients`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            params: {
+              '$top': pageSize,
+              '$skip': skip,
+            },
+          }),
+        );
+
+        const pageClients = response.data.value || [];
+        allBindClients.push(...pageClients);
+
+        this.logger.log(`Fetched page ${Math.floor(skip / pageSize) + 1}: ${pageClients.length} clients`);
+
+        if (pageClients.length < pageSize) {
+          hasMore = false;
+        } else {
+          skip += pageSize;
+          // Pausa entre páginas para evitar rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      this.logger.log(`Fetched ${allBindClients.length} total clients from Bind`);
 
       // Obtener detalles de cada cliente (incluye direcciones)
       const clients: SyncClientDto[] = [];
       const batchSize = 10;
 
-      for (let i = 0; i < bindClients.length; i += batchSize) {
-        const batch = bindClients.slice(i, i + batchSize);
+      for (let i = 0; i < allBindClients.length; i += batchSize) {
+        const batch = allBindClients.slice(i, i + batchSize);
 
         const detailPromises = batch.map(async (client) => {
           try {
@@ -309,7 +329,7 @@ export class BindAdapter {
         clients.push(...batchResults);
 
         // Pausa entre lotes para evitar rate limiting
-        if (i + batchSize < bindClients.length) {
+        if (i + batchSize < allBindClients.length) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
