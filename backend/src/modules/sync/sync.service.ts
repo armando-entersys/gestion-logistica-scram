@@ -54,15 +54,34 @@ export class SyncService {
 
       // Sync clients with their addresses first
       let clientResult = { synced: 0, addresses: 0 };
+      // Create a map of Bind ClientID -> ClientNumber for order mapping
+      const clientIdToNumberMap = new Map<string, string>();
       if (bindClients && bindClients.length > 0) {
         this.logger.log(`Syncing ${bindClients.length} clients with addresses...`);
         clientResult = await this.clientsService.syncClients(bindClients);
+        // Build the lookup map
+        for (const client of bindClients) {
+          clientIdToNumberMap.set(client.bindId, client.clientNumber);
+        }
+        this.logger.log(`Built client ID to number map with ${clientIdToNumberMap.size} entries`);
       }
 
-      // Sync orders
+      // Sync orders - fix clientNumber using the map if it looks like a UUID
       let orderResult = { created: 0, updated: 0, errors: [] as Array<{ bindId: string; error: string }> };
       if (bindOrders && bindOrders.length > 0) {
-        orderResult = await this.ordersService.syncWithBind(bindOrders);
+        // Fix clientNumber in orders using the map
+        const fixedOrders = bindOrders.map(order => {
+          // Check if clientNumber looks like a UUID (has dashes and 36 chars)
+          if (order.clientNumber && order.clientNumber.includes('-') && order.clientNumber.length === 36) {
+            const correctNumber = clientIdToNumberMap.get(order.clientNumber);
+            if (correctNumber) {
+              this.logger.debug(`Fixed clientNumber for order ${order.bindId}: ${order.clientNumber} -> ${correctNumber}`);
+              return { ...order, clientNumber: correctNumber };
+            }
+          }
+          return order;
+        });
+        orderResult = await this.ordersService.syncWithBind(fixedOrders);
       }
 
       return {

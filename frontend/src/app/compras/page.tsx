@@ -63,7 +63,14 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 
-import { ordersApi, syncApi } from '@/lib/api';
+import { ordersApi, syncApi, clientAddressesApi, clientsApi } from '@/lib/api';
+import EditIcon from '@mui/icons-material/Edit';
+import HomeIcon from '@mui/icons-material/Home';
+import PeopleIcon from '@mui/icons-material/People';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 
 const statusConfig: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'success' | 'info' | 'warning' }> = {
   DRAFT: { label: 'Borrador', color: 'default' },
@@ -122,6 +129,33 @@ interface OrphanInvoice {
   hasOrder: boolean;
 }
 
+interface ClientAddress {
+  id: string;
+  clientNumber: string;
+  label?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  postalCode?: string;
+  city?: string;
+  state?: string;
+  reference?: string;
+  isDefault?: boolean;
+  useCount?: number;
+}
+
+interface Client {
+  id: string;
+  clientNumber: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  rfc?: string;
+  isVip?: boolean;
+  totalOrders?: number;
+  totalAmount?: number;
+}
+
 export default function ComprasPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -146,6 +180,15 @@ export default function ComprasPage() {
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [bulkDismissOpen, setBulkDismissOpen] = useState(false);
   const [bulkDismissReason, setBulkDismissReason] = useState('');
+
+  // Client addresses state
+  const [clientAddresses, setClientAddresses] = useState<ClientAddress[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [editingAddress, setEditingAddress] = useState(false);
+
+  // Clients tab state
+  const [clientsPage, setClientsPage] = useState(1);
 
   // Sorting state
   type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
@@ -176,6 +219,38 @@ export default function ComprasPage() {
       return response.data as OrphanInvoice[];
     },
   });
+
+  // Fetch clients for the clients tab
+  const { data: clientsData, isLoading: isLoadingClients } = useQuery({
+    queryKey: ['compras-clients'],
+    queryFn: async () => {
+      const response = await clientsApi.getAll({ limit: 100 });
+      return response.data.data || response.data;
+    },
+  });
+
+  // Fetch client addresses when detail order is opened
+  useEffect(() => {
+    const fetchAddresses = async () => {
+      if (detailOrder?.clientNumber) {
+        setLoadingAddresses(true);
+        try {
+          const response = await clientAddressesApi.getByClient(detailOrder.clientNumber);
+          setClientAddresses(response.data || []);
+        } catch (error) {
+          console.error('Error fetching addresses:', error);
+          setClientAddresses([]);
+        } finally {
+          setLoadingAddresses(false);
+        }
+      } else {
+        setClientAddresses([]);
+      }
+      setSelectedAddressId('');
+      setEditingAddress(false);
+    };
+    fetchAddresses();
+  }, [detailOrder?.clientNumber, detailOrder?.id]);
 
   const syncBindMutation = useMutation({
     mutationFn: async () => {
@@ -327,6 +402,55 @@ export default function ComprasPage() {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error al geocodificar pedidos',
+        severity: 'error',
+      });
+    },
+  });
+
+  const updateAddressMutation = useMutation({
+    mutationFn: async ({ orderId, address }: { orderId: string; address: ClientAddress }) => {
+      return ordersApi.updateAddress(orderId, {
+        street: address.street || '',
+        number: address.number || '',
+        neighborhood: address.neighborhood || '',
+        postalCode: address.postalCode || '',
+        city: address.city || '',
+        state: address.state || '',
+        reference: address.reference,
+      }, true);
+    },
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: 'Dirección actualizada correctamente',
+        severity: 'success',
+      });
+      setEditingAddress(false);
+      setSelectedAddressId('');
+      queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+      // Update local detailOrder
+      if (detailOrder && selectedAddressId) {
+        const selectedAddr = clientAddresses.find(a => a.id === selectedAddressId);
+        if (selectedAddr) {
+          setDetailOrder({
+            ...detailOrder,
+            addressRaw: {
+              street: selectedAddr.street,
+              number: selectedAddr.number,
+              neighborhood: selectedAddr.neighborhood,
+              postalCode: selectedAddr.postalCode,
+              city: selectedAddr.city,
+              state: selectedAddr.state,
+              reference: selectedAddr.reference,
+            },
+          });
+        }
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al actualizar dirección',
         severity: 'error',
       });
     },
@@ -1168,32 +1292,113 @@ export default function ComprasPage() {
                 {/* Destino */}
                 <Grid item xs={12}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <LocationOnIcon color="primary" fontSize="small" />
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        Dirección de Entrega
-                      </Typography>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <LocationOnIcon color="primary" fontSize="small" />
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Dirección de Entrega
+                        </Typography>
+                      </Stack>
+                      {detailOrder.status === 'READY' && clientAddresses.length > 0 && !editingAddress && (
+                        <Tooltip title="Cambiar dirección">
+                          <IconButton size="small" color="primary" onClick={() => setEditingAddress(true)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Stack>
-                    {detailOrder.addressRaw ? (
+
+                    {/* Address selector for READY orders */}
+                    {editingAddress && detailOrder.status === 'READY' ? (
                       <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {detailOrder.addressRaw.street} {detailOrder.addressRaw.number}
-                        </Typography>
-                        {detailOrder.addressRaw.neighborhood && (
-                          <Typography variant="body2">
-                            Col. {detailOrder.addressRaw.neighborhood}
-                            {detailOrder.addressRaw.postalCode && `, CP ${detailOrder.addressRaw.postalCode}`}
-                          </Typography>
-                        )}
-                        <Typography variant="body2" color="text.secondary">
-                          {detailOrder.addressRaw.city}
-                          {detailOrder.addressRaw.state && `, ${detailOrder.addressRaw.state}`}
-                        </Typography>
+                        <FormControl fullWidth size="small" sx={{ mb: 1 }}>
+                          <InputLabel>Seleccionar dirección guardada</InputLabel>
+                          <Select
+                            value={selectedAddressId}
+                            label="Seleccionar dirección guardada"
+                            onChange={(e) => setSelectedAddressId(e.target.value)}
+                          >
+                            {clientAddresses.map((addr) => (
+                              <MenuItem key={addr.id} value={addr.id}>
+                                <Stack>
+                                  <Typography variant="body2" fontWeight={500}>
+                                    {addr.label || `${addr.street} ${addr.number}`}
+                                    {addr.isDefault && ' (Principal)'}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {addr.street} {addr.number}, {addr.neighborhood}, {addr.city}
+                                  </Typography>
+                                </Stack>
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={!selectedAddressId || updateAddressMutation.isPending}
+                            onClick={() => {
+                              const selectedAddr = clientAddresses.find(a => a.id === selectedAddressId);
+                              if (selectedAddr && detailOrder) {
+                                updateAddressMutation.mutate({ orderId: detailOrder.id, address: selectedAddr });
+                              }
+                            }}
+                            startIcon={updateAddressMutation.isPending ? <CircularProgress size={14} /> : null}
+                          >
+                            Aplicar
+                          </Button>
+                          <Button size="small" variant="outlined" onClick={() => { setEditingAddress(false); setSelectedAddressId(''); }}>
+                            Cancelar
+                          </Button>
+                        </Stack>
                       </Box>
                     ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        No especificado
-                      </Typography>
+                      <>
+                        {detailOrder.addressRaw ? (
+                          <Box>
+                            <Typography variant="body2" fontWeight={500}>
+                              {detailOrder.addressRaw.street} {detailOrder.addressRaw.number}
+                            </Typography>
+                            {detailOrder.addressRaw.neighborhood && (
+                              <Typography variant="body2">
+                                Col. {detailOrder.addressRaw.neighborhood}
+                                {detailOrder.addressRaw.postalCode && `, CP ${detailOrder.addressRaw.postalCode}`}
+                              </Typography>
+                            )}
+                            <Typography variant="body2" color="text.secondary">
+                              {detailOrder.addressRaw.city}
+                              {detailOrder.addressRaw.state && `, ${detailOrder.addressRaw.state}`}
+                            </Typography>
+                          </Box>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            No especificado
+                          </Typography>
+                        )}
+
+                        {/* Show available addresses count */}
+                        {detailOrder.status === 'READY' && (
+                          <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
+                            {loadingAddresses ? (
+                              <Typography variant="caption" color="text.secondary">
+                                Cargando direcciones...
+                              </Typography>
+                            ) : clientAddresses.length > 0 ? (
+                              <Stack direction="row" alignItems="center" spacing={0.5}>
+                                <HomeIcon fontSize="small" color="action" />
+                                <Typography variant="caption" color="text.secondary">
+                                  {clientAddresses.length} dirección(es) guardada(s) del cliente
+                                </Typography>
+                              </Stack>
+                            ) : (
+                              <Typography variant="caption" color="text.disabled">
+                                No hay direcciones guardadas para este cliente
+                              </Typography>
+                            )}
+                          </Box>
+                        )}
+                      </>
                     )}
                   </Paper>
                 </Grid>
