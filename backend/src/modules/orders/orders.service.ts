@@ -61,6 +61,7 @@ export class OrdersService {
         });
 
         // Create or update client record for ALL orders (new and existing)
+        let clientId: string | null = null;
         if (bindOrder.clientNumber) {
           this.logger.log(`Upserting client ${bindOrder.clientNumber} for order ${bindOrder.bindId}`);
           try {
@@ -72,6 +73,7 @@ export class OrdersService {
               rfc: bindOrder.clientRfc,
               isVip: bindOrder.isVip,
             }, 'SYNC');
+            clientId = client.id;
             this.logger.log(`Client upserted: ${client.id} - ${client.clientNumber}`);
           } catch (clientError) {
             this.logger.error(`Failed to upsert client for order ${bindOrder.bindId}: ${clientError.message}`, clientError.stack);
@@ -106,6 +108,7 @@ export class OrdersService {
             warehouseName: bindOrder.warehouseName,
             employeeName: bindOrder.employeeName,
             clientNumber: bindOrder.clientNumber,
+            clientId: clientId,
             purchaseOrder: bindOrder.purchaseOrder,
             clientName: bindOrder.clientName,
             clientEmail: bindOrder.clientEmail,
@@ -146,6 +149,7 @@ export class OrdersService {
 
           const newOrder = this.orderRepository.create({
             ...bindOrder,
+            clientId,
             priorityLevel,
             trackingHash,
             status: OrderStatus.DRAFT,

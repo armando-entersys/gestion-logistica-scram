@@ -46,6 +46,13 @@ export class ClientsController {
     return this.service.findOne(id);
   }
 
+  @Get(':id/details')
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.SALES, UserRole.DIRECTOR)
+  @ApiOperation({ summary: 'Get client with addresses and orders' })
+  findOneWithDetails(@Param('id', ParseUUIDPipe) id: string) {
+    return this.service.findOneWithDetails(id);
+  }
+
   @Get('number/:clientNumber')
   @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.SALES, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get client by client number' })

@@ -59,6 +59,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import EmailIcon from '@mui/icons-material/Email';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import HomeIcon from '@mui/icons-material/Home';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 
 import { clientsApi, clientAddressesApi } from '@/lib/api';
 
@@ -93,6 +94,22 @@ interface ClientAddress {
   useCount: number;
 }
 
+interface ClientOrder {
+  id: string;
+  orderNumber: string | null;
+  status: string;
+  totalAmount: number;
+  clientName: string;
+  promisedDate: string | null;
+  deliveredAt: string | null;
+  createdAt: string;
+  addressRaw: {
+    street: string;
+    city: string;
+    state: string;
+  } | null;
+}
+
 interface ClientStats {
   totalClients: number;
   vipClients: number;
@@ -113,7 +130,8 @@ export default function ClientesPage() {
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [detailTab, setDetailTab] = useState(0);
   const [clientAddresses, setClientAddresses] = useState<ClientAddress[]>([]);
-  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [clientOrders, setClientOrders] = useState<ClientOrder[]>([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [formData, setFormData] = useState({
     clientNumber: '',
     name: '',
@@ -300,14 +318,25 @@ export default function ClientesPage() {
     setSelectedClient(client);
     setDetailTab(0);
     setDetailDialogOpen(true);
-    setLoadingAddresses(true);
+    setLoadingDetails(true);
+    setClientAddresses([]);
+    setClientOrders([]);
     try {
-      const response = await clientAddressesApi.getByClient(client.clientNumber);
-      setClientAddresses(response.data as ClientAddress[]);
+      // Fetch client details with addresses and orders
+      const response = await clientsApi.getDetails(client.id);
+      const data = response.data as Client & { addresses: ClientAddress[]; orders: ClientOrder[] };
+      setClientAddresses(data.addresses || []);
+      setClientOrders(data.orders || []);
     } catch (error) {
-      setClientAddresses([]);
+      // Fallback: try to get addresses separately
+      try {
+        const addrResponse = await clientAddressesApi.getByClient(client.clientNumber);
+        setClientAddresses(addrResponse.data as ClientAddress[]);
+      } catch {
+        setClientAddresses([]);
+      }
     } finally {
-      setLoadingAddresses(false);
+      setLoadingDetails(false);
     }
   };
 
@@ -777,6 +806,7 @@ export default function ClientesPage() {
           <Tabs value={detailTab} onChange={(_, v) => setDetailTab(v)} sx={{ mb: 2 }}>
             <Tab label="Informacion" />
             <Tab label={`Direcciones (${clientAddresses.length})`} />
+            <Tab label={`Pedidos (${clientOrders.length})`} />
           </Tabs>
 
           {detailTab === 0 && selectedClient && (
@@ -852,7 +882,7 @@ export default function ClientesPage() {
 
           {detailTab === 1 && (
             <>
-              {loadingAddresses ? (
+              {loadingDetails ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                   <CircularProgress />
                 </Box>
@@ -899,6 +929,75 @@ export default function ClientesPage() {
                     </ListItem>
                   ))}
                 </List>
+              )}
+            </>
+          )}
+
+          {detailTab === 2 && (
+            <>
+              {loadingDetails ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : clientOrders.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 4 }}>
+                  <LocalShippingIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                  <Typography color="text.secondary" sx={{ mt: 1 }}>
+                    No hay pedidos registrados para este cliente
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Pedido</TableCell>
+                        <TableCell>Estado</TableCell>
+                        <TableCell align="right">Monto</TableCell>
+                        <TableCell>Direccion</TableCell>
+                        <TableCell>Fecha</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {clientOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight={500}>
+                              {order.orderNumber || order.id.substring(0, 8)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={order.status}
+                              color={
+                                order.status === 'DELIVERED' ? 'success' :
+                                order.status === 'IN_TRANSIT' ? 'info' :
+                                order.status === 'READY' ? 'warning' : 'default'
+                              }
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatCurrency(order.totalAmount)}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                              {order.addressRaw?.street || 'Sin direccion'}
+                              {order.addressRaw?.city && `, ${order.addressRaw.city}`}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {order.deliveredAt
+                              ? new Date(order.deliveredAt).toLocaleDateString('es-MX')
+                              : order.promisedDate
+                              ? new Date(order.promisedDate).toLocaleDateString('es-MX')
+                              : new Date(order.createdAt).toLocaleDateString('es-MX')}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               )}
             </>
           )}

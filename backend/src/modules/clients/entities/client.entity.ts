@@ -8,6 +8,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
+import { Order } from '@/modules/orders/entities/order.entity';
 
 @Entity('clients')
 @Index('idx_clients_number', ['clientNumber'], { unique: true })
@@ -54,6 +55,9 @@ export class Client {
 
   @OneToMany(() => ClientAddress, (address) => address.client)
   addresses: ClientAddress[];
+
+  @OneToMany(() => Order, (order) => order.client)
+  orders: Order[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

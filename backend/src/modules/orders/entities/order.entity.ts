@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
+import { Client } from '@/modules/clients/entities/client.entity';
 import { ShipmentEvidence } from './shipment-evidence.entity';
 
 @Entity('orders')
@@ -52,6 +53,10 @@ export class Order {
 
   @Column({ name: 'client_rfc', type: 'varchar', length: 15, nullable: true })
   clientRfc: string | null;
+
+  @Column({ name: 'client_id', type: 'uuid', nullable: true })
+  @Index('idx_orders_client_id')
+  clientId: string | null;
 
   @Column({
     name: 'address_raw',
@@ -239,6 +244,10 @@ export class Order {
   @ManyToOne(() => User, (user) => user.assignedOrders, { nullable: true })
   @JoinColumn({ name: 'assigned_driver_id' })
   assignedDriver: User | null;
+
+  @ManyToOne(() => Client, (client) => client.orders, { nullable: true })
+  @JoinColumn({ name: 'client_id' })
+  client: Client | null;
 
   @OneToMany(() => ShipmentEvidence, (evidence) => evidence.order)
   evidences: ShipmentEvidence[];

@@ -55,7 +55,7 @@ export class ClientsService {
   async findOne(id: string): Promise<Client> {
     const client = await this.clientRepo.findOne({
       where: { id },
-      relations: ['addresses'],
+      relations: ['addresses', 'orders'],
     });
 
     if (!client) {
@@ -71,8 +71,28 @@ export class ClientsService {
   async findByClientNumber(clientNumber: string): Promise<Client | null> {
     return this.clientRepo.findOne({
       where: { clientNumber },
-      relations: ['addresses'],
+      relations: ['addresses', 'orders'],
     });
+  }
+
+  /**
+   * Find client with full details (addresses + orders)
+   */
+  async findOneWithDetails(id: string): Promise<Client & { addressCount: number; orderCount: number }> {
+    const client = await this.clientRepo.findOne({
+      where: { id },
+      relations: ['addresses', 'orders'],
+    });
+
+    if (!client) {
+      throw new NotFoundException(`Cliente ${id} no encontrado`);
+    }
+
+    return {
+      ...client,
+      addressCount: client.addresses?.length || 0,
+      orderCount: client.orders?.length || 0,
+    };
   }
 
   /**

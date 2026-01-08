@@ -159,6 +159,9 @@ export const clientsApi = {
   getByClientNumber: (clientNumber: string) =>
     api.get(`/clients/number/${encodeURIComponent(clientNumber)}`),
 
+  getDetails: (id: string) =>
+    api.get(`/clients/${id}/details`),
+
   create: (data: {
     clientNumber: string;
     name: string;
