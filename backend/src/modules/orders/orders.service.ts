@@ -20,6 +20,7 @@ import {
 } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
+import { ClientsService } from '@/modules/clients/clients.service';
 
 @Injectable()
 export class OrdersService {
@@ -35,6 +36,7 @@ export class OrdersService {
     private readonly configService: ConfigService,
     private readonly geocodingService: GeocodingService,
     private readonly clientAddressesService: ClientAddressesService,
+    private readonly clientsService: ClientsService,
   ) {}
 
   /**
@@ -104,6 +106,28 @@ export class OrdersService {
 
           await this.orderRepository.save(newOrder);
           created++;
+
+          // Create or update client record
+          if (bindOrder.clientNumber) {
+            try {
+              await this.clientsService.upsertClient({
+                clientNumber: bindOrder.clientNumber,
+                name: bindOrder.clientName,
+                email: bindOrder.clientEmail,
+                phone: bindOrder.clientPhone,
+                rfc: bindOrder.clientRfc,
+                isVip: bindOrder.isVip,
+              }, 'SYNC');
+
+              // Update client order stats
+              await this.clientsService.incrementOrderStats(
+                bindOrder.clientNumber,
+                bindOrder.totalAmount || 0,
+              );
+            } catch (clientError) {
+              this.logger.warn(`Failed to upsert client for order ${bindOrder.bindId}: ${clientError.message}`);
+            }
+          }
 
           // Save address to client address book
           if (bindOrder.clientNumber && bindOrder.addressRaw?.street) {

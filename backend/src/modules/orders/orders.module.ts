@@ -8,6 +8,7 @@ import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesModule } from '@/modules/client-addresses/client-addresses.module';
+import { ClientsModule } from '@/modules/clients/clients.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ClientAddressesModule } from '@/modules/client-addresses/client-address
       maxRedirects: 3,
     }),
     ClientAddressesModule,
+    ClientsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, GeocodingService],

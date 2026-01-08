@@ -145,6 +145,45 @@ export const routesApi = {
     api.get('/routes/nearby', { params: { lat, lng, radius } }),
 };
 
+// Clients API
+export const clientsApi = {
+  getAll: (params?: { search?: string; isVip?: boolean; page?: number; limit?: number }) =>
+    api.get('/clients', { params }),
+
+  getStats: () =>
+    api.get('/clients/stats'),
+
+  getById: (id: string) =>
+    api.get(`/clients/${id}`),
+
+  getByClientNumber: (clientNumber: string) =>
+    api.get(`/clients/number/${encodeURIComponent(clientNumber)}`),
+
+  create: (data: {
+    clientNumber: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+    category?: string;
+    notes?: string;
+    isVip?: boolean;
+  }) => api.post('/clients', data),
+
+  update: (id: string, data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+    category?: string;
+    notes?: string;
+    isVip?: boolean;
+  }) => api.patch(`/clients/${id}`, data),
+
+  delete: (id: string) =>
+    api.delete(`/clients/${id}`),
+};
+
 // Client Addresses API
 export const clientAddressesApi = {
   getByClient: (clientNumber: string) =>

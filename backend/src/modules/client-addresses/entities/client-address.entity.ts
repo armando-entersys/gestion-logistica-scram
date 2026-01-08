@@ -5,16 +5,27 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Client } from '@/modules/clients/entities/client.entity';
 
 @Entity('client_addresses')
 @Index('idx_client_addresses_client', ['clientNumber'])
+@Index('idx_client_addresses_client_id', ['clientId'])
 export class ClientAddress {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ name: 'client_number', type: 'varchar', length: 50 })
   clientNumber: string;
+
+  @Column({ name: 'client_id', type: 'uuid', nullable: true })
+  clientId: string | null;
+
+  @ManyToOne(() => Client, (client) => client.addresses, { nullable: true })
+  @JoinColumn({ name: 'client_id' })
+  client: Client;
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   label: string | null;

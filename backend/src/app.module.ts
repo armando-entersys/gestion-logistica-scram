@@ -13,6 +13,7 @@ import { SyncModule } from './modules/sync/sync.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HealthModule } from './modules/health/health.module';
 import { ClientAddressesModule } from './modules/client-addresses/client-addresses.module';
+import { ClientsModule } from './modules/clients/clients.module';
 
 // Configuration
 import configuration from './config/configuration';
@@ -73,6 +74,7 @@ import { typeOrmConfig } from './config/typeorm.config';
     SyncModule,
     NotificationsModule,
     ClientAddressesModule,
+    ClientsModule,
   ],
 })
 export class AppModule {}
