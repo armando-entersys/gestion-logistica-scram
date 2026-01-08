@@ -32,7 +32,7 @@ export class ClientAddressesService {
     dto: CreateClientAddressDto,
     source: 'SYNC' | 'MANUAL' = 'MANUAL',
     bindSourceId?: string,
-  ): Promise<ClientAddress> {
+  ): Promise<ClientAddress | null> {
     // Skip if no client number or street
     if (!dto.clientNumber || !dto.street) {
       this.logger.debug('Skipping address upsert: missing clientNumber or street');
@@ -148,7 +148,7 @@ export class ClientAddressesService {
   /**
    * Update address label
    */
-  async updateLabel(id: string, label: string): Promise<ClientAddress> {
+  async updateLabel(id: string, label: string): Promise<ClientAddress | null> {
     await this.addressRepo.update(id, { label });
     return this.addressRepo.findOne({ where: { id } });
   }

@@ -117,8 +117,8 @@ export class OrdersService {
                 city: bindOrder.addressRaw.city,
                 state: bindOrder.addressRaw.state,
                 reference: bindOrder.addressRaw.reference,
-                latitude,
-                longitude,
+                latitude: latitude ?? undefined,
+                longitude: longitude ?? undefined,
               }, 'SYNC', bindOrder.bindId);
             } catch (addrError) {
               this.logger.warn(`Failed to save client address for order ${bindOrder.bindId}: ${addrError.message}`);
