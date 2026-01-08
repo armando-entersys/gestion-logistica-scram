@@ -29,7 +29,14 @@ export class ClientAddressesService {
   }
 
   /**
-   * Create or find existing address (deduplication based on street+number+postalCode)
+   * Normalize string for comparison (trim, lowercase, remove extra spaces)
+   */
+  private normalizeString(str: string | null | undefined): string {
+    return (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Create or find existing address (deduplication based on normalized street+number)
    */
   async upsertAddress(
     dto: CreateClientAddressDto,
@@ -42,23 +49,23 @@ export class ClientAddressesService {
       return null;
     }
 
-    // Check for existing address with same key fields
-    const existingQuery = this.addressRepo
-      .createQueryBuilder('addr')
-      .where('addr.clientNumber = :clientNumber', { clientNumber: dto.clientNumber })
-      .andWhere('LOWER(addr.street) = LOWER(:street)', { street: dto.street || '' });
+    // Normalize input for comparison
+    const normalizedStreet = this.normalizeString(dto.street);
+    const normalizedNumber = this.normalizeString(dto.number);
 
-    if (dto.number) {
-      existingQuery.andWhere('LOWER(addr.number) = LOWER(:number)', { number: dto.number });
-    } else {
-      existingQuery.andWhere('(addr.number IS NULL OR addr.number = :empty)', { empty: '' });
-    }
+    // Get all addresses for this client and check for duplicates
+    const clientAddresses = await this.addressRepo.find({
+      where: { clientNumber: dto.clientNumber },
+    });
 
-    if (dto.postalCode) {
-      existingQuery.andWhere('addr.postalCode = :postalCode', { postalCode: dto.postalCode });
-    }
+    // Find existing address with same street and number (normalized)
+    const existing = clientAddresses.find(addr => {
+      const addrStreet = this.normalizeString(addr.street);
+      const addrNumber = this.normalizeString(addr.number);
 
-    const existing = await existingQuery.getOne();
+      // Match if street is the same and number is the same (or both empty)
+      return addrStreet === normalizedStreet && addrNumber === normalizedNumber;
+    });
 
     if (existing) {
       // Update use count and last used
