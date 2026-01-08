@@ -144,3 +144,31 @@ export const routesApi = {
   getNearby: (lat: number, lng: number, radius?: number) =>
     api.get('/routes/nearby', { params: { lat, lng, radius } }),
 };
+
+// Client Addresses API
+export const clientAddressesApi = {
+  getByClient: (clientNumber: string) =>
+    api.get(`/client-addresses/${encodeURIComponent(clientNumber)}`),
+
+  create: (data: {
+    clientNumber: string;
+    label?: string;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    reference?: string;
+    isDefault?: boolean;
+  }) => api.post('/client-addresses', data),
+
+  setDefault: (id: string, clientNumber: string) =>
+    api.patch(`/client-addresses/${id}/default`, { clientNumber }),
+
+  updateLabel: (id: string, label: string) =>
+    api.patch(`/client-addresses/${id}/label`, { label }),
+
+  delete: (id: string) =>
+    api.delete(`/client-addresses/${id}`),
+};

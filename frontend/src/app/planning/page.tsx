@@ -67,7 +67,7 @@ import GestureIcon from '@mui/icons-material/Gesture';
 import ImageIcon from '@mui/icons-material/Image';
 
 import { useRouter } from 'next/navigation';
-import { ordersApi, usersApi } from '@/lib/api';
+import { ordersApi, usersApi, clientAddressesApi } from '@/lib/api';
 
 const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
   ssr: false,
@@ -91,6 +91,7 @@ interface Order {
   bindId: string;
   orderNumber?: string;
   clientName: string;
+  clientNumber?: string;
   clientRfc?: string;
   clientPhone?: string;
   promisedDate?: string;
@@ -120,6 +121,24 @@ interface Order {
   carrierName?: string;
   carrierTrackingNumber?: string;
   evidences?: ShipmentEvidence[];
+}
+
+interface ClientAddress {
+  id: string;
+  clientNumber: string;
+  label?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  postalCode?: string;
+  city?: string;
+  state?: string;
+  reference?: string;
+  latitude?: number;
+  longitude?: number;
+  isDefault: boolean;
+  source: 'SYNC' | 'MANUAL';
+  useCount: number;
 }
 
 interface CarrierType {
@@ -578,8 +597,10 @@ export default function PlanningPage() {
   };
 
   const [addressOptions, setAddressOptions] = useState<AddressOption[]>([]);
+  const [savedAddresses, setSavedAddresses] = useState<ClientAddress[]>([]);
+  const [loadingSavedAddresses, setLoadingSavedAddresses] = useState(false);
 
-  const openEditDialog = (order: Order) => {
+  const openEditDialog = async (order: Order) => {
     setEditingOrder(order);
     const currentAddress = {
       street: order.addressRaw?.street || '',
@@ -596,7 +617,36 @@ export default function PlanningPage() {
     const options = extractAddressOptions(order);
     setAddressOptions(options);
 
+    // Reset saved addresses
+    setSavedAddresses([]);
+
     setEditDialogOpen(true);
+
+    // Fetch saved addresses for this client if clientNumber exists
+    if (order.clientNumber) {
+      setLoadingSavedAddresses(true);
+      try {
+        const response = await clientAddressesApi.getByClient(order.clientNumber);
+        setSavedAddresses(response.data || []);
+      } catch (err) {
+        console.warn('Could not fetch saved addresses:', err);
+        setSavedAddresses([]);
+      } finally {
+        setLoadingSavedAddresses(false);
+      }
+    }
+  };
+
+  const selectSavedAddress = (addr: ClientAddress) => {
+    setEditAddress({
+      street: addr.street || '',
+      number: addr.number || '',
+      neighborhood: addr.neighborhood || '',
+      city: addr.city || '',
+      state: addr.state || '',
+      postalCode: addr.postalCode || '',
+      reference: editAddress.reference, // Keep original reference
+    });
   };
 
   const selectAddressOption = (option: AddressOption) => {
@@ -1016,12 +1066,87 @@ export default function PlanningPage() {
                 {editingOrder.clientPhone && (
                   <Typography variant="caption" color="text.secondary" display="block">Tel: {editingOrder.clientPhone}</Typography>
                 )}
+                {editingOrder.clientNumber && (
+                  <Typography variant="caption" color="text.secondary" display="block">Cliente: {editingOrder.clientNumber}</Typography>
+                )}
                 {editingOrder.latitude && editingOrder.longitude ? (
                   <Chip size="small" icon={<LocationOnIcon />} label="Con coordenadas" color="success" sx={{ mt: 0.5, height: 20 }} />
                 ) : (
                   <Chip size="small" icon={<WarningAmberIcon />} label="Sin coordenadas" color="warning" sx={{ mt: 0.5, height: 20 }} />
                 )}
               </Paper>
+
+              {/* Saved addresses section */}
+              {editingOrder.clientNumber && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'success.50', borderColor: 'success.light' }}>
+                  <Typography variant="caption" fontWeight={600} color="success.dark" gutterBottom display="block">
+                    Direcciones guardadas del cliente:
+                  </Typography>
+                  {loadingSavedAddresses ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+                      <CircularProgress size={20} />
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>Cargando...</Typography>
+                    </Box>
+                  ) : savedAddresses.length > 0 ? (
+                    <Stack spacing={1} sx={{ mt: 1 }}>
+                      {savedAddresses.map((addr) => {
+                        const displayAddr = [
+                          [addr.street, addr.number].filter(Boolean).join(' '),
+                          addr.neighborhood && `Col. ${addr.neighborhood}`,
+                          addr.city,
+                          addr.postalCode && `C.P. ${addr.postalCode}`,
+                        ].filter(Boolean).join(', ');
+
+                        const isSelected =
+                          editAddress.street === (addr.street || '') &&
+                          editAddress.neighborhood === (addr.neighborhood || '') &&
+                          editAddress.postalCode === (addr.postalCode || '');
+
+                        return (
+                          <Paper
+                            key={addr.id}
+                            variant="outlined"
+                            onClick={() => selectSavedAddress(addr)}
+                            sx={{
+                              p: 1,
+                              cursor: 'pointer',
+                              bgcolor: isSelected ? 'success.100' : 'white',
+                              borderColor: isSelected ? 'success.main' : 'divider',
+                              borderWidth: isSelected ? 2 : 1,
+                              '&:hover': { bgcolor: isSelected ? 'success.100' : 'grey.100' },
+                            }}
+                          >
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                  <Typography variant="body2" fontWeight={500} noWrap>
+                                    {addr.label || displayAddr.substring(0, 30) || 'Sin nombre'}
+                                  </Typography>
+                                  {addr.isDefault && (
+                                    <Chip size="small" label="Principal" color="success" sx={{ height: 16, '& .MuiChip-label': { px: 0.5, fontSize: '0.6rem' } }} />
+                                  )}
+                                  {addr.latitude && addr.longitude && (
+                                    <Tooltip title="Con coordenadas">
+                                      <LocationOnIcon sx={{ fontSize: 14, color: 'success.main' }} />
+                                    </Tooltip>
+                                  )}
+                                </Stack>
+                                <Typography variant="caption" color="text.secondary" noWrap>
+                                  {displayAddr || 'Sin dirección completa'}
+                                </Typography>
+                              </Box>
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      No hay direcciones guardadas para este cliente
+                    </Typography>
+                  )}
+                </Paper>
+              )}
 
               {/* Address options list */}
               {addressOptions.length > 1 && (

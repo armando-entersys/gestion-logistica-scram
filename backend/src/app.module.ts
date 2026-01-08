@@ -12,6 +12,7 @@ import { RoutesModule } from './modules/routes/routes.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { HealthModule } from './modules/health/health.module';
+import { ClientAddressesModule } from './modules/client-addresses/client-addresses.module';
 
 // Configuration
 import configuration from './config/configuration';
@@ -71,6 +72,7 @@ import { typeOrmConfig } from './config/typeorm.config';
     RoutesModule,
     SyncModule,
     NotificationsModule,
+    ClientAddressesModule,
   ],
 })
 export class AppModule {}

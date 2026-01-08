@@ -19,6 +19,7 @@ import {
   OrderFilterDto,
 } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
+import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
 
 @Injectable()
 export class OrdersService {
@@ -33,6 +34,7 @@ export class OrdersService {
     private readonly notificationQueue: Queue,
     private readonly configService: ConfigService,
     private readonly geocodingService: GeocodingService,
+    private readonly clientAddressesService: ClientAddressesService,
   ) {}
 
   /**
@@ -102,6 +104,26 @@ export class OrdersService {
 
           await this.orderRepository.save(newOrder);
           created++;
+
+          // Save address to client address book
+          if (bindOrder.clientNumber && bindOrder.addressRaw?.street) {
+            try {
+              await this.clientAddressesService.upsertAddress({
+                clientNumber: bindOrder.clientNumber,
+                street: bindOrder.addressRaw.street,
+                number: bindOrder.addressRaw.number,
+                neighborhood: bindOrder.addressRaw.neighborhood,
+                postalCode: bindOrder.addressRaw.postalCode,
+                city: bindOrder.addressRaw.city,
+                state: bindOrder.addressRaw.state,
+                reference: bindOrder.addressRaw.reference,
+                latitude,
+                longitude,
+              }, 'SYNC', bindOrder.bindId);
+            } catch (addrError) {
+              this.logger.warn(`Failed to save client address for order ${bindOrder.bindId}: ${addrError.message}`);
+            }
+          }
         }
       } catch (error) {
         this.logger.error(`Error syncing order ${bindOrder.bindId}:`, error);
@@ -561,6 +583,26 @@ export class OrdersService {
       await this.orderRepository.update(dto.orderId, {
         addressGeo: () => `ST_SetSRID(ST_MakePoint(${updateData.longitude}, ${updateData.latitude}), 4326)`,
       });
+    }
+
+    // Save address to client address book for future use
+    if (order.clientNumber && dto.addressRaw?.street) {
+      try {
+        await this.clientAddressesService.upsertAddress({
+          clientNumber: order.clientNumber,
+          street: dto.addressRaw.street,
+          number: dto.addressRaw.number,
+          neighborhood: dto.addressRaw.neighborhood,
+          postalCode: dto.addressRaw.postalCode,
+          city: dto.addressRaw.city,
+          state: dto.addressRaw.state,
+          reference: dto.addressRaw.reference,
+          latitude: updateData.latitude,
+          longitude: updateData.longitude,
+        }, 'MANUAL');
+      } catch (addrError) {
+        this.logger.warn(`Failed to save client address: ${addrError.message}`);
+      }
     }
 
     return this.orderRepository.findOne({ where: { id: dto.orderId } }) as Promise<Order>;

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
@@ -7,6 +7,7 @@ import { Order, ShipmentEvidence } from './entities';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { GeocodingService } from '@/common/services/geocoding.service';
+import { ClientAddressesModule } from '@/modules/client-addresses/client-addresses.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { GeocodingService } from '@/common/services/geocoding.service';
       timeout: 10000,
       maxRedirects: 3,
     }),
+    ClientAddressesModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, GeocodingService],
