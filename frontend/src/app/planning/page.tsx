@@ -65,6 +65,7 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import GestureIcon from '@mui/icons-material/Gesture';
 import ImageIcon from '@mui/icons-material/Image';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi, clientAddressesApi, syncApi } from '@/lib/api';
@@ -662,6 +663,20 @@ export default function PlanningPage() {
     });
   };
 
+  const deleteSavedAddress = async (addressId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent selecting the address
+    if (!confirm('¿Eliminar esta dirección?')) return;
+
+    try {
+      await clientAddressesApi.delete(addressId);
+      setSavedAddresses((prev) => prev.filter((a) => a.id !== addressId));
+      setSnackbar({ open: true, message: 'Dirección eliminada', severity: 'success' });
+    } catch (err) {
+      console.error('Error deleting address:', err);
+      setSnackbar({ open: true, message: 'Error al eliminar dirección', severity: 'error' });
+    }
+  };
+
   const selectAddressOption = (option: AddressOption) => {
     setEditAddress({
       ...option.address,
@@ -1153,6 +1168,15 @@ export default function PlanningPage() {
                                   {displayAddr || 'Sin dirección completa'}
                                 </Typography>
                               </Box>
+                              <Tooltip title="Eliminar dirección">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => deleteSavedAddress(addr.id, e)}
+                                  sx={{ ml: 1, color: 'error.main', '&:hover': { bgcolor: 'error.50' } }}
+                                >
+                                  <DeleteIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
                             </Stack>
                           </Paper>
                         );
