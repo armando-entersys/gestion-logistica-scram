@@ -7,6 +7,7 @@ import { BindAdapter, OrphanInvoiceDto } from './adapters/bind.adapter';
 import { DismissedInvoice } from './entities/dismissed-invoice.entity';
 import { OrdersService } from '../orders/orders.service';
 import { ClientsService } from '../clients/clients.service';
+import { ClientAddressesService } from '../client-addresses/client-addresses.service';
 
 @Injectable()
 export class SyncService {
@@ -21,6 +22,7 @@ export class SyncService {
     private readonly dismissedInvoiceRepository: Repository<DismissedInvoice>,
     @Inject(forwardRef(() => ClientsService))
     private readonly clientsService: ClientsService,
+    private readonly clientAddressesService: ClientAddressesService,
   ) {
     // Timeout de 2 minutos para sincronización completa
     this.timeout = this.configService.get('bind.timeout') || 120000;
@@ -221,5 +223,71 @@ export class SyncService {
    */
   async restoreInvoice(bindInvoiceId: string): Promise<void> {
     await this.dismissedInvoiceRepository.delete({ bindInvoiceId });
+  }
+
+  /**
+   * Sincroniza direcciones de un cliente desde Bind ERP
+   * - Obtiene direcciones del cliente desde Bind usando el clientBindId (UUID)
+   * - Las guarda en nuestra BD usando clientNumber
+   * - No duplica direcciones que ya existen (comparación por texto normalizado)
+   * - Retorna las direcciones actualizadas del cliente
+   */
+  async syncClientAddresses(
+    clientBindId: string,
+    clientNumber: string,
+  ): Promise<{
+    success: boolean;
+    synced: number;
+    total: number;
+    message: string;
+  }> {
+    this.logger.log(`Syncing addresses for client ${clientNumber} (Bind ID: ${clientBindId})...`);
+
+    try {
+      // Obtener direcciones desde Bind
+      const bindAddresses = await this.bindAdapter.getClientAddresses(clientBindId);
+
+      if (!bindAddresses || bindAddresses.length === 0) {
+        this.logger.log(`No addresses found in Bind for client ${clientNumber}`);
+        return {
+          success: true,
+          synced: 0,
+          total: 0,
+          message: 'No se encontraron direcciones en Bind para este cliente',
+        };
+      }
+
+      this.logger.log(`Found ${bindAddresses.length} addresses in Bind for client ${clientNumber}`);
+
+      // Sincronizar cada dirección (upsertFromText evita duplicados)
+      let syncedCount = 0;
+      for (const addressText of bindAddresses) {
+        if (addressText && addressText.trim()) {
+          const result = await this.clientAddressesService.upsertFromText(
+            clientNumber,
+            addressText,
+            'SYNC',
+          );
+          if (result) {
+            syncedCount++;
+          }
+        }
+      }
+
+      this.logger.log(`Synced ${syncedCount} addresses for client ${clientNumber}`);
+
+      return {
+        success: true,
+        synced: syncedCount,
+        total: bindAddresses.length,
+        message: `Sincronizadas ${syncedCount} de ${bindAddresses.length} direcciones`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to sync addresses for client ${clientNumber}:`, error);
+      throw new ServiceUnavailableException({
+        message: 'Error al sincronizar direcciones desde Bind',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   }
 }

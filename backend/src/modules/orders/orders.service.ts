@@ -109,6 +109,7 @@ export class OrdersService {
             employeeName: bindOrder.employeeName,
             clientNumber: bindOrder.clientNumber,
             clientId: clientId,
+            bindClientId: bindOrder.bindClientId, // UUID del cliente en Bind para sincronizar direcciones
             purchaseOrder: bindOrder.purchaseOrder,
             clientName: bindOrder.clientName,
             clientEmail: bindOrder.clientEmail,

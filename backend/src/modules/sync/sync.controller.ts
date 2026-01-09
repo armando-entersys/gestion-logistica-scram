@@ -113,4 +113,30 @@ export class SyncController {
   restoreInvoice(@Param('bindInvoiceId') bindInvoiceId: string) {
     return this.syncService.restoreInvoice(bindInvoiceId);
   }
+
+  /**
+   * Sincroniza direcciones de un cliente desde Bind ERP
+   * Obtiene las direcciones del catálogo del cliente en Bind y las guarda localmente
+   */
+  @Post('client-addresses')
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.SALES, UserRole.DIRECTOR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Sync client addresses from Bind ERP' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        clientBindId: { type: 'string', description: 'UUID del cliente en Bind (ClientID)' },
+        clientNumber: { type: 'string', description: 'Número del cliente para nuestra BD' },
+      },
+      required: ['clientBindId', 'clientNumber'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Addresses synced successfully' })
+  @ApiResponse({ status: 503, description: 'Bind API unavailable' })
+  syncClientAddresses(
+    @Body() body: { clientBindId: string; clientNumber: string },
+  ) {
+    return this.syncService.syncClientAddresses(body.clientBindId, body.clientNumber);
+  }
 }

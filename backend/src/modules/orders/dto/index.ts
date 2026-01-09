@@ -70,6 +70,11 @@ export class CreateOrderDto {
   @IsString()
   clientNumber?: string;
 
+  @ApiPropertyOptional({ description: 'UUID del cliente en Bind ERP (ClientID)' })
+  @IsOptional()
+  @IsString()
+  bindClientId?: string;
+
   @ApiPropertyOptional({ description: 'Orden de compra del cliente' })
   @IsOptional()
   @IsString()

@@ -67,7 +67,7 @@ import GestureIcon from '@mui/icons-material/Gesture';
 import ImageIcon from '@mui/icons-material/Image';
 
 import { useRouter } from 'next/navigation';
-import { ordersApi, usersApi, clientAddressesApi } from '@/lib/api';
+import { ordersApi, usersApi, clientAddressesApi, syncApi } from '@/lib/api';
 
 const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
   ssr: false,
@@ -92,6 +92,7 @@ interface Order {
   orderNumber?: string;
   clientName: string;
   clientNumber?: string;
+  bindClientId?: string; // UUID del cliente en Bind ERP (para sincronizar direcciones)
   clientRfc?: string;
   clientPhone?: string;
   promisedDate?: string;
@@ -626,6 +627,18 @@ export default function PlanningPage() {
     if (order.clientNumber) {
       setLoadingSavedAddresses(true);
       try {
+        // First, sync addresses from Bind if we have bindClientId (Bind UUID)
+        if (order.bindClientId) {
+          try {
+            await syncApi.syncClientAddresses(order.bindClientId, order.clientNumber);
+            console.log('Synced addresses from Bind for client', order.clientNumber);
+          } catch (syncErr) {
+            console.warn('Could not sync addresses from Bind:', syncErr);
+            // Continue to load saved addresses even if sync fails
+          }
+        }
+
+        // Then fetch saved addresses (including any newly synced from Bind)
         const response = await clientAddressesApi.getByClient(order.clientNumber);
         setSavedAddresses(response.data || []);
       } catch (err) {

@@ -8,6 +8,7 @@ import { BindAdapter } from './adapters/bind.adapter';
 import { DismissedInvoice } from './entities/dismissed-invoice.entity';
 import { OrdersModule } from '../orders/orders.module';
 import { ClientsModule } from '../clients/clients.module';
+import { ClientAddressesModule } from '../client-addresses/client-addresses.module';
 
 @Module({
   imports: [
@@ -18,9 +19,10 @@ import { ClientsModule } from '../clients/clients.module';
     TypeOrmModule.forFeature([DismissedInvoice]),
     OrdersModule,
     forwardRef(() => ClientsModule),
+    ClientAddressesModule,
   ],
   providers: [SyncService, BindAdapter],
   controllers: [SyncController],
-  exports: [SyncService],
+  exports: [SyncService, BindAdapter],
 })
 export class SyncModule {}

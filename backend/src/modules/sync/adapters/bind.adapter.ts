@@ -261,6 +261,25 @@ export class BindAdapter {
   }
 
   /**
+   * Obtiene las direcciones de un cliente desde Bind ERP
+   * @param clientBindId - UUID del cliente en Bind (ClientID)
+   * @returns Array de direcciones en texto o vacío si no hay
+   */
+  async getClientAddresses(clientBindId: string): Promise<string[]> {
+    this.logger.log(`Fetching addresses for client ${clientBindId} from Bind...`);
+
+    const clientDetails = await this.getClientDetails(clientBindId);
+    if (!clientDetails) {
+      this.logger.warn(`Could not get client details for ${clientBindId}`);
+      return [];
+    }
+
+    const addresses = clientDetails.Addresses || [];
+    this.logger.log(`Found ${addresses.length} addresses for client ${clientBindId}`);
+    return addresses;
+  }
+
+  /**
    * Obtiene todos los clientes de Bind con sus direcciones (con paginación)
    */
   async fetchClients(): Promise<SyncClientDto[]> {
@@ -383,6 +402,7 @@ export class BindAdapter {
       warehouseName: order.WarehouseName,
       employeeName: order.EmployeeName,
       clientNumber: client?.Number?.toString() || order.ClientID,
+      bindClientId: order.ClientID, // UUID del cliente en Bind (para sincronizar direcciones)
       purchaseOrder: order.PurchaseOrder,
       clientName: this.cleanString(order.ClientName),
       clientEmail: client?.Email || '',

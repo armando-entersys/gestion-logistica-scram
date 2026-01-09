@@ -131,6 +131,9 @@ export const syncApi = {
 
   restoreInvoice: (bindInvoiceId: string) =>
     api.delete(`/sync/dismissed-invoice/${bindInvoiceId}`),
+
+  syncClientAddresses: (clientBindId: string, clientNumber: string) =>
+    api.post('/sync/client-addresses', { clientBindId, clientNumber }),
 };
 
 // Routes API

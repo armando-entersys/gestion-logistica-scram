@@ -58,6 +58,9 @@ export class Order {
   @Index('idx_orders_client_id')
   clientId: string | null;
 
+  @Column({ name: 'bind_client_id', type: 'varchar', length: 50, nullable: true, comment: 'UUID del cliente en Bind ERP (para sincronizar direcciones)' })
+  bindClientId: string | null;
+
   @Column({
     name: 'address_raw',
     type: 'jsonb',
