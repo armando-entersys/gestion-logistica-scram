@@ -1089,21 +1089,11 @@ export class OrdersService {
 
     if (!order) return;
 
-    const addressParts = [
-      order.addressRaw?.street,
-      order.addressRaw?.number,
-      order.addressRaw?.neighborhood,
-      order.addressRaw?.city,
-      order.addressRaw?.state,
-    ].filter(Boolean);
-
-    if (addressParts.length === 0) return;
-
-    const coords = await this.geocodingService.geocode(addressParts.join(', '));
-    if (coords) {
+    const result = await this.geocodingService.geocodeAddress(order.addressRaw);
+    if (result) {
       await this.orderRepository.update(orderId, {
-        latitude: coords.lat,
-        longitude: coords.lng,
+        latitude: result.latitude,
+        longitude: result.longitude,
       });
     }
   }
