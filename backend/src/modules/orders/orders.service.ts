@@ -1055,7 +1055,9 @@ export class OrdersService {
   async getDriverPendingAddressChanges(
     driverId: string,
   ): Promise<AddressChangeRequest[]> {
-    return this.addressChangeRepository.find({
+    this.logger.log(`Fetching pending address changes for driver: ${driverId}`);
+
+    const requests = await this.addressChangeRepository.find({
       where: {
         driverId,
         status: AddressChangeStatus.PENDING,
@@ -1063,6 +1065,10 @@ export class OrdersService {
       relations: ['order', 'requestedBy'],
       order: { createdAt: 'ASC' },
     });
+
+    this.logger.log(`Found ${requests.length} pending address change requests for driver ${driverId}`);
+
+    return requests;
   }
 
   /**
