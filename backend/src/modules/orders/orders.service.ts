@@ -25,6 +25,7 @@ import {
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
 import { ClientsService } from '@/modules/clients/clients.service';
+import { PushSubscriptionsService } from '@/modules/push-subscriptions/push-subscriptions.service';
 
 @Injectable()
 export class OrdersService {
@@ -43,6 +44,7 @@ export class OrdersService {
     private readonly geocodingService: GeocodingService,
     private readonly clientAddressesService: ClientAddressesService,
     private readonly clientsService: ClientsService,
+    private readonly pushService: PushSubscriptionsService,
   ) {}
 
   /**
@@ -1025,6 +1027,24 @@ export class OrdersService {
     this.logger.log(
       `Address change requested for order ${dto.orderId} by user ${requesterId}`,
     );
+
+    // Send push notification to driver
+    try {
+      await this.pushService.sendToUser(order.assignedDriverId, {
+        title: 'Cambio de Direccion Solicitado',
+        body: `Se solicito un cambio de direccion para el pedido de ${order.clientName}`,
+        data: {
+          type: 'ADDRESS_CHANGE_REQUEST',
+          orderId: dto.orderId,
+          requestId: request.id,
+        },
+        actions: [
+          { action: 'view', title: 'Ver Solicitud' },
+        ],
+      });
+    } catch (pushError) {
+      this.logger.warn(`Failed to send push notification for address change: ${pushError.message}`);
+    }
 
     return request;
   }

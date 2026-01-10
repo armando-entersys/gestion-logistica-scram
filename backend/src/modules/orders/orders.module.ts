@@ -10,6 +10,7 @@ import { OrdersController } from './orders.controller';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesModule } from '@/modules/client-addresses/client-addresses.module';
 import { ClientsModule } from '@/modules/clients/clients.module';
+import { PushSubscriptionsModule } from '@/modules/push-subscriptions/push-subscriptions.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ClientsModule } from '@/modules/clients/clients.module';
     }),
     ClientAddressesModule,
     ClientsModule,
+    PushSubscriptionsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, GeocodingService],

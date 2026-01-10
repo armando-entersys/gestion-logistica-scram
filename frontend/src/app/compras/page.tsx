@@ -1304,7 +1304,7 @@ export default function ComprasPage() {
                           Dirección de Entrega
                         </Typography>
                       </Stack>
-                      {detailOrder.status === 'READY' && clientAddresses.length > 0 && !editingAddress && (
+                      {(detailOrder.status === 'READY' || detailOrder.status === 'DRAFT') && clientAddresses.length > 0 && !editingAddress && (
                         <Tooltip title="Cambiar dirección">
                           <IconButton size="small" color="primary" onClick={() => setEditingAddress(true)}>
                             <EditIcon fontSize="small" />
@@ -1313,8 +1313,8 @@ export default function ComprasPage() {
                       )}
                     </Stack>
 
-                    {/* Address selector for READY orders */}
-                    {editingAddress && detailOrder.status === 'READY' ? (
+                    {/* Address selector for DRAFT and READY orders */}
+                    {editingAddress && (detailOrder.status === 'READY' || detailOrder.status === 'DRAFT') ? (
                       <Box>
                         <FormControl fullWidth size="small" sx={{ mb: 1 }}>
                           <InputLabel>Seleccionar dirección guardada</InputLabel>
@@ -1383,7 +1383,7 @@ export default function ComprasPage() {
                         )}
 
                         {/* Show available addresses count */}
-                        {detailOrder.status === 'READY' && (
+                        {(detailOrder.status === 'READY' || detailOrder.status === 'DRAFT') && (
                           <Box sx={{ mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
                             {loadingAddresses ? (
                               <Typography variant="caption" color="text.secondary">

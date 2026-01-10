@@ -48,6 +48,7 @@ import {
   LocalOrder,
 } from '@/lib/db';
 import useSync from '@/hooks/useSync';
+import { subscribeToPush, isSubscribedToPush } from '@/lib/push';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
@@ -129,6 +130,28 @@ export default function RoutePage() {
   useEffect(() => {
     fetchRoute();
     fetchAddressChangeRequests();
+  }, []);
+
+  // Subscribe to push notifications
+  useEffect(() => {
+    const initPush = async () => {
+      try {
+        const sessionData = await getSession();
+        if (!sessionData?.token) return;
+
+        const alreadySubscribed = await isSubscribedToPush();
+        if (!alreadySubscribed) {
+          const success = await subscribeToPush(sessionData.token);
+          if (success) {
+            console.log('Push notifications enabled');
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing push:', error);
+      }
+    };
+
+    initPush();
   }, []);
 
   const handleLogout = async () => {
