@@ -794,6 +794,31 @@ export class OrdersService {
    * Ruta del chofer (solo sus pedidos asignados)
    */
   async getDriverRoute(driverId: string): Promise<Partial<Order>[]> {
+    this.logger.log(`getDriverRoute called for driver: ${driverId}`);
+
+    // Debug: count orders assigned to this driver
+    const totalAssigned = await this.orderRepository.count({
+      where: { assignedDriverId: driverId },
+    });
+    this.logger.log(`Total orders assigned to driver ${driverId}: ${totalAssigned}`);
+
+    // Debug: count by status
+    const inTransitCount = await this.orderRepository.count({
+      where: { assignedDriverId: driverId, status: OrderStatus.IN_TRANSIT },
+    });
+    const readyCount = await this.orderRepository.count({
+      where: { assignedDriverId: driverId, status: OrderStatus.READY },
+    });
+    this.logger.log(`Driver ${driverId} orders - IN_TRANSIT: ${inTransitCount}, READY: ${readyCount}`);
+
+    if (totalAssigned === 0) {
+      // Check if there are any dispatched orders at all
+      const allInTransit = await this.orderRepository.count({
+        where: { status: OrderStatus.IN_TRANSIT },
+      });
+      this.logger.log(`Total IN_TRANSIT orders in system: ${allInTransit}`);
+    }
+
     const orders = await this.orderRepository.find({
       where: {
         assignedDriverId: driverId,
@@ -818,6 +843,59 @@ export class OrdersService {
     });
 
     return orders;
+  }
+
+  /**
+   * Debug method for driver route issues
+   */
+  async getDriverRouteDebug(driverId: string): Promise<{
+    driverId: string;
+    totalOrdersAssigned: number;
+    ordersByStatus: Record<string, number>;
+    allDriversWithOrders: Array<{ driverId: string; count: number }>;
+    sampleOrders: Array<{ id: string; status: string; assignedDriverId: string | null }>;
+  }> {
+    const totalOrdersAssigned = await this.orderRepository.count({
+      where: { assignedDriverId: driverId },
+    });
+
+    const ordersByStatus: Record<string, number> = {};
+    for (const status of Object.values(OrderStatus)) {
+      ordersByStatus[status] = await this.orderRepository.count({
+        where: { assignedDriverId: driverId, status },
+      });
+    }
+
+    // Get all drivers that have orders assigned
+    const driversWithOrders = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('order.assignedDriverId', 'driverId')
+      .addSelect('COUNT(*)', 'count')
+      .where('order.assignedDriverId IS NOT NULL')
+      .groupBy('order.assignedDriverId')
+      .getRawMany();
+
+    // Get sample IN_TRANSIT orders
+    const sampleOrders = await this.orderRepository.find({
+      where: { status: OrderStatus.IN_TRANSIT },
+      select: ['id', 'status', 'assignedDriverId'],
+      take: 10,
+    });
+
+    return {
+      driverId,
+      totalOrdersAssigned,
+      ordersByStatus,
+      allDriversWithOrders: driversWithOrders.map(d => ({
+        driverId: d.driverId,
+        count: parseInt(d.count, 10),
+      })),
+      sampleOrders: sampleOrders.map(o => ({
+        id: o.id,
+        status: o.status,
+        assignedDriverId: o.assignedDriverId,
+      })),
+    };
   }
 
   /**

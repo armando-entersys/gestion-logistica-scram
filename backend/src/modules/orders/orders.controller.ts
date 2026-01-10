@@ -132,6 +132,18 @@ export class OrdersController {
   }
 
   /**
+   * Debug endpoint for driver route issues
+   */
+  @Get('my-route-debug')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER, UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Debug driver route assignment' })
+  async getMyRouteDebug(@CurrentUser() user: any) {
+    return this.ordersService.getDriverRouteDebug(user.id);
+  }
+
+  /**
    * Get available carrier types for dropdown
    * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
    */
