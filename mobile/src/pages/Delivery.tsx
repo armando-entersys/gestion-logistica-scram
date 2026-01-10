@@ -55,17 +55,31 @@ export default function DeliveryPage() {
   useEffect(() => {
     if (evidenceType === 'SIGNATURE' && canvasRef.current) {
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
 
-      // Set canvas size
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      // Use requestAnimationFrame to ensure the canvas is rendered
+      const setupCanvas = () => {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
 
-      if (ctx) {
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-      }
+        // Set canvas size accounting for device pixel ratio
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Scale context to account for device pixel ratio
+          ctx.scale(dpr, dpr);
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        }
+      };
+
+      // Delay setup to ensure element is rendered
+      requestAnimationFrame(() => {
+        requestAnimationFrame(setupCanvas);
+      });
     }
   }, [evidenceType]);
 
