@@ -18,7 +18,7 @@ export function isPushSupported(): boolean {
 /**
  * Get the VAPID public key from the backend
  */
-export async function getVapidKey(token: string): Promise<string | null> {
+export async function getVapidKey(): Promise<string | null> {
   try {
     const response = await fetch(`${API_URL}/push/vapid-key`);
     const data = await response.json();
@@ -33,9 +33,9 @@ export async function getVapidKey(token: string): Promise<string | null> {
 }
 
 /**
- * Convert VAPID key from base64 to Uint8Array
+ * Convert VAPID key from base64 to ArrayBuffer
  */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);
@@ -43,7 +43,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
-  return outputArray;
+  return outputArray.buffer as ArrayBuffer;
 }
 
 /**
@@ -57,7 +57,7 @@ export async function subscribeToPush(token: string): Promise<boolean> {
 
   try {
     // Get VAPID key
-    const vapidKey = await getVapidKey(token);
+    const vapidKey = await getVapidKey();
     if (!vapidKey) {
       console.log('VAPID key not configured on server');
       return false;
