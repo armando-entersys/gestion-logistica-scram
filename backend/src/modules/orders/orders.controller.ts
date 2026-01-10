@@ -34,6 +34,9 @@ import {
   UpdateAddressDto,
   SubmitCsatDto,
   OrderFilterDto,
+  RequestAddressChangeDto,
+  RespondAddressChangeDto,
+  ReturnOrderDto,
 } from './dto';
 
 /**
@@ -355,5 +358,73 @@ export class OrdersController {
     @CurrentUser() user: any,
   ) {
     return this.ordersService.addInternalNote(id, body.note, user);
+  }
+
+  // =============================================
+  // ADDRESS CHANGE REQUESTS (for IN_TRANSIT orders)
+  // =============================================
+
+  /**
+   * Request address change for an order in transit
+   * Admin creates a pending request that driver must approve
+   */
+  @Post('address-change-request')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Request address change for in-transit order' })
+  requestAddressChange(
+    @Body() dto: RequestAddressChangeDto,
+    @CurrentUser('id') requesterId: string,
+  ) {
+    return this.ordersService.requestAddressChange(dto, requesterId);
+  }
+
+  /**
+   * Get pending address change requests for driver
+   * Driver sees their pending requests to approve/reject
+   */
+  @Get('address-change-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pending address change requests for driver' })
+  getDriverAddressChangeRequests(@CurrentUser('id') driverId: string) {
+    return this.ordersService.getDriverPendingAddressChanges(driverId);
+  }
+
+  /**
+   * Driver responds to address change request
+   * Can approve or reject with reason
+   */
+  @Patch('address-change-request/:id/respond')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve or reject address change request' })
+  respondToAddressChange(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RespondAddressChangeDto,
+    @CurrentUser('id') driverId: string,
+  ) {
+    return this.ordersService.respondToAddressChange(id, dto, driverId);
+  }
+
+  /**
+   * Driver returns an order (undelivered)
+   * Order goes back to READY status
+   */
+  @Post('return')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Return order (mark as undelivered)' })
+  returnOrder(
+    @Body() dto: ReturnOrderDto,
+    @CurrentUser('id') driverId: string,
+  ) {
+    return this.ordersService.returnOrder(dto, driverId);
   }
 }

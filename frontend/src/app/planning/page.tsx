@@ -393,10 +393,25 @@ export default function PlanningPage() {
   const addressMutation = useMutation({
     mutationFn: async () => {
       if (!editingOrder) throw new Error('No hay pedido seleccionado');
+
+      // For IN_TRANSIT orders, create a change request instead of direct update
+      if (editingOrder.status === 'IN_TRANSIT') {
+        return ordersApi.requestAddressChange(editingOrder.id, editAddress);
+      }
+
+      // For other statuses, update directly
       return ordersApi.updateAddress(editingOrder.id, editAddress, true);
     },
-    onSuccess: () => {
-      setSnackbar({ open: true, message: 'Dirección actualizada y geocodificada', severity: 'success' });
+    onSuccess: (response, variables, context) => {
+      if (editingOrder?.status === 'IN_TRANSIT') {
+        setSnackbar({
+          open: true,
+          message: 'Solicitud de cambio enviada al chofer para aprobación',
+          severity: 'info'
+        });
+      } else {
+        setSnackbar({ open: true, message: 'Dirección actualizada y geocodificada', severity: 'success' });
+      }
       setEditDialogOpen(false);
       setEditingOrder(null);
       queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
@@ -1088,6 +1103,18 @@ export default function PlanningPage() {
         <DialogContent dividers>
           {editingOrder && (
             <Stack spacing={2}>
+              {/* Warning for IN_TRANSIT orders */}
+              {editingOrder.status === 'IN_TRANSIT' && (
+                <Alert severity="warning" icon={<WarningAmberIcon />}>
+                  <Typography variant="body2" fontWeight={600}>
+                    Pedido en ruta - Requiere aprobación del chofer
+                  </Typography>
+                  <Typography variant="caption">
+                    Este pedido ya fue despachado. El cambio de dirección será enviado al chofer para su aprobación.
+                  </Typography>
+                </Alert>
+              )}
+
               {/* Order info header */}
               <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'grey.50' }}>
                 <Stack direction="row" alignItems="center" spacing={1}>
@@ -1358,11 +1385,12 @@ export default function PlanningPage() {
           </Button>
           <Button
             variant="contained"
+            color={editingOrder?.status === 'IN_TRANSIT' ? 'warning' : 'primary'}
             onClick={() => addressMutation.mutate()}
             disabled={addressMutation.isPending || !editAddress.street}
             startIcon={addressMutation.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
           >
-            Guardar y Geocodificar
+            {editingOrder?.status === 'IN_TRANSIT' ? 'Solicitar Cambio' : 'Guardar y Geocodificar'}
           </Button>
         </DialogActions>
       </Dialog>

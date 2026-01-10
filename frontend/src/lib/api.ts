@@ -101,6 +101,28 @@ export const ordersApi = {
     reference?: string;
   }, geocode: boolean = true) =>
     api.patch('/orders/address', { orderId, addressRaw, geocode }),
+
+  // Address change requests (for IN_TRANSIT orders)
+  requestAddressChange: (orderId: string, newAddress: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    reference?: string;
+  }) =>
+    api.post('/orders/address-change-request', { orderId, newAddress }),
+
+  getAddressChangeRequests: () =>
+    api.get('/orders/address-change-requests'),
+
+  respondToAddressChange: (requestId: string, approved: boolean, rejectionReason?: string) =>
+    api.patch(`/orders/address-change-request/${requestId}/respond`, { approved, rejectionReason }),
+
+  // Return order (driver)
+  returnOrder: (orderId: string, reason: string, notes?: string) =>
+    api.post('/orders/return', { orderId, reason, notes }),
 };
 
 // Users API

@@ -236,6 +236,43 @@ export class UpdateAddressDto {
   geocode?: boolean;
 }
 
+export class RequestAddressChangeDto {
+  @ApiProperty({ description: 'UUID del pedido' })
+  @IsUUID()
+  orderId: string;
+
+  @ApiProperty({ type: AddressDto, description: 'Nueva dirección propuesta' })
+  @ValidateNested()
+  @Type(() => AddressDto)
+  newAddress: AddressDto;
+}
+
+export class RespondAddressChangeDto {
+  @ApiProperty({ description: 'true para aprobar, false para rechazar' })
+  @IsBoolean()
+  approved: boolean;
+
+  @ApiPropertyOptional({ description: 'Razón del rechazo (requerido si rechaza)' })
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;
+}
+
+export class ReturnOrderDto {
+  @ApiProperty({ description: 'UUID del pedido' })
+  @IsUUID()
+  orderId: string;
+
+  @ApiProperty({ description: 'Razón de la devolución' })
+  @IsString()
+  reason: string;
+
+  @ApiPropertyOptional({ description: 'Notas adicionales' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
 export class OrderFilterDto {
   @ApiPropertyOptional({ description: 'Status filter (single or comma-separated)', example: 'DRAFT,READY' })
   @IsOptional()

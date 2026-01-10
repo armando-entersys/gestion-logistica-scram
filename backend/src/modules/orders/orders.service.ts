@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 import { Order, ShipmentEvidence } from './entities';
+import { AddressChangeRequest, AddressChangeStatus } from './entities/address-change-request.entity';
 import { OrderStatus, PriorityLevel, EvidenceType, UserRole, CarrierType } from '@/common/enums';
 import {
   CreateOrderDto,
@@ -17,6 +18,9 @@ import {
   UpdateAddressDto,
   SubmitCsatDto,
   OrderFilterDto,
+  RequestAddressChangeDto,
+  RespondAddressChangeDto,
+  ReturnOrderDto,
 } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
@@ -31,6 +35,8 @@ export class OrdersService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(ShipmentEvidence)
     private readonly evidenceRepository: Repository<ShipmentEvidence>,
+    @InjectRepository(AddressChangeRequest)
+    private readonly addressChangeRepository: Repository<AddressChangeRequest>,
     @InjectQueue('notifications')
     private readonly notificationQueue: Queue,
     private readonly configService: ConfigService,
@@ -881,5 +887,224 @@ export class OrdersService {
       todayDelivered,
       todayPending,
     };
+  }
+
+  // =============================================
+  // ADDRESS CHANGE REQUESTS (for IN_TRANSIT orders)
+  // =============================================
+
+  /**
+   * Request address change for an order in transit
+   * Creates a pending request that the driver must approve
+   */
+  async requestAddressChange(
+    dto: RequestAddressChangeDto,
+    requesterId: string,
+  ): Promise<AddressChangeRequest> {
+    const order = await this.orderRepository.findOne({
+      where: { id: dto.orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    if (order.status !== OrderStatus.IN_TRANSIT) {
+      throw new BadRequestException(
+        'Solo se pueden solicitar cambios de dirección para pedidos en tránsito',
+      );
+    }
+
+    if (!order.assignedDriverId) {
+      throw new BadRequestException('El pedido no tiene un chofer asignado');
+    }
+
+    // Check if there's already a pending request for this order
+    const existingPending = await this.addressChangeRepository.findOne({
+      where: {
+        orderId: dto.orderId,
+        status: AddressChangeStatus.PENDING,
+      },
+    });
+
+    if (existingPending) {
+      throw new BadRequestException(
+        'Ya existe una solicitud pendiente para este pedido',
+      );
+    }
+
+    const request = this.addressChangeRepository.create({
+      orderId: dto.orderId,
+      requestedById: requesterId,
+      driverId: order.assignedDriverId,
+      oldAddress: order.addressRaw,
+      newAddress: dto.newAddress,
+      status: AddressChangeStatus.PENDING,
+    });
+
+    await this.addressChangeRepository.save(request);
+
+    this.logger.log(
+      `Address change requested for order ${dto.orderId} by user ${requesterId}`,
+    );
+
+    return request;
+  }
+
+  /**
+   * Get pending address change requests for a driver
+   */
+  async getDriverPendingAddressChanges(
+    driverId: string,
+  ): Promise<AddressChangeRequest[]> {
+    return this.addressChangeRepository.find({
+      where: {
+        driverId,
+        status: AddressChangeStatus.PENDING,
+      },
+      relations: ['order', 'requestedBy'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /**
+   * Driver responds to address change request
+   */
+  async respondToAddressChange(
+    requestId: string,
+    dto: RespondAddressChangeDto,
+    driverId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const request = await this.addressChangeRepository.findOne({
+      where: { id: requestId },
+      relations: ['order'],
+    });
+
+    if (!request) {
+      throw new NotFoundException('Solicitud no encontrada');
+    }
+
+    if (request.driverId !== driverId) {
+      throw new ForbiddenException('No tienes permiso para responder esta solicitud');
+    }
+
+    if (request.status !== AddressChangeStatus.PENDING) {
+      throw new BadRequestException('Esta solicitud ya fue procesada');
+    }
+
+    if (dto.approved) {
+      // Update the order address
+      await this.orderRepository.update(request.orderId, {
+        addressRaw: request.newAddress,
+        latitude: null, // Reset coordinates to trigger re-geocoding
+        longitude: null,
+      });
+
+      request.status = AddressChangeStatus.APPROVED;
+      request.respondedAt = new Date();
+      await this.addressChangeRepository.save(request);
+
+      // Try to geocode the new address
+      try {
+        await this.geocodeSingleOrder(request.orderId);
+      } catch (err) {
+        this.logger.warn(`Failed to geocode after address change: ${err.message}`);
+      }
+
+      this.logger.log(`Address change approved for order ${request.orderId}`);
+      return { success: true, message: 'Cambio de dirección aprobado' };
+    } else {
+      // Rejection
+      if (!dto.rejectionReason) {
+        throw new BadRequestException('Se requiere un motivo de rechazo');
+      }
+
+      request.status = AddressChangeStatus.REJECTED;
+      request.rejectionReason = dto.rejectionReason;
+      request.respondedAt = new Date();
+      await this.addressChangeRepository.save(request);
+
+      this.logger.log(
+        `Address change rejected for order ${request.orderId}: ${dto.rejectionReason}`,
+      );
+      return { success: true, message: 'Cambio de dirección rechazado' };
+    }
+  }
+
+  /**
+   * Driver returns an order (undelivered)
+   * Order goes back to READY status with notes
+   */
+  async returnOrder(
+    dto: ReturnOrderDto,
+    driverId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const order = await this.orderRepository.findOne({
+      where: { id: dto.orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pedido no encontrado');
+    }
+
+    if (order.assignedDriverId !== driverId) {
+      throw new ForbiddenException('No tienes permiso para devolver este pedido');
+    }
+
+    if (order.status !== OrderStatus.IN_TRANSIT) {
+      throw new BadRequestException('Solo se pueden devolver pedidos en tránsito');
+    }
+
+    // Update order status to READY and add return notes
+    const returnNote = `[DEVUELTO ${new Date().toLocaleDateString('es-MX')}] ${dto.reason}${dto.notes ? '\n' + dto.notes : ''}`;
+    const existingNotes = order.internalNotes || '';
+    const updatedNotes = existingNotes
+      ? `${existingNotes}\n\n${returnNote}`
+      : returnNote;
+
+    await this.orderRepository.update(dto.orderId, {
+      status: OrderStatus.READY,
+      internalNotes: updatedNotes,
+      assignedDriverId: null, // Remove driver assignment
+      routePosition: null,
+      estimatedArrivalStart: null,
+      estimatedArrivalEnd: null,
+    });
+
+    this.logger.log(`Order ${dto.orderId} returned by driver ${driverId}: ${dto.reason}`);
+
+    return {
+      success: true,
+      message: 'Pedido devuelto correctamente',
+    };
+  }
+
+  /**
+   * Helper method to geocode a single order
+   */
+  private async geocodeSingleOrder(orderId: string): Promise<void> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+    });
+
+    if (!order) return;
+
+    const addressParts = [
+      order.addressRaw?.street,
+      order.addressRaw?.number,
+      order.addressRaw?.neighborhood,
+      order.addressRaw?.city,
+      order.addressRaw?.state,
+    ].filter(Boolean);
+
+    if (addressParts.length === 0) return;
+
+    const coords = await this.geocodingService.geocode(addressParts.join(', '));
+    if (coords) {
+      await this.orderRepository.update(orderId, {
+        latitude: coords.lat,
+        longitude: coords.lng,
+      });
+    }
   }
 }
