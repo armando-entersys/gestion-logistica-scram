@@ -407,7 +407,7 @@ export default function PlanningPage() {
         setSnackbar({
           open: true,
           message: 'Solicitud de cambio enviada al chofer para aprobación',
-          severity: 'info'
+          severity: 'success'
         });
       } else {
         setSnackbar({ open: true, message: 'Dirección actualizada y geocodificada', severity: 'success' });
