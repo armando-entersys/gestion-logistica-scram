@@ -82,6 +82,9 @@ services:
       OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
       APP_URL: https://gestion-logistica.scram2k.com
       API_URL: https://api-gestion-logistica.scram2k.com
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:notificaciones@scram2k.com}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"
