@@ -385,7 +385,7 @@ export default function ClientesPage() {
       {/* Header */}
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
-          <IconButton edge="start" onClick={() => router.push('/planning')} sx={{ mr: 2 }}>
+          <IconButton edge="start" onClick={() => router.back()} sx={{ mr: 2 }}>
             <ArrowBackIcon />
           </IconButton>
           <BusinessIcon sx={{ mr: 2, color: 'primary.main' }} />
