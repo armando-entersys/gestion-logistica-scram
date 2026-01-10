@@ -39,13 +39,13 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/api-scram\.entersys\.mx\/.*/i,
+            urlPattern: /^https:\/\/api-gestion-logistica\.scram2k\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60, // 1 hour
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
               },
               networkTimeoutSeconds: 10,
             },
