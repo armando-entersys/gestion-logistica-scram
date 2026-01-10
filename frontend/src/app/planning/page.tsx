@@ -13,6 +13,7 @@ import {
   Chip,
   Checkbox,
   FormControl,
+  FormControlLabel,
   InputLabel,
   Select,
   MenuItem,
@@ -238,6 +239,8 @@ export default function PlanningPage() {
     postalCode: '',
     reference: '',
   });
+  const [saveAddressForClient, setSaveAddressForClient] = useState(false);
+  const [newAddressLabel, setNewAddressLabel] = useState('');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -396,24 +399,54 @@ export default function PlanningPage() {
 
       // For IN_TRANSIT orders, create a change request instead of direct update
       if (editingOrder.status === 'IN_TRANSIT') {
-        return ordersApi.requestAddressChange(editingOrder.id, editAddress);
+        const result = await ordersApi.requestAddressChange(editingOrder.id, editAddress);
+        // Also save address for client if checkbox is checked
+        if (saveAddressForClient && editingOrder.clientNumber) {
+          await clientAddressesApi.create({
+            clientNumber: editingOrder.clientNumber,
+            label: newAddressLabel || undefined,
+            ...editAddress,
+          });
+        }
+        return result;
       }
 
       // For other statuses, update directly
-      return ordersApi.updateAddress(editingOrder.id, editAddress, true);
+      const result = await ordersApi.updateAddress(editingOrder.id, editAddress, true);
+
+      // Also save address for client if checkbox is checked
+      if (saveAddressForClient && editingOrder.clientNumber) {
+        await clientAddressesApi.create({
+          clientNumber: editingOrder.clientNumber,
+          label: newAddressLabel || undefined,
+          ...editAddress,
+        });
+      }
+
+      return result;
     },
     onSuccess: (response, variables, context) => {
       if (editingOrder?.status === 'IN_TRANSIT') {
         setSnackbar({
           open: true,
-          message: 'Solicitud de cambio enviada al chofer para aprobación',
+          message: saveAddressForClient
+            ? 'Solicitud de cambio enviada y dirección guardada para el cliente'
+            : 'Solicitud de cambio enviada al chofer para aprobación',
           severity: 'success'
         });
       } else {
-        setSnackbar({ open: true, message: 'Dirección actualizada y geocodificada', severity: 'success' });
+        setSnackbar({
+          open: true,
+          message: saveAddressForClient
+            ? 'Dirección actualizada, geocodificada y guardada para el cliente'
+            : 'Dirección actualizada y geocodificada',
+          severity: 'success'
+        });
       }
       setEditDialogOpen(false);
       setEditingOrder(null);
+      setSaveAddressForClient(false);
+      setNewAddressLabel('');
       queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
     },
     onError: (error: any) => {
@@ -634,8 +667,10 @@ export default function PlanningPage() {
     const options = extractAddressOptions(order);
     setAddressOptions(options);
 
-    // Reset saved addresses
+    // Reset saved addresses and save options
     setSavedAddresses([]);
+    setSaveAddressForClient(false);
+    setNewAddressLabel('');
 
     setEditDialogOpen(true);
 
@@ -1376,6 +1411,37 @@ export default function PlanningPage() {
                 rows={2}
                 fullWidth
               />
+
+              {/* Option to save address for future client use */}
+              {editingOrder?.clientNumber && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'primary.50', borderColor: 'primary.light' }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={saveAddressForClient}
+                        onChange={(e) => setSaveAddressForClient(e.target.checked)}
+                        size="small"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" fontWeight={500}>
+                        Guardar para uso futuro del cliente
+                      </Typography>
+                    }
+                  />
+                  {saveAddressForClient && (
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label="Etiqueta (opcional)"
+                      placeholder="Ej: Sucursal Norte, Bodega Principal"
+                      value={newAddressLabel}
+                      onChange={(e) => setNewAddressLabel(e.target.value)}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </Paper>
+              )}
             </Stack>
           )}
         </DialogContent>
