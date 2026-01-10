@@ -49,6 +49,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import BusinessIcon from '@mui/icons-material/Business';
+import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import StarIcon from '@mui/icons-material/Star';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
@@ -132,6 +133,17 @@ export default function ClientesPage() {
   const [clientAddresses, setClientAddresses] = useState<ClientAddress[]>([]);
   const [clientOrders, setClientOrders] = useState<ClientOrder[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [newAddressDialogOpen, setNewAddressDialogOpen] = useState(false);
+  const [newAddressForm, setNewAddressForm] = useState({
+    label: '',
+    street: '',
+    number: '',
+    neighborhood: '',
+    postalCode: '',
+    city: '',
+    state: '',
+    reference: '',
+  });
   const [formData, setFormData] = useState({
     clientNumber: '',
     name: '',
@@ -276,6 +288,71 @@ export default function ClientesPage() {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error al cambiar estado VIP',
+        severity: 'error',
+      });
+    },
+  });
+
+  // Create address mutation
+  const createAddressMutation = useMutation({
+    mutationFn: async (data: { clientNumber: string; address: typeof newAddressForm }) => {
+      return clientAddressesApi.create({
+        clientNumber: data.clientNumber,
+        ...data.address,
+      });
+    },
+    onSuccess: async () => {
+      setSnackbar({
+        open: true,
+        message: 'Direccion creada exitosamente',
+        severity: 'success',
+      });
+      setNewAddressDialogOpen(false);
+      setNewAddressForm({ label: '', street: '', number: '', neighborhood: '', postalCode: '', city: '', state: '', reference: '' });
+      // Refresh addresses
+      if (selectedClient) {
+        try {
+          const addrResponse = await clientAddressesApi.getByClient(selectedClient.clientNumber);
+          setClientAddresses(addrResponse.data as ClientAddress[]);
+        } catch {
+          // ignore
+        }
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al crear direccion',
+        severity: 'error',
+      });
+    },
+  });
+
+  // Delete address mutation
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (addressId: string) => {
+      return clientAddressesApi.delete(addressId);
+    },
+    onSuccess: async () => {
+      setSnackbar({
+        open: true,
+        message: 'Direccion eliminada exitosamente',
+        severity: 'success',
+      });
+      // Refresh addresses
+      if (selectedClient) {
+        try {
+          const addrResponse = await clientAddressesApi.getByClient(selectedClient.clientNumber);
+          setClientAddresses(addrResponse.data as ClientAddress[]);
+        } catch {
+          // ignore
+        }
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al eliminar direccion',
         severity: 'error',
       });
     },
@@ -882,6 +959,16 @@ export default function ClientesPage() {
 
           {detailTab === 1 && (
             <>
+              <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => setNewAddressDialogOpen(true)}
+                >
+                  Nueva Direccion
+                </Button>
+              </Stack>
               {loadingDetails ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                   <CircularProgress />
@@ -892,6 +979,14 @@ export default function ClientesPage() {
                   <Typography color="text.secondary" sx={{ mt: 1 }}>
                     No hay direcciones guardadas para este cliente
                   </Typography>
+                  <Button
+                    variant="text"
+                    startIcon={<AddIcon />}
+                    onClick={() => setNewAddressDialogOpen(true)}
+                    sx={{ mt: 1 }}
+                  >
+                    Agregar primera direccion
+                  </Button>
                 </Box>
               ) : (
                 <List>
@@ -899,9 +994,21 @@ export default function ClientesPage() {
                     <ListItem
                       key={addr.id}
                       secondaryAction={
-                        addr.isDefault && (
-                          <Chip size="small" label="Principal" color="primary" />
-                        )
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          {addr.isDefault && (
+                            <Chip size="small" label="Principal" color="primary" />
+                          )}
+                          <Tooltip title="Eliminar direccion">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => deleteAddressMutation.mutate(addr.id)}
+                              disabled={deleteAddressMutation.isPending}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
                       }
                       sx={{
                         border: '1px solid',
@@ -1037,6 +1144,124 @@ export default function ClientesPage() {
             disabled={deleteMutation.isPending}
           >
             {deleteMutation.isPending ? <CircularProgress size={24} /> : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New Address Dialog */}
+      <Dialog
+        open={newAddressDialogOpen}
+        onClose={() => setNewAddressDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <LocationOnIcon color="primary" />
+            <Typography variant="h6">Nueva Direccion</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Cliente: {selectedClient?.name}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Etiqueta"
+                placeholder="Ej: Sucursal Norte, Bodega Principal"
+                value={newAddressForm.label}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, label: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={8}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Calle"
+                required
+                value={newAddressForm.street}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, street: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Numero"
+                value={newAddressForm.number}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, number: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Colonia"
+                value={newAddressForm.neighborhood}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, neighborhood: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Codigo Postal"
+                value={newAddressForm.postalCode}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, postalCode: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Ciudad"
+                value={newAddressForm.city}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, city: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Estado"
+                value={newAddressForm.state}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, state: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Referencia / Instrucciones"
+                multiline
+                rows={2}
+                value={newAddressForm.reference}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, reference: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setNewAddressDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!newAddressForm.street || createAddressMutation.isPending}
+            onClick={() => {
+              if (selectedClient?.clientNumber) {
+                createAddressMutation.mutate({
+                  clientNumber: selectedClient.clientNumber,
+                  address: newAddressForm,
+                });
+              }
+            }}
+            startIcon={createAddressMutation.isPending ? <CircularProgress size={16} /> : null}
+          >
+            Guardar Direccion
           </Button>
         </DialogActions>
       </Dialog>
