@@ -63,7 +63,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 
-import { ordersApi, syncApi, clientAddressesApi, clientsApi } from '@/lib/api';
+import { ordersApi, syncApi, clientAddressesApi } from '@/lib/api';
 import EditIcon from '@mui/icons-material/Edit';
 import HomeIcon from '@mui/icons-material/Home';
 import PeopleIcon from '@mui/icons-material/People';
@@ -144,17 +144,6 @@ interface ClientAddress {
   useCount?: number;
 }
 
-interface Client {
-  id: string;
-  clientNumber: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  rfc?: string;
-  isVip?: boolean;
-  totalOrders?: number;
-  totalAmount?: number;
-}
 
 export default function ComprasPage() {
   const router = useRouter();
@@ -187,8 +176,6 @@ export default function ComprasPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
 
-  // Clients tab state
-  const [clientsPage, setClientsPage] = useState(1);
 
   // Sorting state
   type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
@@ -220,14 +207,6 @@ export default function ComprasPage() {
     },
   });
 
-  // Fetch clients for the clients tab
-  const { data: clientsData, isLoading: isLoadingClients } = useQuery({
-    queryKey: ['compras-clients'],
-    queryFn: async () => {
-      const response = await clientsApi.getAll({ limit: 100 });
-      return response.data.data || response.data;
-    },
-  });
 
   // Fetch client addresses when detail order is opened
   useEffect(() => {
@@ -607,7 +586,6 @@ export default function ComprasPage() {
     setDraftPage(1);
     setReadyPage(1);
     setOrphanPage(1);
-    setClientsPage(1);
   }, [search]);
 
   // Pagination for orphan invoices
@@ -944,11 +922,10 @@ export default function ComprasPage() {
             sx={{
               flex: 1,
               cursor: 'pointer',
-              border: activeTab === 3 ? 2 : 0,
-              borderColor: 'secondary.main',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              '&:hover': { bgcolor: 'secondary.50' }
             }}
-            onClick={() => setActiveTab(3)}
+            onClick={() => router.push('/clientes')}
           >
             <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Stack direction="row" alignItems="center" spacing={2}>
@@ -956,11 +933,11 @@ export default function ComprasPage() {
                   <PeopleIcon color="secondary" fontSize="small" />
                 </Avatar>
                 <Box>
-                  <Typography variant="h5" fontWeight={700}>
-                    {clientsData?.length || 0}
+                  <Typography variant="body1" fontWeight={600} color="secondary.main">
+                    Ver Clientes
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Clientes
+                    Ir al catalogo
                   </Typography>
                 </Box>
               </Stack>
@@ -992,7 +969,6 @@ export default function ComprasPage() {
             <Tab label={`Pendientes (${draftOrders.length})`} />
             <Tab label={`Liberados (${readyOrders.length})`} />
             <Tab label={`Facturas sin Pedido (${orphanInvoices?.length || 0})`} />
-            <Tab label={`Clientes (${clientsData?.length || 0})`} icon={<PeopleIcon />} iconPosition="start" />
           </Tabs>
         </Paper>
       </Box>
@@ -1232,141 +1208,6 @@ export default function ComprasPage() {
           </Paper>
         )}
 
-        {activeTab === 3 && (
-          <Paper sx={{ p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Box>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Catalogo de Clientes
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Clientes sincronizados desde Bind ERP con sus direcciones guardadas
-                </Typography>
-              </Box>
-            </Stack>
-
-            {isLoadingClients ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
-            ) : !clientsData || clientsData.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 8 }}>
-                <PeopleIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
-                <Typography color="text.secondary">
-                  {search ? 'No se encontraron clientes' : 'No hay clientes sincronizados. Sincroniza con Bind.'}
-                </Typography>
-              </Box>
-            ) : (
-              <>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: 'grey.50' }}>
-                        <TableCell sx={{ fontWeight: 600 }}>No. Cliente</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Nombre</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>RFC</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Telefono</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 600 }}>VIP</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>Pedidos</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {(clientsData as Client[])
-                        .filter((client: Client) => {
-                          if (!search) return true;
-                          const searchLower = search.toLowerCase();
-                          return (
-                            client.name?.toLowerCase().includes(searchLower) ||
-                            client.clientNumber?.toLowerCase().includes(searchLower) ||
-                            client.rfc?.toLowerCase().includes(searchLower) ||
-                            client.email?.toLowerCase().includes(searchLower)
-                          );
-                        })
-                        .slice((clientsPage - 1) * ITEMS_PER_PAGE, clientsPage * ITEMS_PER_PAGE)
-                        .map((client: Client) => (
-                          <TableRow key={client.id} hover>
-                            <TableCell>
-                              <Typography variant="body2" fontWeight={600} color="primary.main">
-                                {client.clientNumber}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" noWrap sx={{ maxWidth: 200 }}>
-                                {client.name}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="caption" color="text.secondary">
-                                {client.rfc || '-'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 150 }}>
-                                {client.email || '-'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="caption" color="text.secondary">
-                                {client.phone || '-'}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="center">
-                              {client.isVip ? (
-                                <Chip label="VIP" size="small" color="warning" sx={{ height: 20, fontSize: 10 }} />
-                              ) : (
-                                <Typography variant="caption" color="text.disabled">-</Typography>
-                              )}
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2" fontWeight={500}>
-                                {client.totalOrders || 0}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right">
-                              <Typography variant="body2" fontWeight={500} color="success.main">
-                                ${(client.totalAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                              </Typography>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                {Math.ceil((clientsData as Client[]).filter((client: Client) => {
-                  if (!search) return true;
-                  const searchLower = search.toLowerCase();
-                  return (
-                    client.name?.toLowerCase().includes(searchLower) ||
-                    client.clientNumber?.toLowerCase().includes(searchLower) ||
-                    client.rfc?.toLowerCase().includes(searchLower) ||
-                    client.email?.toLowerCase().includes(searchLower)
-                  );
-                }).length / ITEMS_PER_PAGE) > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                    <Pagination
-                      count={Math.ceil((clientsData as Client[]).filter((client: Client) => {
-                        if (!search) return true;
-                        const searchLower = search.toLowerCase();
-                        return (
-                          client.name?.toLowerCase().includes(searchLower) ||
-                          client.clientNumber?.toLowerCase().includes(searchLower) ||
-                          client.rfc?.toLowerCase().includes(searchLower) ||
-                          client.email?.toLowerCase().includes(searchLower)
-                        );
-                      }).length / ITEMS_PER_PAGE)}
-                      page={clientsPage}
-                      onChange={(_, p) => setClientsPage(p)}
-                      size="small"
-                      color="primary"
-                    />
-                  </Box>
-                )}
-              </>
-            )}
-          </Paper>
-        )}
       </Box>
 
       {/* Order Detail Modal */}
