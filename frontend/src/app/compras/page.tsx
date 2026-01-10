@@ -175,7 +175,17 @@ export default function ComprasPage() {
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [editingAddress, setEditingAddress] = useState(false);
-
+  const [newAddressDialogOpen, setNewAddressDialogOpen] = useState(false);
+  const [newAddressForm, setNewAddressForm] = useState({
+    label: '',
+    street: '',
+    number: '',
+    neighborhood: '',
+    postalCode: '',
+    city: '',
+    state: '',
+    reference: '',
+  });
 
   // Sorting state
   type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
@@ -430,6 +440,69 @@ export default function ComprasPage() {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error al actualizar dirección',
+        severity: 'error',
+      });
+    },
+  });
+
+  const createAddressMutation = useMutation({
+    mutationFn: async (data: { clientNumber: string; address: typeof newAddressForm; applyToOrder?: boolean; orderId?: string }) => {
+      // Create the address
+      const response = await clientAddressesApi.create({
+        clientNumber: data.clientNumber,
+        ...data.address,
+      });
+      // If applyToOrder is true, also update the order with the new address
+      if (data.applyToOrder && data.orderId) {
+        await ordersApi.updateAddress(data.orderId, {
+          street: data.address.street,
+          number: data.address.number,
+          neighborhood: data.address.neighborhood,
+          postalCode: data.address.postalCode,
+          city: data.address.city,
+          state: data.address.state,
+          reference: data.address.reference,
+        }, true);
+      }
+      return response;
+    },
+    onSuccess: (_, variables) => {
+      setSnackbar({
+        open: true,
+        message: variables.applyToOrder ? 'Dirección creada y aplicada al pedido' : 'Dirección creada correctamente',
+        severity: 'success',
+      });
+      setNewAddressDialogOpen(false);
+      setNewAddressForm({ label: '', street: '', number: '', neighborhood: '', postalCode: '', city: '', state: '', reference: '' });
+      // Refresh addresses
+      if (detailOrder?.clientNumber) {
+        clientAddressesApi.getByClient(detailOrder.clientNumber).then(res => {
+          setClientAddresses(res.data || []);
+        });
+      }
+      if (variables.applyToOrder) {
+        queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+        // Update local detailOrder
+        if (detailOrder) {
+          setDetailOrder({
+            ...detailOrder,
+            addressRaw: {
+              street: variables.address.street,
+              number: variables.address.number,
+              neighborhood: variables.address.neighborhood,
+              postalCode: variables.address.postalCode,
+              city: variables.address.city,
+              state: variables.address.state,
+              reference: variables.address.reference,
+            },
+          });
+        }
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al crear dirección',
         severity: 'error',
       });
     },
@@ -1338,7 +1411,7 @@ export default function ComprasPage() {
                             ))}
                           </Select>
                         </FormControl>
-                        <Stack direction="row" spacing={1}>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                           <Button
                             size="small"
                             variant="contained"
@@ -1355,6 +1428,14 @@ export default function ComprasPage() {
                           </Button>
                           <Button size="small" variant="outlined" onClick={() => { setEditingAddress(false); setSelectedAddressId(''); }}>
                             Cancelar
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="text"
+                            color="primary"
+                            onClick={() => setNewAddressDialogOpen(true)}
+                          >
+                            + Nueva Dirección
                           </Button>
                         </Stack>
                       </Box>
@@ -1397,9 +1478,19 @@ export default function ComprasPage() {
                                 </Typography>
                               </Stack>
                             ) : (
-                              <Typography variant="caption" color="text.disabled">
-                                No hay direcciones guardadas para este cliente
-                              </Typography>
+                              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                                <Typography variant="caption" color="text.disabled">
+                                  No hay direcciones guardadas
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={() => setNewAddressDialogOpen(true)}
+                                  sx={{ minWidth: 'auto', fontSize: '0.75rem' }}
+                                >
+                                  + Agregar
+                                </Button>
+                              </Stack>
                             )}
                           </Box>
                         )}
@@ -1682,6 +1773,141 @@ export default function ComprasPage() {
             startIcon={bulkDismissMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
           >
             Descartar {selectedInvoiceIds.length} Factura{selectedInvoiceIds.length !== 1 ? 's' : ''}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New Address Dialog */}
+      <Dialog
+        open={newAddressDialogOpen}
+        onClose={() => setNewAddressDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <LocationOnIcon color="primary" />
+            <Typography variant="h6">Nueva Dirección</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Cliente: {detailOrder?.clientName}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Etiqueta (opcional)"
+                placeholder="Ej: Sucursal Norte, Bodega Principal"
+                value={newAddressForm.label}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, label: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={8}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Calle"
+                required
+                value={newAddressForm.street}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, street: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Número"
+                value={newAddressForm.number}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, number: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Colonia"
+                value={newAddressForm.neighborhood}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, neighborhood: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Código Postal"
+                value={newAddressForm.postalCode}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, postalCode: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Ciudad"
+                value={newAddressForm.city}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, city: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Estado"
+                value={newAddressForm.state}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, state: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Referencia / Instrucciones"
+                multiline
+                rows={2}
+                value={newAddressForm.reference}
+                onChange={(e) => setNewAddressForm({ ...newAddressForm, reference: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setNewAddressDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={!newAddressForm.street || createAddressMutation.isPending}
+            onClick={() => {
+              if (detailOrder?.clientNumber) {
+                createAddressMutation.mutate({
+                  clientNumber: detailOrder.clientNumber,
+                  address: newAddressForm,
+                  applyToOrder: false,
+                });
+              }
+            }}
+          >
+            Solo Guardar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!newAddressForm.street || createAddressMutation.isPending}
+            onClick={() => {
+              if (detailOrder?.clientNumber) {
+                createAddressMutation.mutate({
+                  clientNumber: detailOrder.clientNumber,
+                  address: newAddressForm,
+                  applyToOrder: true,
+                  orderId: detailOrder.id,
+                });
+              }
+            }}
+            startIcon={createAddressMutation.isPending ? <CircularProgress size={16} /> : null}
+          >
+            Guardar y Aplicar
           </Button>
         </DialogActions>
       </Dialog>
