@@ -382,7 +382,7 @@ export class OrdersController {
    */
   @Post('address-change-request')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Request address change for in-transit order' })
