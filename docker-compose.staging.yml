@@ -1,0 +1,213 @@
+# ============================================
+# SCRAM - Sistema de Gestión Logística (STAGING)
+# Dominios:
+#   - Frontend: staging-gestion-logistica.scram2k.com
+#   - Mobile: staging-app-gestion-logistica.scram2k.com
+#   - API: staging-api-gestion-logistica.scram2k.com
+# ============================================
+
+services:
+  # ============================================
+  # PostgreSQL 16 + PostGIS (Staging)
+  # ============================================
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: scram-staging-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-scram_staging_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-scram_staging_db}
+    volumes:
+      - staging_pg_data:/var/lib/postgresql/data
+      - ./scripts/init-postgis.sql:/docker-entrypoint-initdb.d/init-postgis.sql:ro
+    ports:
+      - "127.0.0.1:5435:5432"
+    networks:
+      - staging_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-scram_staging_user} -d ${DB_NAME:-scram_staging_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis 7 (Staging)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: scram-staging-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - staging_redis_data:/data
+    ports:
+      - "127.0.0.1:6382:6379"
+    networks:
+      - staging_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Backend API (NestJS) - Staging
+  # ============================================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: scram-staging-api:latest
+    container_name: scram-staging-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: staging
+      DATABASE_URL: postgres://${DB_USER:-scram_staging_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-scram_staging_db}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-1d}
+      BIND_API_URL: ${BIND_API_URL}
+      BIND_API_KEY: ${BIND_API_KEY}
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-staging@scram2k.com}
+      OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
+      APP_URL: https://staging-gestion-logistica.scram2k.com
+      API_URL: https://staging-api-gestion-logistica.scram2k.com
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:staging@scram2k.com}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-staging-api-http.rule=Host(`staging-api-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-api-http.entrypoints=web"
+      - "traefik.http.routers.scram-staging-api-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-staging-api.rule=Host(`staging-api-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-api.entrypoints=websecure"
+      - "traefik.http.routers.scram-staging-api.tls=true"
+      - "traefik.http.routers.scram-staging-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-staging-api.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+      - staging_internal
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/health/liveness"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Worker Service (BullMQ Processor) - Staging
+  # ============================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    image: scram-staging-worker:latest
+    container_name: scram-staging-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: staging
+      DATABASE_URL: postgres://${DB_USER:-scram_staging_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-scram_staging_db}
+      REDIS_URL: redis://redis:6379
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-staging@scram2k.com}
+      OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
+      APP_URL: https://staging-gestion-logistica.scram2k.com
+    networks:
+      - staging_internal
+
+  # ============================================
+  # Frontend Web (Next.js) - Staging
+  # ============================================
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://staging-api-gestion-logistica.scram2k.com/api/v1
+        - NEXT_PUBLIC_APP_URL=https://staging-gestion-logistica.scram2k.com
+    image: scram-staging-web:latest
+    container_name: scram-staging-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: staging
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-staging-web-http.rule=Host(`staging-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-web-http.entrypoints=web"
+      - "traefik.http.routers.scram-staging-web-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-staging-web.rule=Host(`staging-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-web.entrypoints=websecure"
+      - "traefik.http.routers.scram-staging-web.tls=true"
+      - "traefik.http.routers.scram-staging-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-staging-web.loadbalancer.server.port=3000"
+    networks:
+      - traefik
+      - staging_internal
+
+  # ============================================
+  # Mobile PWA (Vite) - Staging
+  # ============================================
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://staging-api-gestion-logistica.scram2k.com/api/v1
+    image: scram-staging-mobile:latest
+    container_name: scram-staging-mobile
+    restart: unless-stopped
+    depends_on:
+      - api
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Router HTTP -> HTTPS redirect
+      - "traefik.http.routers.scram-staging-mobile-http.rule=Host(`staging-app-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-mobile-http.entrypoints=web"
+      - "traefik.http.routers.scram-staging-mobile-http.middlewares=redirect-to-https@docker"
+      # Router HTTPS
+      - "traefik.http.routers.scram-staging-mobile.rule=Host(`staging-app-gestion-logistica.scram2k.com`)"
+      - "traefik.http.routers.scram-staging-mobile.entrypoints=websecure"
+      - "traefik.http.routers.scram-staging-mobile.tls=true"
+      - "traefik.http.routers.scram-staging-mobile.tls.certresolver=letsencrypt"
+      - "traefik.http.services.scram-staging-mobile.loadbalancer.server.port=80"
+    networks:
+      - traefik
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  traefik:
+    external: true
+  staging_internal:
+    driver: bridge
+
+# ============================================
+# Volumes (Staging - separate from production)
+# ============================================
+volumes:
+  staging_pg_data:
+  staging_redis_data:
