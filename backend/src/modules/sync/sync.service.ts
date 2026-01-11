@@ -13,6 +13,8 @@ import { ClientAddressesService } from '../client-addresses/client-addresses.ser
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
   private readonly timeout: number;
+  private readonly isStagingMode: boolean;
+  private mockOrderCounter = 100;
 
   constructor(
     private readonly bindAdapter: BindAdapter,
@@ -26,11 +28,81 @@ export class SyncService {
   ) {
     // Timeout de 2 minutos para sincronización completa
     this.timeout = this.configService.get('bind.timeout') || 120000;
+    // Detectar modo staging para generar datos mock en vez de conectar a Bind
+    this.isStagingMode = this.configService.get('STAGING_MODE') === 'true';
+    if (this.isStagingMode) {
+      this.logger.warn('STAGING MODE: Using mock data instead of Bind ERP');
+    }
+  }
+
+  /**
+   * Genera pedidos aleatorios de prueba para staging
+   */
+  private generateMockOrders(count: number = 5): any[] {
+    const mockClients = [
+      { name: 'Empresa de Pruebas S.A. de C.V.', email: 'contacto@empresapruebas.com', phone: '5551234567', rfc: 'EPR123456ABC', number: 'CLI-TEST-001' },
+      { name: 'Distribuidora Demo S.A.', email: 'ventas@distribuidorademo.mx', phone: '5559876543', rfc: 'DDE987654XYZ', number: 'CLI-TEST-002' },
+      { name: 'Comercializadora Test', email: 'info@comercializadoratest.com', phone: '5555555555', rfc: 'CTT111222333', number: 'CLI-TEST-003' },
+      { name: 'Industrias Mock S.A.', email: 'compras@industriasmock.com', phone: '5553456789', rfc: 'IMK456789DEF', number: 'CLI-TEST-004' },
+      { name: 'Servicios Staging S.A.', email: 'pedidos@serviciosstaging.mx', phone: '5557890123', rfc: 'SST789012GHI', number: 'CLI-TEST-005' },
+    ];
+
+    const mockAddresses = [
+      { street: 'Av Insurgentes Sur', number: '1234', neighborhood: 'Del Valle', postalCode: '03100', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.3782, lng: -99.1769 },
+      { street: 'Calle 5 de Mayo', number: '89', neighborhood: 'Centro', postalCode: '06000', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.4328, lng: -99.1332 },
+      { street: 'Paseo de la Reforma', number: '222', neighborhood: 'Juarez', postalCode: '06600', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.4277, lng: -99.1621 },
+      { street: 'Calzada Vallejo', number: '567', neighborhood: 'Industrial Vallejo', postalCode: '02300', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.4891, lng: -99.1505 },
+      { street: 'Av Universidad', number: '1000', neighborhood: 'Santa Cruz Atoyac', postalCode: '03310', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.3650, lng: -99.1635 },
+      { street: 'Av Tlahuac', number: '3456', neighborhood: 'Santa Isabel Industrial', postalCode: '09820', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.3015, lng: -99.0892 },
+      { street: 'Periferico Sur', number: '4567', neighborhood: 'Jardines del Pedregal', postalCode: '04500', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.3118, lng: -99.1912 },
+      { street: 'Av Ejercito Nacional', number: '890', neighborhood: 'Polanco', postalCode: '11550', city: 'CDMX', state: 'Ciudad de Mexico', lat: 19.4358, lng: -99.1922 },
+    ];
+
+    const warehouses = ['Almacen Central', 'Almacen Norte', 'Almacen Sur', 'Bodega Vallejo'];
+    const employees = ['Maria Lopez', 'Carlos Hernandez', 'Ana Rodriguez', 'Juan Garcia', 'Pedro Martinez'];
+
+    const orders = [];
+    for (let i = 0; i < count; i++) {
+      this.mockOrderCounter++;
+      const client = mockClients[Math.floor(Math.random() * mockClients.length)];
+      const address = mockAddresses[Math.floor(Math.random() * mockAddresses.length)];
+      const amount = Math.floor(Math.random() * 90000) + 10000; // 10,000 - 100,000
+      const isVip = Math.random() < 0.2; // 20% VIP
+
+      orders.push({
+        bindId: `MOCK-${Date.now()}-${this.mockOrderCounter}`,
+        orderNumber: `PE-M${this.mockOrderCounter}`,
+        warehouseName: warehouses[Math.floor(Math.random() * warehouses.length)],
+        employeeName: employees[Math.floor(Math.random() * employees.length)],
+        clientNumber: client.number,
+        clientName: client.name,
+        clientEmail: client.email,
+        clientPhone: client.phone,
+        clientRfc: client.rfc,
+        addressRaw: {
+          street: address.street,
+          number: address.number,
+          neighborhood: address.neighborhood,
+          postalCode: address.postalCode,
+          city: address.city,
+          state: address.state,
+          reference: `Referencia pedido ${this.mockOrderCounter}`,
+        },
+        latitude: address.lat,
+        longitude: address.lng,
+        totalAmount: amount,
+        isVip,
+        promisedDate: new Date(Date.now() + (Math.floor(Math.random() * 3) + 1) * 24 * 60 * 60 * 1000), // 1-3 days
+      });
+    }
+
+    return orders;
   }
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
    * Ejecuta sincronización manual bajo demanda
+   * En modo staging, genera 5 pedidos aleatorios de prueba
    */
   async syncFromBind(): Promise<{
     success: boolean;
@@ -40,6 +112,19 @@ export class SyncService {
     message: string;
     clients?: { synced: number; addresses: number };
   }> {
+    // Modo staging: generar datos mock en vez de conectar a Bind
+    if (this.isStagingMode) {
+      this.logger.log('STAGING MODE: Generating 5 random mock orders...');
+      const mockOrders = this.generateMockOrders(5);
+      const result = await this.ordersService.syncWithBind(mockOrders);
+      return {
+        success: true,
+        ...result,
+        clients: { synced: 0, addresses: 0 },
+        message: `[STAGING] Generados ${result.created} pedidos de prueba aleatorios`,
+      };
+    }
+
     this.logger.log('Starting manual sync from Bind ERP...');
 
     try {
@@ -150,8 +235,15 @@ export class SyncService {
 
   /**
    * Obtiene facturas sin pedido asociado (huérfanas)
+   * En staging, retorna lista vacía (sin facturas huérfanas)
    */
   async getOrphanInvoices(): Promise<OrphanInvoiceDto[]> {
+    // Staging mode: no hay facturas huérfanas
+    if (this.isStagingMode) {
+      this.logger.log('STAGING MODE: Returning empty orphan invoices');
+      return [];
+    }
+
     this.logger.log('Getting orphan invoices...');
 
     try {
@@ -231,6 +323,7 @@ export class SyncService {
    * - Las guarda en nuestra BD usando clientNumber
    * - No duplica direcciones que ya existen (comparación por texto normalizado)
    * - Retorna las direcciones actualizadas del cliente
+   * En staging, simula sync exitoso sin conectar a Bind
    */
   async syncClientAddresses(
     clientBindId: string,
@@ -241,6 +334,17 @@ export class SyncService {
     total: number;
     message: string;
   }> {
+    // Staging mode: simular sync exitoso
+    if (this.isStagingMode) {
+      this.logger.log(`STAGING MODE: Simulating address sync for client ${clientNumber}`);
+      return {
+        success: true,
+        synced: 0,
+        total: 0,
+        message: '[STAGING] Direcciones ya disponibles localmente',
+      };
+    }
+
     this.logger.log(`Syncing addresses for client ${clientNumber} (Bind ID: ${clientBindId})...`);
 
     try {
