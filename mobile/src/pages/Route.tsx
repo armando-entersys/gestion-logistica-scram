@@ -100,6 +100,7 @@ export default function RoutePage() {
   const [returnReason, setReturnReason] = useState('');
   const [returnNotes, setReturnNotes] = useState('');
   const [isReturning, setIsReturning] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   // Live query for orders
   const orders = useLiveQuery(() => getActiveRoute(), []);
@@ -213,9 +214,15 @@ export default function RoutePage() {
     if (!returningOrder || !returnReason.trim()) return;
 
     setIsReturning(true);
+    setReturnError(null);
     try {
       const sessionData = await getSession();
-      if (!sessionData?.token) return;
+      if (!sessionData?.token) {
+        setReturnError('Sesión expirada. Por favor inicia sesión de nuevo.');
+        return;
+      }
+
+      console.log('Returning order:', returningOrder.id, 'Reason:', returnReason.trim());
 
       await axios.post(
         `${API_URL}/orders/return`,
@@ -235,8 +242,11 @@ export default function RoutePage() {
       setReturningOrder(null);
       setReturnReason('');
       setReturnNotes('');
-    } catch (error) {
+      setReturnError(null);
+    } catch (error: any) {
       console.error('Error returning order:', error);
+      const message = error.response?.data?.message || error.message || 'Error al devolver el pedido';
+      setReturnError(message);
     } finally {
       setIsReturning(false);
     }
@@ -245,6 +255,7 @@ export default function RoutePage() {
   const openReturnDialog = (order: LocalOrder) => {
     setReturningOrder(order);
     setReturnDialogOpen(true);
+    setReturnError(null);
   };
 
   const handleRefresh = () => {
@@ -538,6 +549,10 @@ export default function RoutePage() {
                 rows={2}
                 placeholder="Información adicional..."
               />
+
+              {returnError && (
+                <Alert severity="error">{returnError}</Alert>
+              )}
             </Stack>
           )}
         </DialogContent>
@@ -549,6 +564,7 @@ export default function RoutePage() {
               setReturningOrder(null);
               setReturnReason('');
               setReturnNotes('');
+              setReturnError(null);
             }}
           >
             Cancelar

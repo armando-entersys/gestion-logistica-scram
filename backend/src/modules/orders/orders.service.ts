@@ -1143,19 +1143,26 @@ export class OrdersService {
     dto: ReturnOrderDto,
     driverId: string,
   ): Promise<{ success: boolean; message: string }> {
+    this.logger.log(`Return order request: orderId=${dto.orderId}, driverId=${driverId}, reason=${dto.reason}`);
+
     const order = await this.orderRepository.findOne({
       where: { id: dto.orderId },
     });
 
     if (!order) {
+      this.logger.warn(`Return order failed: order ${dto.orderId} not found`);
       throw new NotFoundException('Pedido no encontrado');
     }
 
+    this.logger.log(`Order ${dto.orderId} found: status=${order.status}, assignedDriverId=${order.assignedDriverId}`);
+
     if (order.assignedDriverId !== driverId) {
+      this.logger.warn(`Return order failed: driver ${driverId} is not assigned to order ${dto.orderId} (assigned: ${order.assignedDriverId})`);
       throw new ForbiddenException('No tienes permiso para devolver este pedido');
     }
 
     if (order.status !== OrderStatus.IN_TRANSIT) {
+      this.logger.warn(`Return order failed: order ${dto.orderId} is not in transit (status: ${order.status})`);
       throw new BadRequestException('Solo se pueden devolver pedidos en tránsito');
     }
 
