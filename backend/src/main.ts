@@ -11,6 +11,8 @@ async function bootstrap() {
     origin: [
       'https://gestion-logistica.scram2k.com',
       'https://app-gestion-logistica.scram2k.com',
+      'https://staging-gestion-logistica.scram2k.com',
+      'https://staging-app-gestion-logistica.scram2k.com',
       'https://scram.entersys.mx',
       'https://app-scram.entersys.mx',
       'http://localhost:3001',
