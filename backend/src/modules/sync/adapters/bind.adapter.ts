@@ -152,9 +152,10 @@ export class BindAdapter {
    * RF-01: Sincronización Controlada con Bind ERP
    * Obtiene pedidos con Status=1 (Surtido) - listos para entregar
    * Obtiene el detalle de cada pedido para conseguir la dirección de entrega
+   * Usa paginación para traer TODOS los pedidos disponibles
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching orders from Bind ERP (Status=1 Surtido)...');
+    this.logger.log('Fetching ALL orders from Bind ERP (Status=1 Surtido) with pagination...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -162,23 +163,44 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener solo pedidos Surtidos (Status=1) - listos para entregar
-      const response = await firstValueFrom(
-        this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          params: {
-            '$filter': 'Status eq 1',
-            '$orderby': 'OrderDate desc',
-            '$top': 100,
-          },
-        }),
-      );
+      // Obtener TODOS los pedidos Surtidos (Status=1) con paginación
+      const allBindOrders: BindOrder[] = [];
+      let skip = 0;
+      const pageSize = 100;
+      let hasMore = true;
 
-      const bindOrders = response.data.value || [];
-      this.logger.log(`Fetched ${bindOrders.length} surtido orders from Bind`);
+      while (hasMore) {
+        const response = await firstValueFrom(
+          this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            params: {
+              '$filter': 'Status eq 1',
+              '$orderby': 'OrderDate desc',
+              '$top': pageSize,
+              '$skip': skip,
+            },
+          }),
+        );
+
+        const pageOrders = response.data.value || [];
+        allBindOrders.push(...pageOrders);
+
+        this.logger.log(`Fetched page ${Math.floor(skip / pageSize) + 1}: ${pageOrders.length} orders (total so far: ${allBindOrders.length})`);
+
+        if (pageOrders.length < pageSize) {
+          hasMore = false;
+        } else {
+          skip += pageSize;
+          // Pausa entre páginas para evitar rate limiting
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      }
+
+      const bindOrders = allBindOrders;
+      this.logger.log(`Fetched ${bindOrders.length} TOTAL surtido orders from Bind`);
 
       // Obtener detalles de cada pedido para conseguir la dirección
       const orders: CreateOrderDto[] = [];
