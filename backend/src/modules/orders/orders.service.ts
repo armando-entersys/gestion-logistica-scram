@@ -48,6 +48,20 @@ export class OrdersService {
   ) {}
 
   /**
+   * Obtiene los bind_id de todos los pedidos existentes en la BD
+   * Usado para sync diferencial - evita re-sincronizar pedidos que ya existen
+   */
+  async getExistingBindIds(): Promise<Set<string>> {
+    const result = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('order.bind_id', 'bindId')
+      .where('order.bind_id IS NOT NULL')
+      .getRawMany();
+
+    return new Set(result.map(r => r.bindId));
+  }
+
+  /**
    * RF-01: Sincronización Controlada con Bind ERP
    * Lógica de upsert usando bind_id como llave de idempotencia
    */

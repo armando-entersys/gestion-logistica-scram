@@ -12,7 +12,6 @@ import { ClientAddressesService } from '../client-addresses/client-addresses.ser
 @Injectable()
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
-  private readonly timeout: number;
 
   constructor(
     private readonly bindAdapter: BindAdapter,
@@ -23,14 +22,12 @@ export class SyncService {
     @Inject(forwardRef(() => ClientsService))
     private readonly clientsService: ClientsService,
     private readonly clientAddressesService: ClientAddressesService,
-  ) {
-    // Timeout de 5 minutos para sincronización completa (con rate limiting)
-    this.timeout = this.configService.get('bind.timeout') || 300000;
-  }
+  ) {}
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
    * Ejecuta sincronización manual bajo demanda
+   * SYNC DIFERENCIAL: Solo sincroniza pedidos nuevos que no existen en la BD
    */
   async syncFromBind(): Promise<{
     success: boolean;
@@ -40,18 +37,17 @@ export class SyncService {
     message: string;
     clients?: { synced: number; addresses: number };
   }> {
-    this.logger.log('Starting manual sync from Bind ERP...');
+    this.logger.log('Starting DIFFERENTIAL sync from Bind ERP...');
 
     try {
-      // Fetch orders and clients from Bind in parallel
-      const [bindOrders, bindClients] = await Promise.race([
-        Promise.all([
-          this.bindAdapter.fetchOrders(),
-          this.bindAdapter.fetchClients(),
-        ]),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Bind API timeout')), this.timeout),
-        ),
+      // Obtener los bind_id de pedidos que ya tenemos en la BD
+      const existingBindIds = await this.ordersService.getExistingBindIds();
+      this.logger.log(`Found ${existingBindIds.size} existing orders in DB`);
+
+      // Fetch orders (diferencial) and clients from Bind in parallel
+      const [bindOrders, bindClients] = await Promise.all([
+        this.bindAdapter.fetchOrders(existingBindIds),
+        this.bindAdapter.fetchClients(),
       ]);
 
       // Sync clients with their addresses first
