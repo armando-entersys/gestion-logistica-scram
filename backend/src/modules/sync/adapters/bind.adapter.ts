@@ -152,11 +152,17 @@ export class BindAdapter {
    * RF-01: Sincronización Controlada con Bind ERP
    * Obtiene pedidos con Status=0 (Pendiente) y Status=1 (Surtido)
    * Status=2 (Cancelado) se excluye
-   * Obtiene el detalle de cada pedido para conseguir la dirección de entrega
-   * Usa paginación para traer TODOS los pedidos disponibles
+   * Filtra por fecha para traer solo pedidos recientes (últimos 60 días)
+   * Usa paginación para traer todos los pedidos del período
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching ALL orders from Bind ERP (Status=0 Pendiente + Status=1 Surtido) with pagination...');
+    // Calcular fecha de hace 60 días para el filtro
+    const daysBack = 60;
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - daysBack);
+    const fromDateStr = fromDate.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    this.logger.log(`Fetching orders from Bind ERP (Status=0,1) from ${fromDateStr} onwards...`);
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -164,12 +170,15 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener TODOS los pedidos Pendientes (Status=0) y Surtidos (Status=1) con paginación
+      // Obtener pedidos Pendientes (Status=0) y Surtidos (Status=1) de los últimos 60 días
       // Excluir Cancelados (Status=2)
       const allBindOrders: BindOrder[] = [];
       let skip = 0;
       const pageSize = 100;
       let hasMore = true;
+
+      // Filtro OData: Status 0 o 1, y fecha >= hace 60 días
+      const filter = `(Status eq 0 or Status eq 1) and OrderDate ge ${fromDateStr}`;
 
       while (hasMore) {
         const response = await firstValueFrom(
@@ -179,7 +188,7 @@ export class BindAdapter {
               'Content-Type': 'application/json',
             },
             params: {
-              '$filter': 'Status eq 0 or Status eq 1',
+              '$filter': filter,
               '$orderby': 'OrderDate desc',
               '$top': pageSize,
               '$skip': skip,
@@ -202,37 +211,43 @@ export class BindAdapter {
       }
 
       const bindOrders = allBindOrders;
-      this.logger.log(`Fetched ${bindOrders.length} TOTAL orders from Bind (Pendiente + Surtido)`);
+      this.logger.log(`Fetched ${bindOrders.length} orders from Bind (last ${daysBack} days)`);
 
       // Obtener detalles de cada pedido para conseguir la dirección
       const orders: CreateOrderDto[] = [];
-      const batchSize = 10; // Procesar en lotes para evitar rate limiting
+      const batchSize = 5; // Lotes pequeños para evitar rate limiting
+      const batchDelay = 500; // 500ms entre lotes
 
       for (let i = 0; i < bindOrders.length; i += batchSize) {
         const batch = bindOrders.slice(i, i + batchSize);
 
-        // Obtener detalles en paralelo dentro del lote
-        const detailPromises = batch.map(async (bindOrder) => {
+        // Obtener detalles en secuencia dentro del lote (no en paralelo para evitar 429)
+        for (const bindOrder of batch) {
           try {
             // Obtener el detalle del pedido para conseguir la dirección
             const detail = await this.getOrderDetail(bindOrder.ID);
             if (detail) {
-              return this.transformOrder(detail, null);
+              orders.push(this.transformOrder(detail, null));
+            } else {
+              // Si falla el detalle, usar datos de la lista
+              orders.push(this.transformOrder(bindOrder, null));
             }
-            // Si falla el detalle, usar datos de la lista
-            return this.transformOrder(bindOrder, null);
           } catch (error) {
             this.logger.warn(`Failed to get detail for order ${bindOrder.ID}: ${error.message}`);
-            return this.transformOrder(bindOrder, null);
+            orders.push(this.transformOrder(bindOrder, null));
           }
-        });
+          // Pequeña pausa entre cada petición
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
-        const batchResults = await Promise.all(detailPromises);
-        orders.push(...batchResults.filter(o => o !== null));
-
-        // Pequeña pausa entre lotes para evitar rate limiting
+        // Pausa entre lotes para evitar rate limiting
         if (i + batchSize < bindOrders.length) {
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, batchDelay));
+        }
+
+        // Log de progreso cada 50 pedidos
+        if ((i + batchSize) % 50 === 0 || i + batchSize >= bindOrders.length) {
+          this.logger.log(`Processing orders: ${Math.min(i + batchSize, bindOrders.length)}/${bindOrders.length}`);
         }
       }
 
