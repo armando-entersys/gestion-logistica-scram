@@ -44,11 +44,16 @@ export class SyncService {
       const existingBindIds = await this.ordersService.getExistingBindIds();
       this.logger.log(`Found ${existingBindIds.size} existing orders in DB`);
 
-      // Fetch orders (diferencial) and clients from Bind in parallel
-      const [bindOrders, bindClients] = await Promise.all([
-        this.bindAdapter.fetchOrders(existingBindIds),
-        this.bindAdapter.fetchClients(),
-      ]);
+      // Fetch clients FIRST (es rápido y no usa mucha cuota de API)
+      this.logger.log('Fetching clients from Bind...');
+      const bindClients = await this.bindAdapter.fetchClients();
+
+      // Pausa de 2 segundos para evitar rate limiting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // LUEGO fetch orders (diferencial - solo los nuevos)
+      this.logger.log('Fetching NEW orders from Bind (differential)...');
+      const bindOrders = await this.bindAdapter.fetchOrders(existingBindIds);
 
       // Sync clients with their addresses first
       let clientResult = { synced: 0, addresses: 0 };
