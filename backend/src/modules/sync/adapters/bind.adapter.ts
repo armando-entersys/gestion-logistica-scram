@@ -150,12 +150,13 @@ export class BindAdapter {
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
-   * Obtiene pedidos con Status=1 (Surtido) - listos para entregar
+   * Obtiene pedidos con Status=0 (Pendiente) y Status=1 (Surtido)
+   * Status=2 (Cancelado) se excluye
    * Obtiene el detalle de cada pedido para conseguir la dirección de entrega
    * Usa paginación para traer TODOS los pedidos disponibles
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching ALL orders from Bind ERP (Status=1 Surtido) with pagination...');
+    this.logger.log('Fetching ALL orders from Bind ERP (Status=0 Pendiente + Status=1 Surtido) with pagination...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -163,7 +164,8 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener TODOS los pedidos Surtidos (Status=1) con paginación
+      // Obtener TODOS los pedidos Pendientes (Status=0) y Surtidos (Status=1) con paginación
+      // Excluir Cancelados (Status=2)
       const allBindOrders: BindOrder[] = [];
       let skip = 0;
       const pageSize = 100;
@@ -177,7 +179,7 @@ export class BindAdapter {
               'Content-Type': 'application/json',
             },
             params: {
-              '$filter': 'Status eq 1',
+              '$filter': 'Status eq 0 or Status eq 1',
               '$orderby': 'OrderDate desc',
               '$top': pageSize,
               '$skip': skip,
@@ -200,7 +202,7 @@ export class BindAdapter {
       }
 
       const bindOrders = allBindOrders;
-      this.logger.log(`Fetched ${bindOrders.length} TOTAL surtido orders from Bind`);
+      this.logger.log(`Fetched ${bindOrders.length} TOTAL orders from Bind (Pendiente + Surtido)`);
 
       // Obtener detalles de cada pedido para conseguir la dirección
       const orders: CreateOrderDto[] = [];
