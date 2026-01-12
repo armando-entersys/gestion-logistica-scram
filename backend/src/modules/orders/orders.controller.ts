@@ -240,15 +240,15 @@ export class OrdersController {
 
   /**
    * Delete selected DRAFT orders
-   * Solo PURCHASING puede eliminar pedidos en borrador
+   * PURCHASING y ADMIN pueden eliminar pedidos en borrador
    * Solo elimina pedidos que estén en estado DRAFT
    */
   @Post('delete-draft')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.PURCHASING)
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Delete selected draft orders (only PURCHASING)' })
+  @ApiOperation({ summary: 'Delete selected draft orders (PURCHASING or ADMIN)' })
   @ApiResponse({ status: 200, description: 'Draft orders deleted' })
   deleteDraft(@Body() body: { orderIds: string[] }) {
     return this.ordersService.deleteDraftOrders(body.orderIds);
