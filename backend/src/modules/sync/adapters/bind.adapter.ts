@@ -156,29 +156,28 @@ export class BindAdapter {
    * Usa paginación para traer todos los pedidos del período
    */
   async fetchOrders(): Promise<CreateOrderDto[]> {
-    // Calcular fecha de hace 60 días para el filtro
-    const daysBack = 60;
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - daysBack);
-    const fromDateStr = fromDate.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    this.logger.log(`Fetching orders from Bind ERP (Status=0,1) from ${fromDateStr} onwards...`);
+    this.logger.log('Fetching orders from Bind ERP (Status=0 Pendiente + Status=1 Surtido)...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
       throw new Error('Bind API Key not configured. Please set BIND_API_KEY environment variable.');
     }
 
+    // Calcular fecha de hace 60 días para filtrar localmente
+    const daysBack = 60;
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysBack);
+
     try {
-      // Obtener pedidos Pendientes (Status=0) y Surtidos (Status=1) de los últimos 60 días
-      // Excluir Cancelados (Status=2)
+      // Obtener pedidos Pendientes (Status=0) y Surtidos (Status=1)
+      // Filtraremos por fecha localmente porque el filtro OData de Bind es limitado
       const allBindOrders: BindOrder[] = [];
       let skip = 0;
       const pageSize = 100;
       let hasMore = true;
 
-      // Filtro OData: Status 0 o 1, y fecha >= hace 60 días
-      const filter = `(Status eq 0 or Status eq 1) and OrderDate ge ${fromDateStr}`;
+      // Filtro OData: Solo por Status (el filtro de fecha lo haremos localmente)
+      const filter = 'Status eq 0 or Status eq 1';
 
       while (hasMore) {
         const response = await firstValueFrom(
@@ -210,8 +209,15 @@ export class BindAdapter {
         }
       }
 
-      const bindOrders = allBindOrders;
-      this.logger.log(`Fetched ${bindOrders.length} orders from Bind (last ${daysBack} days)`);
+      // Filtrar localmente por fecha (últimos 60 días)
+      const recentOrders = allBindOrders.filter(order => {
+        if (!order.OrderDate) return true; // Incluir si no tiene fecha
+        const orderDate = new Date(order.OrderDate);
+        return orderDate >= cutoffDate;
+      });
+
+      this.logger.log(`Fetched ${allBindOrders.length} total orders, ${recentOrders.length} from last ${daysBack} days`);
+      const bindOrders = recentOrders;
 
       // Obtener detalles de cada pedido para conseguir la dirección
       const orders: CreateOrderDto[] = [];
