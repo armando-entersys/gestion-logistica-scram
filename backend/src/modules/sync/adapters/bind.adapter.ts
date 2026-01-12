@@ -8,13 +8,9 @@ import { CreateOrderDto } from '@/modules/orders/dto';
 /**
  * Estructura de Pedido según API de Bind ERP (GET /Orders)
  *
- * Status (en lista):
- * 1 = Surtido (listo para entregar)
- * 2 = Cancelado
- *
- * StatusCode (en detalle):
- * 0 = Pendiente
- * 1 = Surtido
+ * Status:
+ * 0 = Activo/Pendiente (pedidos por entregar) ← ESTOS sincronizamos
+ * 1 = Surtido (ya fueron entregados - históricos)
  * 2 = Cancelado
  */
 interface BindOrder {
@@ -150,12 +146,12 @@ export class BindAdapter {
 
   /**
    * RF-01: Sincronización Controlada con Bind ERP
-   * Obtiene pedidos con Status=1 (Surtido) - listos para entregar
+   * Obtiene pedidos con Status=0 (Activo) - pedidos pendientes de entregar
    * SYNC DIFERENCIAL: Solo trae pedidos que no existen en la BD
    * @param existingBindIds Set de IDs de Bind que ya existen en nuestra BD
    */
   async fetchOrders(existingBindIds?: Set<string>): Promise<CreateOrderDto[]> {
-    this.logger.log('Fetching orders from Bind ERP (Status=1 Surtido)...');
+    this.logger.log('Fetching orders from Bind ERP (Status=0 Activo - pendientes de entregar)...');
     if (existingBindIds) {
       this.logger.log(`Differential sync: ${existingBindIds.size} orders already in DB`);
     }
@@ -166,7 +162,7 @@ export class BindAdapter {
     }
 
     try {
-      // Obtener pedidos Pendientes (Status=0) y Surtidos (Status=1)
+      // Obtener pedidos Activos (Status=0) - pendientes de entregar
       // Ordenados por fecha DESC para encontrar los nuevos primero
       const newBindOrders: BindOrder[] = [];
       let skip = 0;
@@ -174,7 +170,7 @@ export class BindAdapter {
       let hasMore = true;
       let consecutiveExistingPages = 0; // Contador de páginas consecutivas sin pedidos nuevos
 
-      const filter = 'Status eq 1'; // Solo pedidos Surtidos (listos para entregar)
+      const filter = 'Status eq 0'; // Solo pedidos Activos (pendientes de entregar)
 
       while (hasMore) {
         const response = await firstValueFrom(
@@ -536,6 +532,63 @@ export class BindAdapter {
 
   private cleanString(str: string): string {
     return (str || '').trim();
+  }
+
+  /**
+   * Busca un pedido específico por número en Bind
+   * Útil para diagnóstico - ver qué Status tiene un pedido
+   */
+  async findOrderByNumber(orderNumber: number): Promise<{
+    found: boolean;
+    bindOrder?: any;
+    status?: number;
+    statusName?: string;
+    message: string;
+  }> {
+    this.logger.log(`Searching for order number ${orderNumber} in Bind...`);
+
+    if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
+      return { found: false, message: 'Bind API Key not configured' };
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<BindApiResponse<BindOrder>>(`${this.apiUrl}/api/Orders`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            '$filter': `Number eq ${orderNumber}`,
+            '$top': 10,
+          },
+        }),
+      );
+
+      const orders = response.data.value || [];
+
+      if (orders.length === 0) {
+        return { found: false, message: `No se encontró pedido con número ${orderNumber} en Bind` };
+      }
+
+      const order = orders[0];
+      const statusNames: Record<number, string> = {
+        0: 'Activo (pendiente de entregar)',
+        1: 'Surtido (ya entregado)',
+        2: 'Cancelado',
+      };
+
+      return {
+        found: true,
+        bindOrder: order,
+        status: order.Status as number,
+        statusName: statusNames[order.Status as number] || `Desconocido (${order.Status})`,
+        message: `Pedido encontrado: ${order.Serie || 'PE'}${order.Number} - Status: ${statusNames[order.Status as number] || order.Status}`,
+      };
+    } catch (error) {
+      this.logger.error(`Error searching for order ${orderNumber}:`, error.message);
+      return { found: false, message: `Error al buscar pedido: ${error.message}` };
+    }
   }
 
   /**

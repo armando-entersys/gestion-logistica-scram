@@ -139,4 +139,16 @@ export class SyncController {
   ) {
     return this.syncService.syncClientAddresses(body.clientBindId, body.clientNumber);
   }
+
+  /**
+   * Diagnóstico: busca un pedido por número en Bind y en la BD local
+   * Útil para investigar por qué un pedido no aparece en el sistema
+   */
+  @Get('diagnose/:orderNumber')
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiOperation({ summary: 'Diagnose why an order is not appearing' })
+  @ApiResponse({ status: 200, description: 'Diagnosis completed' })
+  diagnoseOrder(@Param('orderNumber') orderNumber: string) {
+    return this.syncService.findOrderDiagnostic(parseInt(orderNumber, 10));
+  }
 }

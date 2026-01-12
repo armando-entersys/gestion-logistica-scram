@@ -48,6 +48,19 @@ export class OrdersService {
   ) {}
 
   /**
+   * Busca un pedido por número de pedido (ej: 4880 para PE4880)
+   */
+  async findByOrderNumber(orderNumber: number): Promise<Order | null> {
+    // El orderNumber en la BD es como "PE4880", buscamos con LIKE
+    return this.orderRepository.findOne({
+      where: [
+        { orderNumber: `PE${orderNumber}` },
+        { orderNumber: `${orderNumber}` },
+      ],
+    });
+  }
+
+  /**
    * Obtiene los bind_id de todos los pedidos existentes en la BD
    * Usado para sync diferencial - evita re-sincronizar pedidos que ya existen
    */

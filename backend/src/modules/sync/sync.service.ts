@@ -227,6 +227,66 @@ export class SyncService {
   }
 
   /**
+   * Busca un pedido específico por número en Bind y verifica si existe en nuestra BD
+   * Útil para diagnóstico cuando un pedido no aparece
+   */
+  async findOrderDiagnostic(orderNumber: number): Promise<{
+    inBind: {
+      found: boolean;
+      status?: number;
+      statusName?: string;
+      bindId?: string;
+      orderDate?: string;
+      clientName?: string;
+    };
+    inDatabase: {
+      found: boolean;
+      id?: string;
+      status?: string;
+      bindId?: string;
+    };
+    diagnosis: string;
+  }> {
+    this.logger.log(`Diagnosing order ${orderNumber}...`);
+
+    // Buscar en Bind
+    const bindResult = await this.bindAdapter.findOrderByNumber(orderNumber);
+
+    // Buscar en nuestra BD
+    const dbOrder = await this.ordersService.findByOrderNumber(orderNumber);
+
+    let diagnosis = '';
+
+    if (!bindResult.found) {
+      diagnosis = `El pedido ${orderNumber} NO existe en Bind ERP.`;
+    } else if (bindResult.status !== 0) {
+      diagnosis = `El pedido ${orderNumber} existe en Bind pero tiene Status=${bindResult.status} (${bindResult.statusName}). Solo sincronizamos Status=0 (Activo - pendientes de entregar).`;
+    } else if (dbOrder) {
+      diagnosis = `El pedido ${orderNumber} existe en Bind con Status=0 (Activo) y YA está en nuestra BD con status=${dbOrder.status}.`;
+    } else {
+      diagnosis = `El pedido ${orderNumber} existe en Bind con Status=0 (Activo) pero NO está en nuestra BD. Ejecuta sincronización para traerlo.`;
+    }
+
+    return {
+      inBind: {
+        found: bindResult.found,
+        status: bindResult.status,
+        statusName: bindResult.statusName,
+        bindId: bindResult.bindOrder?.ID,
+        orderDate: bindResult.bindOrder?.OrderDate,
+        clientName: bindResult.bindOrder?.ClientName,
+      },
+      inDatabase: {
+        found: !!dbOrder,
+        id: dbOrder?.id,
+        status: dbOrder?.status,
+        bindId: dbOrder?.bindId,
+      },
+      diagnosis,
+    };
+  }
+
+  /**
    * Sincroniza direcciones de un cliente desde Bind ERP
    * - Obtiene direcciones del cliente desde Bind usando el clientBindId (UUID)
    * - Las guarda en nuestra BD usando clientNumber
