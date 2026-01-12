@@ -344,13 +344,35 @@ export class OrdersService {
 
   /**
    * Eliminar pedidos en DRAFT por IDs
-   * Solo PURCHASING puede ejecutar esta acción
+   * PURCHASING y ADMIN pueden ejecutar esta acción
    * Solo se eliminan pedidos en estado DRAFT
    */
   async deleteDraftOrders(orderIds: string[]): Promise<{ deleted: number }> {
+    this.logger.log(`Delete request for ${orderIds.length} orders: ${orderIds.join(', ')}`);
+
+    // Verificar cuántos existen y en qué status están
+    const existingOrders = await this.orderRepository.find({
+      where: { id: In(orderIds) },
+      select: ['id', 'status', 'orderNumber'],
+    });
+
+    this.logger.log(`Found ${existingOrders.length} orders in DB`);
+    for (const order of existingOrders) {
+      this.logger.log(`  - Order ${order.orderNumber || order.id}: status=${order.status}`);
+    }
+
+    const draftOrders = existingOrders.filter(o => o.status === OrderStatus.DRAFT);
+    this.logger.log(`${draftOrders.length} orders are in DRAFT status`);
+
+    if (draftOrders.length === 0) {
+      this.logger.warn('No DRAFT orders to delete - orders may have different status');
+      return { deleted: 0 };
+    }
+
+    // Eliminar solo los que están en DRAFT
+    const draftIds = draftOrders.map(o => o.id);
     const result = await this.orderRepository.delete({
-      id: In(orderIds),
-      status: OrderStatus.DRAFT, // Solo eliminar si están en DRAFT
+      id: In(draftIds),
     });
 
     this.logger.log(`Deleted ${result.affected} draft orders`);
