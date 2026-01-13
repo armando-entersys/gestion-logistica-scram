@@ -175,14 +175,10 @@ export class SyncProcessor extends WorkerHost {
         await this.clientRepository.upsert(
           {
             clientNumber,
-            bindId: client.ID,
             name: this.cleanString(client.LegalName),
-            commercialName: client.CommercialName,
-            email: client.Email,
-            phone: client.Telephones,
-            rfc: client.RFC,
-            city: client.City,
-            state: client.State,
+            email: client.Email || null,
+            phone: client.Telephones || null,
+            rfc: client.RFC || null,
           },
           {
             conflictPaths: ['clientNumber'],
@@ -302,8 +298,9 @@ export class SyncProcessor extends WorkerHost {
             orderNumber,
             clientNumber,
             clientName: this.cleanString(order.ClientName),
-            clientPhone: order.PhoneNumber,
-            clientRfc: order.RFC,
+            clientEmail: '',
+            clientPhone: order.PhoneNumber || null,
+            clientRfc: order.RFC || null,
             addressRaw: {
               street: addressInfo.street,
               number: addressInfo.number,
@@ -312,15 +309,14 @@ export class SyncProcessor extends WorkerHost {
               city: addressInfo.city,
               state: addressInfo.state,
               reference: order.Comments?.substring(0, 300),
-              original: order.Address || '',
             },
             totalAmount: order.Total || 0,
             isVip: this.detectVip(order.Comments),
             promisedDate: order.OrderDate ? new Date(order.OrderDate) : undefined,
             status: OrderStatus.DRAFT,
-            warehouseName: order.WarehouseName,
-            employeeName: order.EmployeeName,
-            purchaseOrder: order.PurchaseOrder,
+            warehouseName: order.WarehouseName || null,
+            employeeName: order.EmployeeName || null,
+            purchaseOrder: order.PurchaseOrder || null,
             bindClientId: order.ClientID,
           });
           created++;
