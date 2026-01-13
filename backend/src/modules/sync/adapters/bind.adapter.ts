@@ -408,28 +408,32 @@ export class BindAdapter {
     // Número de pedido visible (ej: PE2945)
     const orderNumber = `${order.Serie || 'PE'}${order.Number}`;
 
-    // Parsear la dirección del pedido
+    // Parsear la dirección del pedido (solo del campo Address, NO de Comments)
     let addressInfo = this.parseAddress(order.Address || '');
 
-    // Si no hay dirección en el campo Address, buscar en comentarios
+    // Solo buscar dirección en comentarios si tienen patrones claros de dirección
+    // (CP, Col., No., Calle, etc.) - NO usar comentarios genéricos como direcciones
     if (!addressInfo.street && order.Comments) {
-      const commentsAddress = this.parseAddress(order.Comments);
-      // Solo usar la dirección de comentarios si encontramos algo útil
-      if (commentsAddress.street || commentsAddress.postalCode || commentsAddress.neighborhood) {
-        addressInfo = commentsAddress;
-        this.logger.log(`Using address from comments for order ${order.Number}`);
-      }
-    }
+      // Verificar si los comentarios contienen patrones de dirección reales
+      const hasAddressPatterns = /(?:C\.?P\.?\s*\d{5}|Col(?:onia)?\.?\s+\w|No\.?\s*\d|#\s*\d|(?:Calle|Av(?:enida)?|Blvd|Carretera)\s+\w)/i.test(order.Comments);
 
-    // Buscar también direcciones en formato específico en comentarios
-    // Ej: "Entregar en: Calle X #123, Col. Y, Ciudad Z"
-    if (!addressInfo.street && order.Comments) {
-      const deliveryMatch = order.Comments.match(/(?:entregar en|enviar a|direcci[oó]n)[:\s]+(.+?)(?:\.|$)/i);
-      if (deliveryMatch) {
-        const extractedAddress = this.parseAddress(deliveryMatch[1]);
-        if (extractedAddress.street) {
-          addressInfo = extractedAddress;
-          this.logger.log(`Found delivery address in comments for order ${order.Number}`);
+      if (hasAddressPatterns) {
+        // Buscar formato específico: "Entregar en: ...", "Enviar a: ...", "Dirección: ..."
+        const deliveryMatch = order.Comments.match(/(?:entregar en|enviar a|direcci[oó]n)[:\s]+(.+?)(?:\.|$)/i);
+        if (deliveryMatch) {
+          const extractedAddress = this.parseAddress(deliveryMatch[1]);
+          if (extractedAddress.postalCode || extractedAddress.neighborhood) {
+            addressInfo = extractedAddress;
+            this.logger.log(`Found delivery address in comments for order ${order.Number}`);
+          }
+        } else {
+          // Intentar parsear todo el comentario si tiene patrones de dirección
+          const commentsAddress = this.parseAddress(order.Comments);
+          // Solo usar si encontramos CP o Colonia (indicadores fuertes de dirección)
+          if (commentsAddress.postalCode || commentsAddress.neighborhood) {
+            addressInfo = commentsAddress;
+            this.logger.log(`Using address from comments for order ${order.Number}`);
+          }
         }
       }
     }
