@@ -2,14 +2,18 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
+import { HttpModule } from '@nestjs/axios';
 
 import configuration from '@/config/configuration';
 import { typeOrmConfig } from '@/config/typeorm.config';
 
 import { Order } from '@/modules/orders/entities/order.entity';
 import { User } from '@/modules/users/entities/user.entity';
+import { Client } from '@/modules/clients/entities/client.entity';
+import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
 
 import { EmailProcessor } from './processors/email.processor';
+import { SyncProcessor } from './processors/sync.processor';
 import { EmailService } from './services/email.service';
 
 @Module({
@@ -25,7 +29,12 @@ import { EmailService } from './services/email.service';
       useFactory: typeOrmConfig,
     }),
 
-    TypeOrmModule.forFeature([Order, User]),
+    TypeOrmModule.forFeature([Order, User, Client, ClientAddress]),
+
+    HttpModule.register({
+      timeout: 30000,
+      maxRedirects: 5,
+    }),
 
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -38,10 +47,11 @@ import { EmailService } from './services/email.service';
       }),
     }),
 
-    BullModule.registerQueue({
-      name: 'notifications',
-    }),
+    BullModule.registerQueue(
+      { name: 'notifications' },
+      { name: 'sync' },
+    ),
   ],
-  providers: [EmailProcessor, EmailService],
+  providers: [EmailProcessor, SyncProcessor, EmailService],
 })
 export class WorkerModule {}

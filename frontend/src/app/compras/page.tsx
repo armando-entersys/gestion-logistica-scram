@@ -191,6 +191,8 @@ export default function ComprasPage() {
   type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>('promisedDate');
+  const [syncProgress, setSyncProgress] = useState<number>(0);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed'>('idle');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Check auth
@@ -243,23 +245,53 @@ export default function ComprasPage() {
 
   const syncBindMutation = useMutation({
     mutationFn: async () => {
-      return syncApi.syncBind();
+      // 1. Iniciar sync asíncrono
+      setSyncStatus('syncing');
+      setSyncProgress(0);
+
+      const response = await syncApi.syncBind();
+      const { jobId } = response.data;
+
+      // 2. Polling hasta que termine
+      const result = await syncApi.waitForSync(jobId, (progress) => {
+        setSyncProgress(progress);
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result;
     },
-    onSuccess: (response) => {
-      const data = response.data;
+    onSuccess: (result) => {
+      setSyncStatus('completed');
+      const data = result.result;
       setSnackbar({
         open: true,
-        message: `Sincronizacion completada: ${data.created || 0} nuevos, ${data.updated || 0} actualizados`,
+        message: `Sincronizacion completada: ${data?.orders?.created || 0} nuevos, ${data?.clients?.synced || 0} clientes`,
         severity: 'success',
       });
       queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+
+      // Reset after 3 seconds
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncProgress(0);
+      }, 3000);
     },
     onError: (error: any) => {
+      setSyncStatus('failed');
       setSnackbar({
         open: true,
-        message: error.response?.data?.message || 'Error al sincronizar con Bind ERP',
+        message: error.message || 'Error al sincronizar con Bind ERP',
         severity: 'error',
       });
+
+      // Reset after 3 seconds
+      setTimeout(() => {
+        setSyncStatus('idle');
+        setSyncProgress(0);
+      }, 3000);
     },
   });
 
@@ -891,12 +923,17 @@ export default function ComprasPage() {
             </Tooltip>
             <Button
               variant="contained"
-              color="secondary"
-              startIcon={syncBindMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
+              color={syncStatus === 'completed' ? 'success' : syncStatus === 'failed' ? 'error' : 'secondary'}
+              startIcon={syncStatus === 'syncing' ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
               onClick={() => syncBindMutation.mutate()}
-              disabled={syncBindMutation.isPending}
+              disabled={syncStatus === 'syncing'}
+              sx={{ minWidth: 180 }}
             >
-              Sincronizar Bind
+              {syncStatus === 'syncing'
+                ? `Sincronizando... ${syncProgress}%`
+                : syncStatus === 'completed'
+                ? 'Completado!'
+                : 'Sincronizar Bind'}
             </Button>
             <Button
               variant="outlined"

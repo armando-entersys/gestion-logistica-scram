@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 
 import { SyncService } from './sync.service';
 import { SyncController } from './sync.controller';
@@ -17,6 +18,7 @@ import { ClientAddressesModule } from '../client-addresses/client-addresses.modu
       maxRedirects: 5,
     }),
     TypeOrmModule.forFeature([DismissedInvoice]),
+    BullModule.registerQueue({ name: 'sync' }),
     OrdersModule,
     forwardRef(() => ClientsModule),
     ClientAddressesModule,

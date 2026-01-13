@@ -365,36 +365,11 @@ export class BindAdapter {
 
       this.logger.log(`Fetched ${allBindClients.length} total clients from Bind`);
 
-      // Obtener detalles de cada cliente UNO A LA VEZ para evitar rate limiting
-      const clients: SyncClientDto[] = [];
+      // NO obtenemos detalles individuales aquí (causa rate limiting)
+      // Las direcciones se obtienen on-demand cuando se necesitan
+      const clients = allBindClients.map(client => this.transformClient(client));
 
-      for (let i = 0; i < allBindClients.length; i++) {
-        const client = allBindClients[i];
-
-        try {
-          const details = await this.getClientDetails(client.ID);
-          if (details) {
-            clients.push(this.transformClient(details));
-          } else {
-            clients.push(this.transformClient(client));
-          }
-        } catch (error) {
-          this.logger.warn(`Failed to get details for client ${client.ID}: ${error.message}`);
-          clients.push(this.transformClient(client));
-        }
-
-        // Log progreso cada 50 clientes
-        if ((i + 1) % 50 === 0) {
-          this.logger.log(`Processed ${i + 1}/${allBindClients.length} clients`);
-        }
-
-        // Pausa de 300ms entre cada cliente para evitar rate limiting
-        if (i < allBindClients.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      }
-
-      this.logger.log(`Processed ${clients.length} clients with addresses`);
+      this.logger.log(`Processed ${clients.length} clients`);
       return clients;
     } catch (error) {
       this.logger.error('Failed to fetch clients from Bind:', error.response?.data || error.message);

@@ -350,6 +350,40 @@ export default function VentasPage() {
                   ${selectedOrder.totalAmount?.toLocaleString() || 0}
                 </Typography>
               </Stack>
+
+              {/* Internal Notes */}
+              {selectedOrder.internalNotes && (
+                <>
+                  <Divider sx={{ my: 3 }} />
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Notas Internas
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'warning.50' }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {selectedOrder.internalNotes}
+                      </Typography>
+                    </Paper>
+                  </Box>
+                </>
+              )}
+
+              {/* Address Reference/Comments */}
+              {selectedOrder.addressRaw?.reference && (
+                <>
+                  <Divider sx={{ my: 3 }} />
+                  <Box>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Comentarios del Pedido
+                    </Typography>
+                    <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.100' }}>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                        {selectedOrder.addressRaw.reference}
+                      </Typography>
+                    </Paper>
+                  </Box>
+                </>
+              )}
             </Paper>
           ) : (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>

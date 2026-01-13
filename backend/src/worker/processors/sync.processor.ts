@@ -1,0 +1,393 @@
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, In } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+
+import { Order } from '@/modules/orders/entities/order.entity';
+import { Client } from '@/modules/clients/entities/client.entity';
+import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
+import { OrderStatus } from '@/common/enums';
+
+interface BindOrder {
+  ID: string;
+  Number: number;
+  Serie?: string;
+  ClientID: string;
+  ClientName: string;
+  OrderDate: string;
+  Comments?: string;
+  Address?: string;
+  PhoneNumber?: string;
+  RFC?: string;
+  Total: number;
+  Status: number;
+  WarehouseName?: string;
+  EmployeeName?: string;
+  PurchaseOrder?: string;
+}
+
+interface BindClient {
+  ID: string;
+  RFC?: string;
+  LegalName: string;
+  CommercialName?: string;
+  Email?: string;
+  Telephones?: string;
+  Number?: number;
+  City?: string;
+  State?: string;
+}
+
+interface SyncJobPayload {
+  userId: string;
+}
+
+interface SyncJobResult {
+  success: boolean;
+  clients: { synced: number };
+  orders: { created: number; updated: number; errors: string[] };
+  message: string;
+}
+
+@Processor('sync')
+export class SyncProcessor extends WorkerHost {
+  private readonly logger = new Logger(SyncProcessor.name);
+  private readonly apiUrl: string;
+  private readonly apiKey: string;
+
+  constructor(
+    @InjectRepository(Order)
+    private readonly orderRepository: Repository<Order>,
+    @InjectRepository(Client)
+    private readonly clientRepository: Repository<Client>,
+    @InjectRepository(ClientAddress)
+    private readonly clientAddressRepository: Repository<ClientAddress>,
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    super();
+    this.apiUrl = this.configService.get<string>('bind.apiUrl') || 'https://api.bind.com.mx';
+    this.apiKey = this.configService.get<string>('bind.apiKey') || '';
+  }
+
+  async process(job: Job<SyncJobPayload>): Promise<SyncJobResult> {
+    this.logger.log(`Processing sync job [${job.id}]`);
+
+    try {
+      // Update progress
+      await job.updateProgress(5);
+
+      // Step 1: Fetch clients (just the list, no details)
+      this.logger.log('Step 1: Fetching clients from Bind...');
+      const clients = await this.fetchClients();
+      await job.updateProgress(20);
+
+      // Step 2: Sync clients to DB
+      this.logger.log(`Step 2: Syncing ${clients.length} clients to DB...`);
+      const clientResult = await this.syncClients(clients);
+      await job.updateProgress(40);
+
+      // Build client ID -> Number map for orders
+      const clientIdToNumberMap = new Map<string, string>();
+      for (const client of clients) {
+        clientIdToNumberMap.set(client.ID, client.Number?.toString() || client.ID);
+      }
+
+      // Pause before fetching orders
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Step 3: Get existing order bind_ids
+      const existingBindIds = await this.getExistingBindIds();
+      await job.updateProgress(45);
+
+      // Step 4: Fetch orders from Bind (differential)
+      this.logger.log('Step 3: Fetching orders from Bind...');
+      const orders = await this.fetchOrders(existingBindIds);
+      await job.updateProgress(70);
+
+      // Step 5: Sync orders to DB
+      this.logger.log(`Step 4: Syncing ${orders.length} orders to DB...`);
+      const orderResult = await this.syncOrders(orders, clientIdToNumberMap);
+      await job.updateProgress(100);
+
+      const result: SyncJobResult = {
+        success: true,
+        clients: { synced: clientResult.synced },
+        orders: {
+          created: orderResult.created,
+          updated: orderResult.updated,
+          errors: orderResult.errors,
+        },
+        message: `Sync completed: ${orderResult.created} orders created, ${clientResult.synced} clients synced`,
+      };
+
+      this.logger.log(result.message);
+      return result;
+    } catch (error) {
+      this.logger.error(`Sync job failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async fetchClients(): Promise<BindClient[]> {
+    const allClients: BindClient[] = [];
+    let skip = 0;
+    const pageSize = 100;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await firstValueFrom(
+        this.httpService.get<{ value: BindClient[] }>(`${this.apiUrl}/api/Clients`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: { '$top': pageSize, '$skip': skip },
+        }),
+      );
+
+      const pageClients = response.data.value || [];
+      allClients.push(...pageClients);
+
+      if (pageClients.length < pageSize) {
+        hasMore = false;
+      } else {
+        skip += pageSize;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+    }
+
+    this.logger.log(`Fetched ${allClients.length} clients from Bind`);
+    return allClients;
+  }
+
+  private async syncClients(clients: BindClient[]): Promise<{ synced: number }> {
+    let synced = 0;
+
+    for (const client of clients) {
+      try {
+        const clientNumber = client.Number?.toString() || client.ID;
+
+        await this.clientRepository.upsert(
+          {
+            clientNumber,
+            bindId: client.ID,
+            name: this.cleanString(client.LegalName),
+            commercialName: client.CommercialName,
+            email: client.Email,
+            phone: client.Telephones,
+            rfc: client.RFC,
+            city: client.City,
+            state: client.State,
+          },
+          {
+            conflictPaths: ['clientNumber'],
+            skipUpdateIfNoValuesChanged: true,
+          },
+        );
+        synced++;
+      } catch (error) {
+        this.logger.warn(`Failed to sync client ${client.ID}: ${error.message}`);
+      }
+    }
+
+    return { synced };
+  }
+
+  private async getExistingBindIds(): Promise<Set<string>> {
+    const result = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('order.bind_id', 'bindId')
+      .where('order.bind_id IS NOT NULL')
+      .getRawMany();
+    return new Set(result.map(r => r.bindId));
+  }
+
+  private async fetchOrders(existingBindIds: Set<string>): Promise<BindOrder[]> {
+    const newOrders: BindOrder[] = [];
+    let skip = 0;
+    const pageSize = 100;
+    let hasMore = true;
+    let consecutiveExistingPages = 0;
+
+    // Solo Status=0 (Activo/Pendiente de entregar)
+    const filter = 'Status eq 0';
+
+    while (hasMore) {
+      const response = await firstValueFrom(
+        this.httpService.get<{ value: BindOrder[] }>(`${this.apiUrl}/api/Orders`, {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          params: {
+            '$filter': filter,
+            '$top': pageSize,
+            '$skip': skip,
+            '$orderby': 'OrderDate desc',
+          },
+        }),
+      );
+
+      const pageOrders = response.data.value || [];
+
+      // Filter only new orders
+      let newInPage = 0;
+      for (const order of pageOrders) {
+        if (!existingBindIds.has(order.ID)) {
+          newOrders.push(order);
+          newInPage++;
+        }
+      }
+
+      this.logger.log(`Page ${Math.floor(skip / pageSize) + 1}: ${pageOrders.length} orders, ${newInPage} new`);
+
+      // Stop if no new orders in 3 consecutive pages
+      if (newInPage === 0) {
+        consecutiveExistingPages++;
+      } else {
+        consecutiveExistingPages = 0;
+      }
+
+      if (pageOrders.length < pageSize || consecutiveExistingPages >= 3) {
+        hasMore = false;
+      } else {
+        skip += pageSize;
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+
+    this.logger.log(`Fetched ${newOrders.length} new orders from Bind`);
+    return newOrders;
+  }
+
+  private async syncOrders(
+    orders: BindOrder[],
+    clientIdToNumberMap: Map<string, string>,
+  ): Promise<{ created: number; updated: number; errors: string[] }> {
+    let created = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const order of orders) {
+      try {
+        const orderNumber = `${order.Serie || 'PE'}${order.Number}`;
+
+        // Fix clientNumber if it's a UUID
+        let clientNumber = order.ClientID;
+        if (clientIdToNumberMap.has(order.ClientID)) {
+          clientNumber = clientIdToNumberMap.get(order.ClientID)!;
+        }
+
+        // Parse address
+        const addressInfo = this.parseAddress(order.Address || '');
+
+        const existing = await this.orderRepository.findOne({
+          where: { bindId: order.ID },
+        });
+
+        if (existing) {
+          await this.orderRepository.update(existing.id, {
+            clientName: this.cleanString(order.ClientName),
+            totalAmount: order.Total || 0,
+          });
+          updated++;
+        } else {
+          await this.orderRepository.insert({
+            bindId: order.ID,
+            orderNumber,
+            clientNumber,
+            clientName: this.cleanString(order.ClientName),
+            clientPhone: order.PhoneNumber,
+            clientRfc: order.RFC,
+            addressRaw: {
+              street: addressInfo.street,
+              number: addressInfo.number,
+              neighborhood: addressInfo.neighborhood,
+              postalCode: addressInfo.postalCode,
+              city: addressInfo.city,
+              state: addressInfo.state,
+              reference: order.Comments?.substring(0, 300),
+              original: order.Address || '',
+            },
+            totalAmount: order.Total || 0,
+            isVip: this.detectVip(order.Comments),
+            promisedDate: order.OrderDate ? new Date(order.OrderDate) : undefined,
+            status: OrderStatus.DRAFT,
+            warehouseName: order.WarehouseName,
+            employeeName: order.EmployeeName,
+            purchaseOrder: order.PurchaseOrder,
+            bindClientId: order.ClientID,
+          });
+          created++;
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to sync order ${order.ID}: ${error.message}`);
+        errors.push(`${order.Serie || 'PE'}${order.Number}: ${error.message}`);
+      }
+    }
+
+    return { created, updated, errors };
+  }
+
+  private parseAddress(address: string): {
+    street: string;
+    number: string;
+    neighborhood: string;
+    postalCode: string;
+    city: string;
+    state: string;
+  } {
+    const result = { street: '', number: '', neighborhood: '', postalCode: '', city: '', state: '' };
+    if (!address) return result;
+
+    // Extract postal code
+    const cpMatch = address.match(/C\.?P\.?\s*(\d{5})/i);
+    if (cpMatch) result.postalCode = cpMatch[1];
+
+    // Extract neighborhood (Col. or Colonia)
+    const colMatch = address.match(/Col(?:onia)?\.?\s+([^,]+)/i);
+    if (colMatch) result.neighborhood = colMatch[1].trim();
+
+    // Extract street number
+    const numMatch = address.match(/(?:No\.?|#)\s*(\d+[A-Za-z]?)/i);
+    if (numMatch) result.number = numMatch[1];
+
+    // Street is everything before the first comma or number indicator
+    const streetMatch = address.match(/^([^,#]+?)(?:\s+(?:No\.?|#|\d+)|,)/i);
+    if (streetMatch) result.street = streetMatch[1].trim();
+    else result.street = address.split(',')[0]?.trim() || '';
+
+    return result;
+  }
+
+  private detectVip(comments?: string): boolean {
+    if (!comments) return false;
+    const upper = comments.toUpperCase();
+    return upper.includes('VIP') || upper.includes('URGENTE') || upper.includes('PRIORITARIO');
+  }
+
+  private cleanString(str: string): string {
+    if (!str) return '';
+    return str.replace(/\s+/g, ' ').trim();
+  }
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job) {
+    this.logger.log(`Sync job [${job.id}] completed`);
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job, error: Error) {
+    this.logger.error(`Sync job [${job.id}] failed: ${error.message}`);
+  }
+
+  @OnWorkerEvent('progress')
+  onProgress(job: Job, progress: number) {
+    this.logger.log(`Sync job [${job.id}] progress: ${progress}%`);
+  }
+}

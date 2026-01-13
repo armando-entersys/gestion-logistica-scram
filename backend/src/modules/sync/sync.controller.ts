@@ -1,5 +1,7 @@
 import { Controller, Post, Get, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -12,19 +14,66 @@ import { UserRole } from '@/common/enums';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class SyncController {
-  constructor(private readonly syncService: SyncService) {}
+  constructor(
+    private readonly syncService: SyncService,
+    @InjectQueue('sync') private readonly syncQueue: Queue,
+  ) {}
 
   /**
-   * RF-01: Sincronización manual con Bind ERP
+   * RF-01: Sincronización ASÍNCRONA con Bind ERP
+   * Encola el job y retorna inmediatamente con el jobId
+   * El frontend debe hacer polling a /sync/status/:jobId
    */
   @Post('bind')
   @Roles(UserRole.PURCHASING, UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Sync orders from Bind ERP' })
-  @ApiResponse({ status: 200, description: 'Sync completed successfully' })
-  @ApiResponse({ status: 503, description: 'Bind API unavailable - use Excel fallback' })
-  syncFromBind() {
-    return this.syncService.syncFromBind();
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Start async sync from Bind ERP' })
+  @ApiResponse({ status: 202, description: 'Sync job queued' })
+  async syncFromBind(@Request() req: any) {
+    const job = await this.syncQueue.add(
+      'sync-bind',
+      { userId: req.user.id },
+      {
+        removeOnComplete: { age: 3600 }, // Keep completed jobs for 1 hour
+        removeOnFail: { age: 86400 }, // Keep failed jobs for 24 hours
+      },
+    );
+
+    return {
+      success: true,
+      jobId: job.id,
+      message: 'Sincronización iniciada. Consulta el estado en /sync/status/' + job.id,
+    };
+  }
+
+  /**
+   * Consulta el estado de un job de sincronización
+   */
+  @Get('status/:jobId')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get sync job status' })
+  @ApiResponse({ status: 200, description: 'Job status retrieved' })
+  async getSyncStatus(@Param('jobId') jobId: string) {
+    const job = await this.syncQueue.getJob(jobId);
+
+    if (!job) {
+      return {
+        jobId,
+        status: 'not_found',
+        message: 'Job no encontrado',
+      };
+    }
+
+    const state = await job.getState();
+    const progress = job.progress;
+
+    return {
+      jobId,
+      status: state,
+      progress: typeof progress === 'number' ? progress : 0,
+      result: state === 'completed' ? job.returnvalue : null,
+      failedReason: state === 'failed' ? job.failedReason : null,
+    };
   }
 
   /**

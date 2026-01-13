@@ -136,8 +136,60 @@ export const usersApi = {
 
 // Sync API
 export const syncApi = {
+  // Inicia sync asíncrono, retorna jobId
   syncBind: () =>
-    api.post('/sync/bind'),
+    api.post<{ success: boolean; jobId: string; message: string }>('/sync/bind'),
+
+  // Consulta estado del job
+  getSyncStatus: (jobId: string) =>
+    api.get<{
+      jobId: string;
+      status: 'waiting' | 'active' | 'completed' | 'failed' | 'not_found';
+      progress: number;
+      result?: {
+        success: boolean;
+        clients: { synced: number };
+        orders: { created: number; updated: number; errors: string[] };
+        message: string;
+      };
+      failedReason?: string;
+    }>(`/sync/status/${jobId}`),
+
+  // Polling helper: espera a que el job termine
+  waitForSync: async (jobId: string, onProgress?: (progress: number) => void): Promise<{
+    success: boolean;
+    result?: any;
+    error?: string;
+  }> => {
+    const maxAttempts = 120; // 4 minutos máximo (120 * 2s)
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const { data } = await syncApi.getSyncStatus(jobId);
+
+      if (onProgress && typeof data.progress === 'number') {
+        onProgress(data.progress);
+      }
+
+      if (data.status === 'completed') {
+        return { success: true, result: data.result };
+      }
+
+      if (data.status === 'failed') {
+        return { success: false, error: data.failedReason || 'Sync failed' };
+      }
+
+      if (data.status === 'not_found') {
+        return { success: false, error: 'Job not found' };
+      }
+
+      // Wait 2 seconds before next poll
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      attempts++;
+    }
+
+    return { success: false, error: 'Timeout: sync took too long' };
+  },
 
   syncExcel: (orders: any[]) =>
     api.post('/sync/excel', { orders }),
