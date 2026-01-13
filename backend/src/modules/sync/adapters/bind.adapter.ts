@@ -365,11 +365,42 @@ export class BindAdapter {
 
       this.logger.log(`Fetched ${allBindClients.length} total clients from Bind`);
 
-      // Transformar clientes (sin obtener detalles individuales para evitar rate limiting)
-      // Las direcciones se poblarán desde los pedidos sincronizados
-      const clients = allBindClients.map(client => this.transformClient(client));
+      // Obtener detalles de cada cliente (incluye direcciones)
+      // Procesamos en lotes con pausas para evitar rate limiting
+      const clients: SyncClientDto[] = [];
+      const batchSize = 10;
 
-      this.logger.log(`Processed ${clients.length} clients`);
+      for (let i = 0; i < allBindClients.length; i += batchSize) {
+        const batch = allBindClients.slice(i, i + batchSize);
+
+        // Procesar lote en paralelo
+        const batchResults = await Promise.all(
+          batch.map(async (client) => {
+            try {
+              const details = await this.getClientDetails(client.ID);
+              if (details) {
+                return this.transformClient(details);
+              }
+              return this.transformClient(client);
+            } catch (error) {
+              this.logger.warn(`Failed to get details for client ${client.ID}: ${error.message}`);
+              return this.transformClient(client);
+            }
+          })
+        );
+
+        clients.push(...batchResults);
+
+        // Log progreso
+        this.logger.log(`Processed ${Math.min(i + batchSize, allBindClients.length)}/${allBindClients.length} clients`);
+
+        // Pausa entre lotes para evitar rate limiting
+        if (i + batchSize < allBindClients.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      this.logger.log(`Processed ${clients.length} clients with addresses`);
       return clients;
     } catch (error) {
       this.logger.error('Failed to fetch clients from Bind:', error.response?.data || error.message);
