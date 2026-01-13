@@ -48,8 +48,9 @@ export class SyncService {
       this.logger.log('Fetching clients from Bind...');
       const bindClients = await this.bindAdapter.fetchClients();
 
-      // Pausa de 2 segundos para evitar rate limiting
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Pausa de 5 segundos para evitar rate limiting después de obtener clientes
+      this.logger.log('Waiting 5 seconds to avoid rate limiting...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // LUEGO fetch orders (diferencial - solo los nuevos)
       this.logger.log('Fetching NEW orders from Bind (differential)...');
