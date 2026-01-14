@@ -12,7 +12,7 @@ import { Client } from '@/modules/clients/entities/client.entity';
 import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
 import { OrderStatus } from '@/common/enums';
 
-interface BindOrder {
+interface BindOrderList {
   ID: string;
   Number: number;
   Serie?: string;
@@ -20,7 +20,6 @@ interface BindOrder {
   ClientName: string;
   OrderDate: string;
   Comments?: string;
-  Address?: string;
   PhoneNumber?: string;
   RFC?: string;
   Total: number;
@@ -28,6 +27,10 @@ interface BindOrder {
   WarehouseName?: string;
   EmployeeName?: string;
   PurchaseOrder?: string;
+}
+
+interface BindOrderDetail extends BindOrderList {
+  Address?: string;
 }
 
 interface BindClient {
@@ -226,8 +229,8 @@ export class SyncProcessor extends WorkerHost {
     return new Set(result.map(r => r.bindId));
   }
 
-  private async fetchOrders(existingBindIds: Set<string>): Promise<BindOrder[]> {
-    const newOrders: BindOrder[] = [];
+  private async fetchOrders(existingBindIds: Set<string>): Promise<BindOrderDetail[]> {
+    const newOrderIds: string[] = [];
     let skip = 0;
     const pageSize = 100;
     let hasMore = true;
@@ -236,9 +239,10 @@ export class SyncProcessor extends WorkerHost {
     // Solo Status=0 (Activo/Pendiente de entregar)
     const filter = 'Status eq 0';
 
+    // Step 1: Get list of new order IDs
     while (hasMore) {
       const response = await firstValueFrom(
-        this.httpService.get<{ value: BindOrder[] }>(`${this.apiUrl}/api/Orders`, {
+        this.httpService.get<{ value: BindOrderList[] }>(`${this.apiUrl}/api/Orders`, {
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
@@ -258,7 +262,7 @@ export class SyncProcessor extends WorkerHost {
       let newInPage = 0;
       for (const order of pageOrders) {
         if (!existingBindIds.has(order.ID)) {
-          newOrders.push(order);
+          newOrderIds.push(order.ID);
           newInPage++;
         }
       }
@@ -280,12 +284,41 @@ export class SyncProcessor extends WorkerHost {
       }
     }
 
-    this.logger.log(`Fetched ${newOrders.length} new orders from Bind`);
-    return newOrders;
+    this.logger.log(`Found ${newOrderIds.length} new orders, fetching details...`);
+
+    // Step 2: Fetch details for each new order (to get Address)
+    const ordersWithDetails: BindOrderDetail[] = [];
+    for (let i = 0; i < newOrderIds.length; i++) {
+      const orderId = newOrderIds[i];
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<BindOrderDetail>(`${this.apiUrl}/api/Orders/${orderId}`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+        );
+        ordersWithDetails.push(response.data);
+
+        // Log progress every 10 orders
+        if ((i + 1) % 10 === 0) {
+          this.logger.log(`Fetched details for ${i + 1}/${newOrderIds.length} orders`);
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error: any) {
+        this.logger.warn(`Failed to fetch order ${orderId}: ${error.message}`);
+      }
+    }
+
+    this.logger.log(`Fetched ${ordersWithDetails.length} orders with details from Bind`);
+    return ordersWithDetails;
   }
 
   private async syncOrders(
-    orders: BindOrder[],
+    orders: BindOrderDetail[],
     clientIdToNumberMap: Map<string, string>,
   ): Promise<{ created: number; updated: number; errors: string[] }> {
     let created = 0;
@@ -302,8 +335,13 @@ export class SyncProcessor extends WorkerHost {
           clientNumber = clientIdToNumberMap.get(order.ClientID)!;
         }
 
-        // Parse address
-        const addressInfo = this.parseAddress(order.Address || '');
+        // Parse address - now comes from order detail endpoint
+        const rawAddress = order.Address || '';
+        const addressInfo = this.parseAddress(rawAddress);
+
+        if (rawAddress) {
+          this.logger.log(`Order ${orderNumber} address: ${rawAddress.substring(0, 100)}...`);
+        }
 
         const existing = await this.orderRepository.findOne({
           where: { bindId: order.ID },
@@ -332,6 +370,7 @@ export class SyncProcessor extends WorkerHost {
               city: addressInfo.city,
               state: addressInfo.state,
               reference: order.Comments?.substring(0, 300),
+              original: rawAddress,
             },
             totalAmount: order.Total || 0,
             isVip: this.detectVip(order.Comments),
