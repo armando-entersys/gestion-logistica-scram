@@ -335,6 +335,13 @@ export class SyncProcessor extends WorkerHost {
           clientNumber = clientIdToNumberMap.get(order.ClientID)!;
         }
 
+        // Look up client to get the UUID for the relationship
+        let clientId: string | null = null;
+        const client = await this.clientRepository.findOne({ where: { clientNumber } });
+        if (client) {
+          clientId = client.id;
+        }
+
         // Parse address - now comes from order detail endpoint
         const rawAddress = order.Address || '';
         const addressInfo = this.parseAddress(rawAddress);
@@ -358,6 +365,7 @@ export class SyncProcessor extends WorkerHost {
             bindId: order.ID,
             orderNumber,
             clientNumber,
+            clientId, // UUID from our clients table for the relationship
             clientName: this.cleanString(order.ClientName),
             clientEmail: '',
             clientPhone: order.PhoneNumber || null,
