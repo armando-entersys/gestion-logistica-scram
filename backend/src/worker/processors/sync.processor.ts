@@ -363,14 +363,14 @@ export class SyncProcessor extends WorkerHost {
             clientPhone: order.PhoneNumber || null,
             clientRfc: order.RFC || null,
             addressRaw: {
-              street: addressInfo.street,
+              // If parsing failed, use the full original address as street
+              street: addressInfo.street || rawAddress,
               number: addressInfo.number,
               neighborhood: addressInfo.neighborhood,
               postalCode: addressInfo.postalCode,
               city: addressInfo.city,
               state: addressInfo.state,
               reference: order.Comments?.substring(0, 300),
-              original: rawAddress,
             },
             totalAmount: order.Total || 0,
             isVip: this.detectVip(order.Comments),
