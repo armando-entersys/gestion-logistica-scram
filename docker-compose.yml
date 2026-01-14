@@ -130,6 +130,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://${DB_USER:-scram_user}:${DB_PASSWORD}@db:5432/${DB_NAME:-scram_logistica_db}
       REDIS_URL: redis://redis:6379
+      BIND_API_URL: ${BIND_API_URL}
+      BIND_API_KEY: ${BIND_API_KEY}
       SENDGRID_API_KEY: ${SENDGRID_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-notificaciones@scram2k.com}
       OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
