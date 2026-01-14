@@ -382,6 +382,18 @@ export class SyncProcessor extends WorkerHost {
             bindClientId: order.ClientID,
           });
           created++;
+
+          // Save address to client's addresses (with deduplication)
+          if (rawAddress && clientNumber) {
+            await this.upsertClientAddress(clientNumber, {
+              street: addressInfo.street || rawAddress,
+              number: addressInfo.number,
+              neighborhood: addressInfo.neighborhood,
+              postalCode: addressInfo.postalCode,
+              city: addressInfo.city,
+              state: addressInfo.state,
+            }, order.ID);
+          }
         }
       } catch (error) {
         this.logger.warn(`Failed to sync order ${order.ID}: ${error.message}`);
@@ -421,6 +433,90 @@ export class SyncProcessor extends WorkerHost {
     else result.street = address.split(',')[0]?.trim() || '';
 
     return result;
+  }
+
+  /**
+   * Normalize string for address comparison
+   */
+  private normalizeForComparison(str: string | null | undefined): string {
+    return (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  /**
+   * Upsert client address with deduplication
+   * Checks if address already exists based on normalized street + number
+   */
+  private async upsertClientAddress(
+    clientNumber: string,
+    address: {
+      street: string;
+      number: string;
+      neighborhood: string;
+      postalCode: string;
+      city: string;
+      state: string;
+    },
+    bindOrderId: string,
+  ): Promise<void> {
+    try {
+      // Skip if no street
+      if (!address.street) {
+        return;
+      }
+
+      const normalizedStreet = this.normalizeForComparison(address.street);
+      const normalizedNumber = this.normalizeForComparison(address.number);
+
+      // Get existing addresses for this client
+      const existingAddresses = await this.clientAddressRepository.find({
+        where: { clientNumber },
+      });
+
+      // Check if address already exists (by normalized street + number)
+      const duplicate = existingAddresses.find(addr => {
+        const addrStreet = this.normalizeForComparison(addr.street);
+        const addrNumber = this.normalizeForComparison(addr.number);
+        return addrStreet === normalizedStreet && addrNumber === normalizedNumber;
+      });
+
+      if (duplicate) {
+        // Update usage count
+        await this.clientAddressRepository.update(duplicate.id, {
+          useCount: duplicate.useCount + 1,
+          lastUsedAt: new Date(),
+        });
+        this.logger.debug(`Address already exists for client ${clientNumber}, updated usage`);
+        return;
+      }
+
+      // Get client ID for relationship
+      const client = await this.clientRepository.findOne({ where: { clientNumber } });
+      const clientId = client?.id || null;
+
+      // Check if this is the first address (make it default)
+      const isFirstAddress = existingAddresses.length === 0;
+
+      // Create new address
+      await this.clientAddressRepository.insert({
+        clientNumber,
+        clientId,
+        street: address.street,
+        number: address.number || null,
+        neighborhood: address.neighborhood || null,
+        postalCode: address.postalCode || null,
+        city: address.city || null,
+        state: address.state || null,
+        isDefault: isFirstAddress,
+        source: 'SYNC',
+        bindSourceId: bindOrderId,
+        useCount: 1,
+        lastUsedAt: new Date(),
+      });
+
+      this.logger.log(`Created new address for client ${clientNumber}: ${address.street.substring(0, 50)}...`);
+    } catch (error: any) {
+      this.logger.warn(`Failed to upsert client address: ${error.message}`);
+    }
   }
 
   private detectVip(comments?: string): boolean {
