@@ -70,12 +70,24 @@ export class SyncProcessor extends WorkerHost {
     private readonly configService: ConfigService,
   ) {
     super();
-    this.apiUrl = this.configService.get<string>('bind.apiUrl') || 'https://api.bind.com.mx';
-    this.apiKey = this.configService.get<string>('bind.apiKey') || '';
+    // Try ConfigService first, then fall back to direct env access
+    this.apiUrl = this.configService.get<string>('bind.apiUrl') || process.env.BIND_API_URL || 'https://api.bind.com.mx';
+    this.apiKey = this.configService.get<string>('bind.apiKey') || process.env.BIND_API_KEY || '';
+
+    this.logger.log(`SyncProcessor initialized - API URL: ${this.apiUrl}, API Key configured: ${this.apiKey ? 'YES (' + this.apiKey.substring(0, 8) + '...)' : 'NO'}`);
   }
 
   async process(job: Job<SyncJobPayload>): Promise<SyncJobResult> {
     this.logger.log(`Processing sync job [${job.id}]`);
+    this.logger.log(`Using API URL: ${this.apiUrl}`);
+    this.logger.log(`API Key configured: ${this.apiKey ? 'YES' : 'NO'}`);
+
+    // Validate API key before starting
+    if (!this.apiKey) {
+      const errorMsg = 'BIND_API_KEY not configured. Check worker environment variables.';
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
 
     try {
       // Update progress
@@ -140,24 +152,35 @@ export class SyncProcessor extends WorkerHost {
     let hasMore = true;
 
     while (hasMore) {
-      const response = await firstValueFrom(
-        this.httpService.get<{ value: BindClient[] }>(`${this.apiUrl}/api/Clients`, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          params: { '$top': pageSize, '$skip': skip },
-        }),
-      );
+      this.logger.log(`Fetching clients page ${Math.floor(skip / pageSize) + 1}...`);
 
-      const pageClients = response.data.value || [];
-      allClients.push(...pageClients);
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<{ value: BindClient[] }>(`${this.apiUrl}/api/Clients`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            params: { '$top': pageSize, '$skip': skip },
+          }),
+        );
 
-      if (pageClients.length < pageSize) {
-        hasMore = false;
-      } else {
-        skip += pageSize;
-        await new Promise(resolve => setTimeout(resolve, 200));
+        const pageClients = response.data.value || [];
+        allClients.push(...pageClients);
+
+        if (pageClients.length < pageSize) {
+          hasMore = false;
+        } else {
+          skip += pageSize;
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      } catch (error: any) {
+        this.logger.error(`Error fetching clients from Bind: ${error.message}`);
+        if (error.response) {
+          this.logger.error(`Response status: ${error.response.status}`);
+          this.logger.error(`Response data: ${JSON.stringify(error.response.data)}`);
+        }
+        throw error;
       }
     }
 
