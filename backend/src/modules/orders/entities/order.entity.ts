@@ -12,6 +12,7 @@ import {
 import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
 import { Client } from '@/modules/clients/entities/client.entity';
+import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
 import { ShipmentEvidence } from './shipment-evidence.entity';
 
 @Entity('orders')
@@ -60,6 +61,14 @@ export class Order {
 
   @Column({ name: 'bind_client_id', type: 'varchar', length: 50, nullable: true, comment: 'UUID del cliente en Bind ERP (para sincronizar direcciones)' })
   bindClientId: string | null;
+
+  @Column({ name: 'delivery_address_id', type: 'uuid', nullable: true, comment: 'Referencia a la dirección de entrega del cliente' })
+  @Index('idx_orders_delivery_address')
+  deliveryAddressId: string | null;
+
+  @ManyToOne(() => ClientAddress, { nullable: true })
+  @JoinColumn({ name: 'delivery_address_id' })
+  deliveryAddress: ClientAddress | null;
 
   @Column({
     name: 'address_raw',

@@ -361,11 +361,26 @@ export class SyncProcessor extends WorkerHost {
           });
           updated++;
         } else {
+          // First: Create/get the client address and get its ID
+          let deliveryAddressId: string | null = null;
+          if (rawAddress && clientNumber) {
+            deliveryAddressId = await this.upsertClientAddress(clientNumber, {
+              street: addressInfo.street || rawAddress,
+              number: addressInfo.number,
+              neighborhood: addressInfo.neighborhood,
+              postalCode: addressInfo.postalCode,
+              city: addressInfo.city,
+              state: addressInfo.state,
+            }, order.ID);
+          }
+
+          // Then: Insert the order with the deliveryAddressId
           await this.orderRepository.insert({
             bindId: order.ID,
             orderNumber,
             clientNumber,
             clientId, // UUID from our clients table for the relationship
+            deliveryAddressId, // Link to the client's address
             clientName: this.cleanString(order.ClientName),
             clientEmail: '',
             clientPhone: order.PhoneNumber || null,
@@ -390,18 +405,6 @@ export class SyncProcessor extends WorkerHost {
             bindClientId: order.ClientID,
           });
           created++;
-
-          // Save address to client's addresses (with deduplication)
-          if (rawAddress && clientNumber) {
-            await this.upsertClientAddress(clientNumber, {
-              street: addressInfo.street || rawAddress,
-              number: addressInfo.number,
-              neighborhood: addressInfo.neighborhood,
-              postalCode: addressInfo.postalCode,
-              city: addressInfo.city,
-              state: addressInfo.state,
-            }, order.ID);
-          }
         }
       } catch (error) {
         this.logger.warn(`Failed to sync order ${order.ID}: ${error.message}`);
@@ -465,11 +468,11 @@ export class SyncProcessor extends WorkerHost {
       state: string;
     },
     bindOrderId: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     try {
       // Skip if no street
       if (!address.street) {
-        return;
+        return null;
       }
 
       const normalizedStreet = this.normalizeForComparison(address.street);
@@ -494,7 +497,7 @@ export class SyncProcessor extends WorkerHost {
           lastUsedAt: new Date(),
         });
         this.logger.debug(`Address already exists for client ${clientNumber}, updated usage`);
-        return;
+        return duplicate.id; // Return existing address ID
       }
 
       // Get client ID for relationship
@@ -504,8 +507,8 @@ export class SyncProcessor extends WorkerHost {
       // Check if this is the first address (make it default)
       const isFirstAddress = existingAddresses.length === 0;
 
-      // Create new address
-      await this.clientAddressRepository.insert({
+      // Create new address and get the ID
+      const result = await this.clientAddressRepository.insert({
         clientNumber,
         clientId,
         street: address.street,
@@ -521,9 +524,12 @@ export class SyncProcessor extends WorkerHost {
         lastUsedAt: new Date(),
       });
 
+      const newAddressId = result.identifiers[0]?.id;
       this.logger.log(`Created new address for client ${clientNumber}: ${address.street.substring(0, 50)}...`);
+      return newAddressId || null;
     } catch (error: any) {
       this.logger.warn(`Failed to upsert client address: ${error.message}`);
+      return null;
     }
   }
 
