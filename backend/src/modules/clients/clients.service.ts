@@ -21,7 +21,7 @@ export class ClientsService {
    * Find all clients with pagination and filters
    */
   async findAll(filters: ClientFilterDto): Promise<{
-    data: Client[];
+    data: (Client & { orderCount: number; addressCount: number })[];
     total: number;
     page: number;
     limit: number;
@@ -30,7 +30,10 @@ export class ClientsService {
     const limit = filters.limit || 20;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.clientRepo.createQueryBuilder('client');
+    const queryBuilder = this.clientRepo
+      .createQueryBuilder('client')
+      .loadRelationCountAndMap('client.orderCount', 'client.orders')
+      .loadRelationCountAndMap('client.addressCount', 'client.addresses');
 
     if (filters.search) {
       queryBuilder.andWhere(
@@ -44,13 +47,12 @@ export class ClientsService {
     }
 
     queryBuilder
-      .orderBy('client.totalOrders', 'DESC')
-      .addOrderBy('client.name', 'ASC')
+      .orderBy('client.name', 'ASC')
       .skip(skip)
       .take(limit);
 
     const [data, total] = await queryBuilder.getManyAndCount();
-    return { data, total, page, limit };
+    return { data: data as (Client & { orderCount: number; addressCount: number })[], total, page, limit };
   }
 
   /**
