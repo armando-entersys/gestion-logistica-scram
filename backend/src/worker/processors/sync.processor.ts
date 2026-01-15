@@ -362,15 +362,19 @@ export class SyncProcessor extends WorkerHost {
           updated++;
         } else {
           // First: Create/get the client address and get its ID
+          // IMPORTANT: Store the FULL raw address from Bind without parsing.
+          // Bind API (at least in current version) only provides Address as a
+          // single text string, not structured fields like ShippingAddress.
+          // We store the complete text to avoid data loss (e.g., "Chalco, México").
           let deliveryAddressId: string | null = null;
           if (rawAddress && clientNumber) {
             deliveryAddressId = await this.upsertClientAddress(clientNumber, {
-              street: addressInfo.street || rawAddress,
-              number: addressInfo.number,
-              neighborhood: addressInfo.neighborhood,
-              postalCode: addressInfo.postalCode,
-              city: addressInfo.city,
-              state: addressInfo.state,
+              street: rawAddress, // Full address from Bind - DO NOT parse
+              number: '',        // Not available from Bind API
+              neighborhood: '',  // Not available from Bind API
+              postalCode: addressInfo.postalCode, // Extract CP if found (for filtering)
+              city: '',          // Not reliably parseable
+              state: '',         // Not reliably parseable
             }, order.ID);
           }
 
@@ -386,13 +390,13 @@ export class SyncProcessor extends WorkerHost {
             clientPhone: order.PhoneNumber || null,
             clientRfc: order.RFC || null,
             addressRaw: {
-              // If parsing failed, use the full original address as street
-              street: addressInfo.street || rawAddress,
-              number: addressInfo.number,
-              neighborhood: addressInfo.neighborhood,
-              postalCode: addressInfo.postalCode,
-              city: addressInfo.city,
-              state: addressInfo.state,
+              // Use the full address from Bind as-is (no parsing to avoid data loss)
+              street: rawAddress,
+              number: '',
+              neighborhood: '',
+              postalCode: '',
+              city: '',
+              state: '',
               reference: order.Comments?.substring(0, 300),
             },
             totalAmount: order.Total || 0,
@@ -426,22 +430,45 @@ export class SyncProcessor extends WorkerHost {
     const result = { street: '', number: '', neighborhood: '', postalCode: '', city: '', state: '' };
     if (!address) return result;
 
-    // Extract postal code
+    // Format típico de Bind: "Calle 123 No. 45  Col. Colonia,  Ciudad, Estado  C.P 12345 País"
+
+    // Extract postal code (C.P or CP followed by 5 digits)
     const cpMatch = address.match(/C\.?P\.?\s*(\d{5})/i);
     if (cpMatch) result.postalCode = cpMatch[1];
 
-    // Extract neighborhood (Col. or Colonia)
+    // Extract neighborhood (Col. or Colonia followed by text until comma)
     const colMatch = address.match(/Col(?:onia)?\.?\s+([^,]+)/i);
     if (colMatch) result.neighborhood = colMatch[1].trim();
 
-    // Extract street number
-    const numMatch = address.match(/(?:No\.?|#)\s*(\d+[A-Za-z]?)/i);
+    // Extract street number (No. or # followed by number or S/N)
+    const numMatch = address.match(/No\.?\s*(S\/N|\d+[A-Za-z\-]*)/i);
     if (numMatch) result.number = numMatch[1];
 
-    // Street is everything before the first comma or number indicator
-    const streetMatch = address.match(/^([^,#]+?)(?:\s+(?:No\.?|#|\d+)|,)/i);
-    if (streetMatch) result.street = streetMatch[1].trim();
-    else result.street = address.split(',')[0]?.trim() || '';
+    // Extract city and state - typically after Col. section and before C.P
+    // Format: "..., Ciudad, Estado C.P..." or "..., Ciudad, Estado, C.P..."
+    const afterColMatch = address.match(/Col(?:onia)?\.?\s+[^,]+,\s*([^,]+),\s*([^,C]+?)(?:\s*C\.?P|,|\s*México$)/i);
+    if (afterColMatch) {
+      result.city = afterColMatch[1].trim();
+      result.state = afterColMatch[2].trim();
+    }
+
+    // Street: everything before "Col." or "No."
+    // First try to get everything before Col.
+    const beforeColMatch = address.match(/^(.+?)(?:\s+Col\.?)/i);
+    if (beforeColMatch) {
+      let streetPart = beforeColMatch[1].trim();
+      // If there's a No. in the street part, separate it
+      const streetNoMatch = streetPart.match(/^(.+?)\s+No\.?\s*(S\/N|\d+[A-Za-z\-]*)$/i);
+      if (streetNoMatch) {
+        result.street = streetNoMatch[1].trim();
+        if (!result.number) result.number = streetNoMatch[2];
+      } else {
+        result.street = streetPart;
+      }
+    } else {
+      // Fallback: first part before comma
+      result.street = address.split(',')[0]?.trim() || '';
+    }
 
     return result;
   }
@@ -455,12 +482,13 @@ export class SyncProcessor extends WorkerHost {
 
   /**
    * Upsert client address with deduplication
-   * Checks if address already exists based on normalized street + number
+   * Since Bind API provides the full address as a single text field,
+   * we compare the complete normalized address string for deduplication.
    */
   private async upsertClientAddress(
     clientNumber: string,
     address: {
-      street: string;
+      street: string; // Contains full address text from Bind
       number: string;
       neighborhood: string;
       postalCode: string;
@@ -470,24 +498,23 @@ export class SyncProcessor extends WorkerHost {
     bindOrderId: string,
   ): Promise<string | null> {
     try {
-      // Skip if no street
+      // Skip if no address
       if (!address.street) {
         return null;
       }
 
-      const normalizedStreet = this.normalizeForComparison(address.street);
-      const normalizedNumber = this.normalizeForComparison(address.number);
+      // Normalize full address for comparison (street contains the complete address)
+      const normalizedFullAddress = this.normalizeForComparison(address.street);
 
       // Get existing addresses for this client
       const existingAddresses = await this.clientAddressRepository.find({
         where: { clientNumber },
       });
 
-      // Check if address already exists (by normalized street + number)
+      // Check if address already exists (compare full address text)
       const duplicate = existingAddresses.find(addr => {
-        const addrStreet = this.normalizeForComparison(addr.street);
-        const addrNumber = this.normalizeForComparison(addr.number);
-        return addrStreet === normalizedStreet && addrNumber === normalizedNumber;
+        const existingNormalized = this.normalizeForComparison(addr.street);
+        return existingNormalized === normalizedFullAddress;
       });
 
       if (duplicate) {
