@@ -19,7 +19,7 @@ import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
 import LoginIcon from '@mui/icons-material/Login';
 
-import { saveSession } from '@/lib/db';
+import { saveSession, getSession, clearAllData } from '@/lib/db';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
@@ -49,6 +49,14 @@ export default function LoginPage() {
         setError('Esta aplicacion es solo para choferes');
         setIsLoading(false);
         return;
+      }
+
+      // Check if a different user was logged in before
+      // If so, clear all local data to prevent mixing orders/evidence
+      const previousSession = await getSession();
+      if (previousSession && previousSession.id !== user.id) {
+        console.log('Different user login detected, clearing previous data');
+        await clearAllData();
       }
 
       // Save session to IndexedDB

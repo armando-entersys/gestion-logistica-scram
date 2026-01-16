@@ -101,6 +101,8 @@ export const db = new SCRAMDatabase();
 
 /**
  * Save orders from server to local database
+ * IMPORTANT: Clears existing orders first to prevent mixing data from different drivers
+ * when they share a device without proper logout
  */
 export async function saveOrdersLocally(orders: LocalOrder[]): Promise<void> {
   const now = new Date().toISOString();
@@ -110,6 +112,9 @@ export async function saveOrdersLocally(orders: LocalOrder[]): Promise<void> {
     isLocalOnly: false,
   }));
 
+  // Clear old orders first to prevent mixing orders from different drivers
+  // This is crucial when multiple drivers use the same device
+  await db.orders.clear();
   await db.orders.bulkPut(ordersWithSync);
 }
 
