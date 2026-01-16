@@ -401,7 +401,7 @@ export class SyncProcessor extends WorkerHost {
             },
             totalAmount: order.Total || 0,
             isVip: this.detectVip(order.Comments),
-            promisedDate: order.OrderDate ? new Date(order.OrderDate) : undefined,
+            promisedDate: this.parseBindDate(order.OrderDate),
             status: OrderStatus.DRAFT,
             warehouseName: order.WarehouseName || null,
             employeeName: order.EmployeeName || null,
@@ -569,6 +569,28 @@ export class SyncProcessor extends WorkerHost {
   private cleanString(str: string): string {
     if (!str) return '';
     return str.replace(/\s+/g, ' ').trim();
+  }
+
+  /**
+   * Parse date from Bind API without timezone shift.
+   * Bind sends dates like "2026-01-16T00:00:00" which JavaScript interprets as UTC.
+   * This causes the date to appear as the previous day in Mexico timezone (UTC-6).
+   * We extract just the date part and create a date at noon local time.
+   */
+  private parseBindDate(dateString: string | undefined): Date | undefined {
+    if (!dateString) return undefined;
+
+    // Extract just the date part (YYYY-MM-DD)
+    const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) {
+      // Fallback to standard parsing if format doesn't match
+      return new Date(dateString);
+    }
+
+    const [, year, month, day] = match;
+    // Create date at noon local time to avoid DST issues
+    // This ensures the date stays on the correct day regardless of timezone
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
   }
 
   @OnWorkerEvent('completed')
