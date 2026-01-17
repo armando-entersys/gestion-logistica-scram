@@ -700,9 +700,23 @@ export default function ComprasPage() {
     orphanPage * ITEMS_PER_PAGE
   );
 
+  // Helper to parse dates without timezone shift
+  // Date-only strings like "2026-01-16" are interpreted as UTC by JavaScript
+  // which causes them to appear as the previous day in Mexico timezone
+  const parseDate = (dateString: string): Date => {
+    // Check if it's a date-only string (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      // Parse as local date by adding time component
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0);
+    }
+    // For full datetime strings, parse normally
+    return new Date(dateString);
+  };
+
   const formatDate = (dateString: string) => {
     if (!dateString) return '-';
-    const date = new Date(dateString);
+    const date = parseDate(dateString);
     return date.toLocaleDateString('es-MX', {
       day: '2-digit',
       month: 'short',
@@ -714,7 +728,7 @@ export default function ComprasPage() {
 
   const formatDateShort = (dateString: string) => {
     if (!dateString) return '-';
-    const date = new Date(dateString);
+    const date = parseDate(dateString);
     return date.toLocaleDateString('es-MX', {
       day: '2-digit',
       month: 'short',

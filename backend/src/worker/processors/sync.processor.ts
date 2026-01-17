@@ -572,10 +572,10 @@ export class SyncProcessor extends WorkerHost {
   }
 
   /**
-   * Parse date from Bind API without timezone shift.
-   * Bind sends dates like "2026-01-16T00:00:00" which JavaScript interprets as UTC.
-   * This causes the date to appear as the previous day in Mexico timezone (UTC-6).
-   * We extract just the date part and create a date at noon local time.
+   * Parse date from Bind API preserving the exact date.
+   * Bind sends dates like "2026-01-16T00:00:00".
+   * We extract just the date part (YYYY-MM-DD) and create a Date at UTC noon
+   * to ensure PostgreSQL stores the correct date regardless of server timezone.
    */
   private parseBindDate(dateString: string | undefined): Date | undefined {
     if (!dateString) return undefined;
@@ -583,14 +583,12 @@ export class SyncProcessor extends WorkerHost {
     // Extract just the date part (YYYY-MM-DD)
     const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!match) {
-      // Fallback to standard parsing if format doesn't match
       return new Date(dateString);
     }
 
-    const [, year, month, day] = match;
-    // Create date at noon local time to avoid DST issues
-    // This ensures the date stays on the correct day regardless of timezone
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0);
+    // Create date at UTC noon to avoid timezone shifts
+    // "2026-01-16T12:00:00Z" will always be January 16 in any timezone
+    return new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00Z`);
   }
 
   @OnWorkerEvent('completed')
