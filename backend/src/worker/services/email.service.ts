@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
 
 interface EmailOptions {
   to: string;
@@ -12,15 +13,23 @@ interface EmailOptions {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly from: string;
-  private readonly sendgridApiKey: string | undefined;
+  private readonly transporter: nodemailer.Transporter;
 
   // STAGING MODE: Redirect all customer emails to this address for testing
   // TODO: Remove this override when going to production
   private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx';
 
   constructor(private readonly configService: ConfigService) {
-    this.from = this.configService.get('sendgrid.from') || 'noreply@entersys.mx';
-    this.sendgridApiKey = this.configService.get('sendgrid.apiKey');
+    this.from = this.configService.get('email.from') || 'notificaciones@scram2k.com';
+
+    // Configure Gmail SMTP transporter
+    this.transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'armando.cortes@entersys.mx',
+        pass: 'izgs zmmp sapa nupz',
+      },
+    });
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
@@ -32,44 +41,18 @@ export class EmailService {
 
     const html = this.renderTemplate(options.template, {
       ...options.context,
-      // Add original recipient info to email content for reference
       _originalRecipient: originalRecipient,
     });
 
-    if (!this.sendgridApiKey || this.sendgridApiKey === 'your_sendgrid_api_key') {
-      // Development mode - log email instead of sending
-      this.logger.log('='.repeat(60));
-      this.logger.log('[EMAIL - DEV MODE]');
-      this.logger.log(`To: ${recipientEmail} (original: ${originalRecipient})`);
-      this.logger.log(`From: ${this.from}`);
-      this.logger.log(`Subject: ${options.subject}`);
-      this.logger.log(`Template: ${options.template}`);
-      this.logger.log('Context:', JSON.stringify(options.context, null, 2));
-      this.logger.log('='.repeat(60));
-      return;
-    }
-
-    // Production mode - use SendGrid
     try {
-      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.sendgridApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          personalizations: [{ to: [{ email: recipientEmail }] }],
-          from: { email: this.from, name: 'SCRAM Logística' },
-          subject: `[STAGING] ${options.subject}`,
-          content: [{ type: 'text/html', value: html }],
-        }),
+      const info = await this.transporter.sendMail({
+        from: `"SCRAM Logistica" <${this.from}>`,
+        to: recipientEmail,
+        subject: `[STAGING] ${options.subject}`,
+        html: html,
       });
 
-      if (!response.ok) {
-        throw new Error(`SendGrid error: ${response.status} ${response.statusText}`);
-      }
-
-      this.logger.log(`Email sent successfully to ${recipientEmail} (original: ${originalRecipient})`);
+      this.logger.log(`Email sent successfully to ${recipientEmail} (original: ${originalRecipient}) - MessageId: ${info.messageId}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${recipientEmail}:`, error);
       throw error;
@@ -115,11 +98,11 @@ export class EmailService {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚀 ¡Tu pedido va en camino!</h1>
+      <h1>Tu pedido va en camino!</h1>
     </div>
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
-      <p>Buenas noticias: tu pedido ha salido de nuestro almacén y está en camino.</p>
+      <p>Buenas noticias: tu pedido ha salido de nuestro almacen y esta en camino.</p>
 
       <p><strong>Tu chofer asignado es:</strong> ${ctx.driverName}</p>
 
@@ -129,12 +112,12 @@ export class EmailService {
         <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Parada #${ctx.routePosition} de la ruta</p>
       </div>
 
-      <p>Por favor, asegúrate de que haya alguien disponible para recibir el paquete.</p>
+      <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
 
       <a href="${ctx.trackingUrl}" class="btn">Ver Estatus en Tiempo Real</a>
     </div>
     <div class="footer">
-      <p>SCRAM Logística - Sistema de Gestión de Entregas</p>
+      <p>SCRAM Logistica - Sistema de Gestion de Entregas</p>
       <p>Si tienes alguna pregunta, contacta a nuestro equipo de soporte.</p>
     </div>
   </div>
@@ -166,31 +149,31 @@ export class EmailService {
 <body>
   <div class="container">
     <div class="header">
-      <h1>✅ ¡Pedido Entregado!</h1>
+      <h1>Pedido Entregado!</h1>
     </div>
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
       <p>Confirmamos que tu pedido ha sido entregado exitosamente.</p>
 
-      <p style="text-align: center; margin: 30px 0;"><strong>¿Cómo fue tu experiencia?</strong></p>
+      <p style="text-align: center; margin: 30px 0;"><strong>Como fue tu experiencia?</strong></p>
 
       <div class="stars">
-        <a href="${ctx.csatUrl}&score=1" class="star">⭐</a>
-        <a href="${ctx.csatUrl}&score=2" class="star">⭐</a>
-        <a href="${ctx.csatUrl}&score=3" class="star">⭐</a>
-        <a href="${ctx.csatUrl}&score=4" class="star">⭐</a>
-        <a href="${ctx.csatUrl}&score=5" class="star">⭐</a>
+        <a href="${ctx.csatUrl}&score=1" class="star">1</a>
+        <a href="${ctx.csatUrl}&score=2" class="star">2</a>
+        <a href="${ctx.csatUrl}&score=3" class="star">3</a>
+        <a href="${ctx.csatUrl}&score=4" class="star">4</a>
+        <a href="${ctx.csatUrl}&score=5" class="star">5</a>
       </div>
 
-      <p style="text-align: center; color: #666; font-size: 14px;">Haz clic en las estrellas para calificar</p>
+      <p style="text-align: center; color: #666; font-size: 14px;">Haz clic en un numero para calificar</p>
 
       <p style="text-align: center; margin-top: 30px;">
         <a href="${ctx.csatUrl}" class="btn">Ver Detalles de Entrega</a>
       </p>
     </div>
     <div class="footer">
-      <p>¡Gracias por confiar en nosotros!</p>
-      <p>SCRAM Logística - Sistema de Gestión de Entregas</p>
+      <p>Gracias por confiar en nosotros!</p>
+      <p>SCRAM Logistica - Sistema de Gestion de Entregas</p>
     </div>
   </div>
 </body>
@@ -204,7 +187,7 @@ export class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Alerta de Calificación Negativa</title>
+  <title>Alerta de Calificacion Negativa</title>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -222,11 +205,11 @@ export class EmailService {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚨 Alerta: Calificación Negativa</h1>
+      <h1>ALERTA: Calificacion Negativa</h1>
     </div>
     <div class="content">
-      <div class="score">${'⭐'.repeat(ctx.score)}</div>
-      <p style="text-align: center; color: #666;">Calificación: ${ctx.score}/5</p>
+      <div class="score">${ctx.score}/5</div>
+      <p style="text-align: center; color: #666;">Calificacion: ${ctx.score}/5</p>
 
       <div class="alert-box">
         <p><strong>Comentario del cliente:</strong></p>
@@ -256,11 +239,11 @@ export class EmailService {
       </div>
 
       <p style="margin-top: 20px; color: #dc3545; font-weight: bold;">
-        Se recomienda contactar al cliente dentro de las próximas 24 horas para seguimiento.
+        Se recomienda contactar al cliente dentro de las proximas 24 horas para seguimiento.
       </p>
     </div>
     <div class="footer">
-      <p>Sistema de Alertas SCRAM - Ticket de Rescate Automático</p>
+      <p>Sistema de Alertas SCRAM - Ticket de Rescate Automatico</p>
     </div>
   </div>
 </body>
@@ -292,10 +275,9 @@ export class EmailService {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚗 ¡Tu pedido esta en camino!</h1>
+      <h1>Tu pedido esta en camino!</h1>
     </div>
     <div class="content">
-      <div class="icon">📦</div>
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
       <p>Te informamos que nuestro chofer ya salio a entregar tu pedido.</p>
 
