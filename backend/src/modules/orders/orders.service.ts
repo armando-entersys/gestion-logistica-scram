@@ -503,12 +503,16 @@ export class OrdersService {
       const etaStart = new Date(baseTime.getTime() + minutesToAdd * 60000);
       const etaEnd = new Date(etaStart.getTime() + (avgStopTime + bufferMinutes) * 60000);
 
+      // Generar trackingHash si no existe
+      const trackingHash = order.trackingHash || this.generateTrackingHash();
+
       const updateResult = await this.orderRepository.update(orderId, {
         status: OrderStatus.IN_TRANSIT,
         routePosition: position,
         estimatedArrivalStart: etaStart,
         estimatedArrivalEnd: etaEnd,
         assignedDriverId: dto.driverId,
+        trackingHash: trackingHash,
       });
       this.logger.log(`Updated order ${orderId} to IN_TRANSIT (affected: ${updateResult.affected})`);
 
@@ -523,7 +527,7 @@ export class OrdersService {
             driverId: dto.driverId,
             etaStart: etaStart.toISOString(),
             etaEnd: etaEnd.toISOString(),
-            trackingHash: order.trackingHash,
+            trackingHash: trackingHash,
             routePosition: position,
           },
           {
@@ -563,10 +567,14 @@ export class OrdersService {
     const now = new Date();
     const trackingExpires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
+    // Generar trackingHash si no existe (para órdenes creadas antes de esta feature)
+    const trackingHash = order.trackingHash || this.generateTrackingHash();
+
     await this.orderRepository.update(orderId, {
       status: OrderStatus.DELIVERED,
       deliveredAt: now,
       trackingExpiresAt: trackingExpires,
+      trackingHash: trackingHash,
     });
 
     if (evidenceData) {
@@ -587,7 +595,7 @@ export class OrdersService {
         orderId,
         clientEmail: order.clientEmail,
         clientName: order.clientName,
-        trackingHash: order.trackingHash,
+        trackingHash: trackingHash,
       },
       {
         delay: 5000,
@@ -1352,8 +1360,12 @@ export class OrdersService {
 
     const now = new Date();
 
+    // Generar trackingHash si no existe
+    const trackingHash = order.trackingHash || this.generateTrackingHash();
+
     await this.orderRepository.update(orderId, {
       enRouteAt: now,
+      trackingHash: trackingHash,
     });
 
     this.logger.log(`Order ${orderId} marked en-route by driver ${driverId}`);
@@ -1371,7 +1383,7 @@ export class OrdersService {
             : 'Nuestro chofer',
           estimatedArrivalStart: order.estimatedArrivalStart?.toISOString(),
           estimatedArrivalEnd: order.estimatedArrivalEnd?.toISOString(),
-          trackingHash: order.trackingHash,
+          trackingHash: trackingHash,
         },
         {
           attempts: 3,
