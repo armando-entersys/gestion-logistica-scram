@@ -115,7 +115,7 @@ export class EmailService {
 
       <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
 
-      <a href="${ctx.trackingUrl}" class="btn">Ver Estatus en Tiempo Real</a>
+      <a href="${ctx.trackingUrl}" class="btn" style="color: #ffffff !important;">Ver Estatus en Tiempo Real</a>
     </div>
     <div class="footer">
       <p>SCRAM Logistica - Sistema de Gestion de Entregas</p>
@@ -170,7 +170,7 @@ export class EmailService {
       <p style="text-align: center; color: #666; font-size: 14px;">Haz clic en un numero para calificar</p>
 
       <p style="text-align: center; margin-top: 30px;">
-        <a href="${ctx.csatUrl}" class="btn">Ver Detalles de Entrega</a>
+        <a href="${ctx.csatUrl}" class="btn" style="color: #ffffff !important;">Ver Detalles de Entrega</a>
       </p>
     </div>
     <div class="footer">
@@ -297,7 +297,7 @@ export class EmailService {
       <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
 
       <p style="text-align: center;">
-        <a href="${ctx.trackingUrl}" class="btn">Rastrear Mi Pedido</a>
+        <a href="${ctx.trackingUrl}" class="btn" style="color: #ffffff !important;">Rastrear Mi Pedido</a>
       </p>
     </div>
     <div class="footer">
