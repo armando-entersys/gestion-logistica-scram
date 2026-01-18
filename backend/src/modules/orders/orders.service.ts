@@ -829,14 +829,20 @@ export class OrdersService {
       where: { trackingHash: hash },
       select: [
         'id',
+        'bindId',
+        'orderNumber',
         'clientName',
+        'addressRaw',
         'status',
         'estimatedArrivalStart',
         'estimatedArrivalEnd',
         'routePosition',
         'deliveredAt',
         'trackingExpiresAt',
+        'csatScore',
+        'assignedDriverId',
       ],
+      relations: ['assignedDriver'],
     });
 
     if (!order) {

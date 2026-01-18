@@ -177,7 +177,7 @@ export default function TrackingPage() {
                   Numero de Pedido
                 </Typography>
                 <Typography variant="body1" fontWeight={500}>
-                  {order?.bindId || 'N/A'}
+                  {order?.orderNumber || order?.bindId || 'N/A'}
                 </Typography>
               </Box>
             </Stack>

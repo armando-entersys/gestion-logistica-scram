@@ -84,15 +84,16 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tu pedido va en camino</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 24px; }
+    .header { background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; font-family: 'Cabin', 'Segoe UI', sans-serif; }
     .content { padding: 30px; }
-    .eta-box { background: #f8f9fa; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
-    .eta-time { font-size: 28px; font-weight: bold; color: #333; }
-    .btn { display: inline-block; background: #667eea; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+    .eta-box { background: #f0fdfa; border-left: 4px solid #0d9488; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .eta-time { font-size: 28px; font-weight: bold; color: #0f766e; }
+    .btn { display: inline-block; background: #0d9488; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    .btn:hover { background: #0f766e; }
+    .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
   </style>
 </head>
 <body>
@@ -134,16 +135,17 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pedido Entregado</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); padding: 30px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 24px; }
+    .header { background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; font-family: 'Cabin', 'Segoe UI', sans-serif; }
     .content { padding: 30px; }
     .stars { text-align: center; margin: 20px 0; }
-    .star { display: inline-block; font-size: 36px; color: #ddd; text-decoration: none; margin: 0 5px; transition: color 0.2s; }
-    .star:hover { color: #ffc107; }
-    .btn { display: inline-block; background: #11998e; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; }
-    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+    .star { display: inline-block; font-size: 36px; color: #e2e8f0; text-decoration: none; margin: 0 5px; transition: color 0.2s; }
+    .star:hover { color: #f59e0b; }
+    .btn { display: inline-block; background: #0d9488; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; }
+    .btn:hover { background: #0f766e; }
+    .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
   </style>
 </head>
 <body>
@@ -189,17 +191,17 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Alerta de Calificacion Negativa</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%); padding: 30px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 24px; }
+    .header { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; font-family: 'Cabin', 'Segoe UI', sans-serif; }
     .content { padding: 30px; }
-    .alert-box { background: #fff3cd; border: 1px solid #ffc107; padding: 20px; border-radius: 8px; margin: 20px 0; }
-    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-    .info-label { color: #666; }
-    .info-value { font-weight: bold; }
-    .score { font-size: 48px; text-align: center; color: #dc3545; }
-    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+    .alert-box { background: #fef3c7; border: 1px solid #f59e0b; padding: 20px; border-radius: 8px; margin: 20px 0; }
+    .info-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+    .info-label { color: #64748b; }
+    .info-value { font-weight: bold; color: #0f172a; }
+    .score { font-size: 48px; text-align: center; color: #dc2626; }
+    .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
   </style>
 </head>
 <body>
@@ -238,7 +240,7 @@ export class EmailService {
         <span class="info-value">${ctx.deliveredAt}</span>
       </div>
 
-      <p style="margin-top: 20px; color: #dc3545; font-weight: bold;">
+      <p style="margin-top: 20px; color: #dc2626; font-weight: bold;">
         Se recomienda contactar al cliente dentro de las proximas 24 horas para seguimiento.
       </p>
     </div>
@@ -259,17 +261,18 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tu pedido esta en camino</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; }
     .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-    .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center; color: white; }
-    .header h1 { margin: 0; font-size: 24px; }
+    .header { background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; font-family: 'Cabin', 'Segoe UI', sans-serif; }
     .content { padding: 30px; }
-    .driver-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
-    .eta-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
-    .eta-time { font-size: 24px; font-weight: bold; color: #333; }
+    .driver-box { background: #f0fdfa; border-left: 4px solid #0d9488; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .eta-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .eta-time { font-size: 24px; font-weight: bold; color: #0f766e; }
     .icon { font-size: 48px; text-align: center; margin: 20px 0; }
-    .btn { display: inline-block; background: #f5576c; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
-    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+    .btn { display: inline-block; background: #0d9488; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    .btn:hover { background: #0f766e; }
+    .footer { background: #f8fafc; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
   </style>
 </head>
 <body>
@@ -282,12 +285,12 @@ export class EmailService {
       <p>Te informamos que nuestro chofer ya salio a entregar tu pedido.</p>
 
       <div class="driver-box">
-        <p style="margin: 0 0 10px 0; color: #1565c0;"><strong>Chofer asignado:</strong></p>
-        <p style="margin: 0; font-size: 18px; font-weight: bold;">${ctx.driverName}</p>
+        <p style="margin: 0 0 10px 0; color: #0f766e;"><strong>Chofer asignado:</strong></p>
+        <p style="margin: 0; font-size: 18px; font-weight: bold; color: #0f172a;">${ctx.driverName}</p>
       </div>
 
       <div class="eta-box">
-        <p style="margin: 0 0 10px 0; color: #e65100;"><strong>Hora estimada de llegada:</strong></p>
+        <p style="margin: 0 0 10px 0; color: #d97706;"><strong>Hora estimada de llegada:</strong></p>
         <div class="eta-time">${ctx.etaRange}</div>
       </div>
 
