@@ -14,19 +14,33 @@ export class EmailService {
   private readonly from: string;
   private readonly sendgridApiKey: string | undefined;
 
+  // STAGING MODE: Redirect all customer emails to this address for testing
+  // TODO: Remove this override when going to production
+  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx';
+
   constructor(private readonly configService: ConfigService) {
     this.from = this.configService.get('sendgrid.from') || 'noreply@entersys.mx';
     this.sendgridApiKey = this.configService.get('sendgrid.apiKey');
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
-    const html = this.renderTemplate(options.template, options.context);
+    // STAGING: Override recipient email for all customer notifications
+    const originalRecipient = options.to;
+    const recipientEmail = this.STAGING_EMAIL_OVERRIDE;
+
+    this.logger.log(`[STAGING] Email redirected: ${originalRecipient} -> ${recipientEmail}`);
+
+    const html = this.renderTemplate(options.template, {
+      ...options.context,
+      // Add original recipient info to email content for reference
+      _originalRecipient: originalRecipient,
+    });
 
     if (!this.sendgridApiKey || this.sendgridApiKey === 'your_sendgrid_api_key') {
       // Development mode - log email instead of sending
       this.logger.log('='.repeat(60));
       this.logger.log('[EMAIL - DEV MODE]');
-      this.logger.log(`To: ${options.to}`);
+      this.logger.log(`To: ${recipientEmail} (original: ${originalRecipient})`);
       this.logger.log(`From: ${this.from}`);
       this.logger.log(`Subject: ${options.subject}`);
       this.logger.log(`Template: ${options.template}`);
@@ -44,9 +58,9 @@ export class EmailService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          personalizations: [{ to: [{ email: options.to }] }],
+          personalizations: [{ to: [{ email: recipientEmail }] }],
           from: { email: this.from, name: 'SCRAM Logística' },
-          subject: options.subject,
+          subject: `[STAGING] ${options.subject}`,
           content: [{ type: 'text/html', value: html }],
         }),
       });
@@ -55,9 +69,9 @@ export class EmailService {
         throw new Error(`SendGrid error: ${response.status} ${response.statusText}`);
       }
 
-      this.logger.log(`Email sent successfully to ${options.to}`);
+      this.logger.log(`Email sent successfully to ${recipientEmail} (original: ${originalRecipient})`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${options.to}:`, error);
+      this.logger.error(`Failed to send email to ${recipientEmail}:`, error);
       throw error;
     }
   }
@@ -67,6 +81,7 @@ export class EmailService {
       'eta-notification': this.etaNotificationTemplate,
       'delivery-confirmation': this.deliveryConfirmationTemplate,
       'detractor-alert': this.detractorAlertTemplate,
+      'en-route-notification': this.enRouteNotificationTemplate,
     };
 
     const templateFn = templates[template];
@@ -246,6 +261,63 @@ export class EmailService {
     </div>
     <div class="footer">
       <p>Sistema de Alertas SCRAM - Ticket de Rescate Automático</p>
+    </div>
+  </div>
+</body>
+</html>`;
+  }
+
+  private enRouteNotificationTemplate(ctx: any): string {
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tu pedido esta en camino</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 30px; text-align: center; color: white; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .content { padding: 30px; }
+    .driver-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .eta-box { background: #fff3e0; border-left: 4px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+    .eta-time { font-size: 24px; font-weight: bold; color: #333; }
+    .icon { font-size: 48px; text-align: center; margin: 20px 0; }
+    .btn { display: inline-block; background: #f5576c; color: white; padding: 14px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 20px; }
+    .footer { background: #f8f9fa; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚗 ¡Tu pedido esta en camino!</h1>
+    </div>
+    <div class="content">
+      <div class="icon">📦</div>
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Te informamos que nuestro chofer ya salio a entregar tu pedido.</p>
+
+      <div class="driver-box">
+        <p style="margin: 0 0 10px 0; color: #1565c0;"><strong>Chofer asignado:</strong></p>
+        <p style="margin: 0; font-size: 18px; font-weight: bold;">${ctx.driverName}</p>
+      </div>
+
+      <div class="eta-box">
+        <p style="margin: 0 0 10px 0; color: #e65100;"><strong>Hora estimada de llegada:</strong></p>
+        <div class="eta-time">${ctx.etaRange}</div>
+      </div>
+
+      <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
+
+      <p style="text-align: center;">
+        <a href="${ctx.trackingUrl}" class="btn">Rastrear Mi Pedido</a>
+      </p>
+    </div>
+    <div class="footer">
+      <p>SCRAM Logistica - Sistema de Gestion de Entregas</p>
+      <p>Si tienes alguna pregunta, contacta a nuestro equipo de soporte.</p>
     </div>
   </div>
 </body>

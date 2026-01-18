@@ -273,6 +273,18 @@ export class ReturnOrderDto {
   notes?: string;
 }
 
+export class ConfirmPickupDto {
+  @ApiPropertyOptional({ description: 'Indica si hay un problema con el pedido' })
+  @IsOptional()
+  @IsBoolean()
+  hasIssue?: boolean;
+
+  @ApiPropertyOptional({ description: 'Descripción del problema (requerido si hasIssue es true)' })
+  @IsOptional()
+  @IsString()
+  issueNotes?: string;
+}
+
 export class OrderFilterDto {
   @ApiPropertyOptional({ description: 'Status filter (single or comma-separated)', example: 'DRAFT,READY' })
   @IsOptional()

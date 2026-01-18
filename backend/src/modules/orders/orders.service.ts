@@ -21,6 +21,7 @@ import {
   RequestAddressChangeDto,
   RespondAddressChangeDto,
   ReturnOrderDto,
+  ConfirmPickupDto,
 } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
@@ -889,6 +890,9 @@ export class OrdersService {
         'routePosition',
         'estimatedArrivalStart',
         'estimatedArrivalEnd',
+        'pickupConfirmedAt',
+        'pickupHasIssue',
+        'enRouteAt',
         // NO incluye totalAmount (restricción MD050)
       ],
     });
@@ -1256,5 +1260,143 @@ export class OrdersService {
         longitude: result.longitude,
       });
     }
+  }
+
+  // =============================================
+  // PICKUP CONFIRMATION & EN-ROUTE TRACKING
+  // =============================================
+
+  /**
+   * Driver confirms pickup (receipt) of an order before leaving
+   * Can optionally report an issue with the order
+   */
+  async confirmPickup(
+    orderId: string,
+    driverId: string,
+    dto: ConfirmPickupDto,
+  ): Promise<{ success: boolean; confirmedAt: Date }> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Pedido ${orderId} no encontrado`);
+    }
+
+    if (order.assignedDriverId !== driverId) {
+      throw new ForbiddenException('No tienes permiso para confirmar este pedido');
+    }
+
+    if (order.status !== OrderStatus.IN_TRANSIT) {
+      throw new BadRequestException('Solo se pueden confirmar pedidos despachados (IN_TRANSIT)');
+    }
+
+    if (order.pickupConfirmedAt) {
+      throw new BadRequestException('Este pedido ya fue confirmado');
+    }
+
+    const now = new Date();
+
+    await this.orderRepository.update(orderId, {
+      pickupConfirmedAt: now,
+      pickupConfirmedBy: driverId,
+      pickupHasIssue: dto.hasIssue || false,
+      pickupIssueNotes: dto.issueNotes || null,
+    });
+
+    this.logger.log(
+      `Order ${orderId} pickup confirmed by driver ${driverId}${dto.hasIssue ? ' (with issue)' : ''}`,
+    );
+
+    // If there's an issue, notify traffic team via push
+    if (dto.hasIssue && dto.issueNotes) {
+      // Could add notification queue here for traffic team
+      this.logger.warn(`Pickup issue reported for order ${orderId}: ${dto.issueNotes}`);
+    }
+
+    return { success: true, confirmedAt: now };
+  }
+
+  /**
+   * Driver marks they are en-route to deliver an order
+   * Triggers email notification to customer
+   */
+  async markEnRoute(
+    orderId: string,
+    driverId: string,
+  ): Promise<{ success: boolean; enRouteAt: Date }> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['assignedDriver'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Pedido ${orderId} no encontrado`);
+    }
+
+    if (order.assignedDriverId !== driverId) {
+      throw new ForbiddenException('No tienes permiso para marcar este pedido');
+    }
+
+    if (order.status !== OrderStatus.IN_TRANSIT) {
+      throw new BadRequestException('Solo se pueden marcar pedidos en tránsito');
+    }
+
+    if (!order.pickupConfirmedAt) {
+      throw new BadRequestException('Primero debes confirmar la recepción del pedido');
+    }
+
+    if (order.enRouteAt) {
+      throw new BadRequestException('Este pedido ya fue marcado como en camino');
+    }
+
+    const now = new Date();
+
+    await this.orderRepository.update(orderId, {
+      enRouteAt: now,
+    });
+
+    this.logger.log(`Order ${orderId} marked en-route by driver ${driverId}`);
+
+    // Queue email notification to customer if email exists and not already sent
+    if (order.clientEmail && !order.enRouteEmailSent) {
+      await this.notificationQueue.add(
+        'send-en-route-email',
+        {
+          orderId,
+          clientEmail: order.clientEmail,
+          clientName: order.clientName,
+          driverName: order.assignedDriver
+            ? `${order.assignedDriver.firstName} ${order.assignedDriver.lastName}`
+            : 'Nuestro chofer',
+          estimatedArrivalStart: order.estimatedArrivalStart?.toISOString(),
+          estimatedArrivalEnd: order.estimatedArrivalEnd?.toISOString(),
+          trackingHash: order.trackingHash,
+        },
+        {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
+
+      await this.orderRepository.update(orderId, { enRouteEmailSent: true });
+      this.logger.log(`En-route email queued for order ${orderId}`);
+    }
+
+    return { success: true, enRouteAt: now };
+  }
+
+  /**
+   * Get orders pending pickup confirmation for a driver
+   */
+  async getDriverPendingPickupConfirmation(driverId: string): Promise<Order[]> {
+    return this.orderRepository.find({
+      where: {
+        assignedDriverId: driverId,
+        status: OrderStatus.IN_TRANSIT,
+        pickupConfirmedAt: IsNull(),
+      },
+      order: { routePosition: 'ASC' },
+    });
   }
 }

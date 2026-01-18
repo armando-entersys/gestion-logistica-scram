@@ -125,6 +125,27 @@ export function useSync() {
           );
           break;
         }
+
+        case 'pickup-confirmation': {
+          await axios.post(
+            `${API_URL}/orders/${item.payload.orderId}/confirm-pickup`,
+            {
+              hasIssue: item.payload.hasIssue,
+              issueNotes: item.payload.issueNotes,
+            },
+            { headers }
+          );
+          break;
+        }
+
+        case 'en-route': {
+          await axios.post(
+            `${API_URL}/orders/${item.payload.orderId}/en-route`,
+            {},
+            { headers }
+          );
+          break;
+        }
       }
 
       return true;

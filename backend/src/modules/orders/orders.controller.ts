@@ -37,6 +37,7 @@ import {
   RequestAddressChangeDto,
   RespondAddressChangeDto,
   ReturnOrderDto,
+  ConfirmPickupDto,
 } from './dto';
 
 /**
@@ -347,6 +348,56 @@ export class OrdersController {
     @CurrentUser('id') driverId: string,
   ) {
     return this.ordersService.markAsDelivered(id, body, driverId);
+  }
+
+  /**
+   * Get orders pending pickup confirmation
+   * Driver sees orders that need confirmation before leaving
+   */
+  @Get('pending-pickup')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get orders pending pickup confirmation' })
+  getPendingPickup(@CurrentUser('id') driverId: string) {
+    return this.ordersService.getDriverPendingPickupConfirmation(driverId);
+  }
+
+  /**
+   * Confirm pickup of an order
+   * Driver confirms receipt of order before leaving
+   * Can optionally report an issue
+   */
+  @Post(':id/confirm-pickup')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm pickup of order (receipt confirmation)' })
+  confirmPickup(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmPickupDto,
+    @CurrentUser('id') driverId: string,
+  ) {
+    return this.ordersService.confirmPickup(id, driverId, dto);
+  }
+
+  /**
+   * Mark order as en-route
+   * Driver marks they are heading to deliver this order
+   * Triggers email notification to customer
+   */
+  @Post(':id/en-route')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark order as en-route (heading to delivery)' })
+  markEnRoute(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') driverId: string,
+  ) {
+    return this.ordersService.markEnRoute(id, driverId);
   }
 
   // =============================================

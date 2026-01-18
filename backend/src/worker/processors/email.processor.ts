@@ -33,6 +33,16 @@ interface DetractorAlertPayload {
   clientName: string;
 }
 
+interface EnRouteEmailPayload {
+  orderId: string;
+  clientEmail: string;
+  clientName: string;
+  driverName: string;
+  estimatedArrivalStart?: string;
+  estimatedArrivalEnd?: string;
+  trackingHash: string;
+}
+
 @Processor('notifications')
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
@@ -61,6 +71,10 @@ export class EmailProcessor extends WorkerHost {
 
       case 'send-detractor-alert':
         await this.handleDetractorAlert(job.data as DetractorAlertPayload);
+        break;
+
+      case 'send-en-route-email':
+        await this.handleEnRouteEmail(job.data as EnRouteEmailPayload);
         break;
 
       default:
@@ -162,6 +176,44 @@ export class EmailProcessor extends WorkerHost {
     });
 
     this.logger.warn(`Detractor alert sent for order ${orderId} - Score: ${score}`);
+  }
+
+  /**
+   * En-Route notification: Driver is heading to deliver this specific order
+   */
+  private async handleEnRouteEmail(payload: EnRouteEmailPayload): Promise<void> {
+    const { orderId, clientEmail, clientName, driverName, estimatedArrivalStart, estimatedArrivalEnd, trackingHash } = payload;
+
+    // Format ETA times
+    let etaRange = 'Muy pronto';
+    if (estimatedArrivalStart && estimatedArrivalEnd) {
+      const etaStartDate = new Date(estimatedArrivalStart);
+      const etaEndDate = new Date(estimatedArrivalEnd);
+
+      const formatTime = (date: Date) => {
+        return date.toLocaleTimeString('es-MX', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
+      };
+
+      etaRange = `${formatTime(etaStartDate)} - ${formatTime(etaEndDate)}`;
+    }
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject: '🚗 ¡Tu pedido SCRAM esta en camino!',
+      template: 'en-route-notification',
+      context: {
+        clientName: clientName.split(' ')[0], // First name only
+        driverName,
+        etaRange,
+        trackingUrl: `${process.env.APP_URL}/track/${trackingHash}`,
+      },
+    });
+
+    this.logger.log(`En-route email sent to ${clientEmail} for order ${orderId}`);
   }
 
   @OnWorkerEvent('completed')

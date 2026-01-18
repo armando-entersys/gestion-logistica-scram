@@ -216,6 +216,30 @@ export class Order {
   @Column({ name: 'delivered_at', type: 'timestamp', nullable: true })
   deliveredAt: Date | null;
 
+  // Pickup confirmation fields (driver confirms receipt of order before leaving)
+  @Column({ name: 'pickup_confirmed_at', type: 'timestamp', nullable: true })
+  pickupConfirmedAt: Date | null;
+
+  @Column({ name: 'pickup_confirmed_by', type: 'uuid', nullable: true })
+  pickupConfirmedBy: string | null;
+
+  @Column({ name: 'pickup_has_issue', default: false })
+  pickupHasIssue: boolean;
+
+  @Column({ name: 'pickup_issue_notes', type: 'text', nullable: true })
+  pickupIssueNotes: string | null;
+
+  // En-route tracking (driver marks when heading to delivery)
+  @Column({ name: 'en_route_at', type: 'timestamp', nullable: true })
+  enRouteAt: Date | null;
+
+  @Column({
+    name: 'en_route_email_sent',
+    default: false,
+    comment: 'Flag de control envio email en-route',
+  })
+  enRouteEmailSent: boolean;
+
   @Column({ name: 'assigned_driver_id', type: 'uuid', nullable: true })
   assignedDriverId: string | null;
 
@@ -256,6 +280,10 @@ export class Order {
   @ManyToOne(() => User, (user) => user.assignedOrders, { nullable: true })
   @JoinColumn({ name: 'assigned_driver_id' })
   assignedDriver: User | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'pickup_confirmed_by' })
+  pickupConfirmedByUser: User | null;
 
   @ManyToOne(() => Client, (client) => client.orders, { nullable: true })
   @JoinColumn({ name: 'client_id' })

@@ -28,6 +28,11 @@ export interface LocalOrder {
   routePosition?: number;
   estimatedArrivalStart?: string;
   estimatedArrivalEnd?: string;
+  // Pickup confirmation fields
+  pickupConfirmedAt?: string;
+  pickupHasIssue?: boolean;
+  // En-route tracking
+  enRouteAt?: string;
   // Local tracking
   lastSyncedAt?: string;
   isLocalOnly?: boolean;
@@ -35,7 +40,7 @@ export interface LocalOrder {
 
 export interface PendingSync {
   id?: number;
-  type: 'delivery' | 'evidence' | 'location';
+  type: 'delivery' | 'evidence' | 'location' | 'pickup-confirmation' | 'en-route';
   payload: {
     orderId: string;
     [key: string]: any;
@@ -245,4 +250,81 @@ export async function clearAllData(): Promise<void> {
     db.evidence.clear(),
     db.session.clear(),
   ]);
+}
+
+/**
+ * Confirm pickup of an order (Optimistic UI)
+ * Driver confirms receipt of order before leaving
+ */
+export async function confirmPickupLocally(
+  orderId: string,
+  hasIssue?: boolean,
+  issueNotes?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  await db.orders.update(orderId, {
+    pickupConfirmedAt: now,
+    pickupHasIssue: hasIssue || false,
+    isLocalOnly: true,
+  });
+
+  // Queue for sync
+  await db.pendingSync.add({
+    type: 'pickup-confirmation',
+    payload: {
+      orderId,
+      hasIssue: hasIssue || false,
+      issueNotes: issueNotes || null,
+    },
+    createdAt: now,
+    attempts: 0,
+    status: 'pending',
+  });
+}
+
+/**
+ * Mark order as en-route (Optimistic UI)
+ * Driver is heading to deliver this order
+ */
+export async function markEnRouteLocally(orderId: string): Promise<void> {
+  const now = new Date().toISOString();
+
+  await db.orders.update(orderId, {
+    enRouteAt: now,
+    isLocalOnly: true,
+  });
+
+  // Queue for sync
+  await db.pendingSync.add({
+    type: 'en-route',
+    payload: { orderId },
+    createdAt: now,
+    attempts: 0,
+    status: 'pending',
+  });
+}
+
+/**
+ * Get orders pending pickup confirmation
+ */
+export async function getPendingPickupOrders(): Promise<LocalOrder[]> {
+  return db.orders
+    .where('status')
+    .equals('IN_TRANSIT')
+    .filter((order) => !order.pickupConfirmedAt)
+    .sortBy('routePosition');
+}
+
+/**
+ * Check if all orders have been confirmed for pickup
+ */
+export async function allOrdersConfirmed(): Promise<boolean> {
+  const pendingCount = await db.orders
+    .where('status')
+    .equals('IN_TRANSIT')
+    .filter((order) => !order.pickupConfirmedAt)
+    .count();
+
+  return pendingCount === 0;
 }

@@ -38,6 +38,9 @@ import EditLocationIcon from '@mui/icons-material/EditLocation';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
 import UndoIcon from '@mui/icons-material/Undo';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import InventoryIcon from '@mui/icons-material/Inventory';
 
 import {
   db,
@@ -46,6 +49,9 @@ import {
   clearSession,
   getSession,
   LocalOrder,
+  confirmPickupLocally,
+  markEnRouteLocally,
+  getPendingPickupOrders,
 } from '@/lib/db';
 import useSync from '@/hooks/useSync';
 import { subscribeToPush, isSubscribedToPush } from '@/lib/push';
@@ -102,9 +108,21 @@ export default function RoutePage() {
   const [isReturning, setIsReturning] = useState(false);
   const [returnError, setReturnError] = useState<string | null>(null);
 
+  // Pickup confirmation state
+  const [pickupIssueDialogOpen, setPickupIssueDialogOpen] = useState(false);
+  const [pickupIssueOrder, setPickupIssueOrder] = useState<LocalOrder | null>(null);
+  const [pickupIssueNotes, setPickupIssueNotes] = useState('');
+  const [isConfirmingPickup, setIsConfirmingPickup] = useState<string | null>(null);
+  const [isMarkingEnRoute, setIsMarkingEnRoute] = useState<string | null>(null);
+
   // Live query for orders
   const orders = useLiveQuery(() => getActiveRoute(), []);
   const session = useLiveQuery(() => db.session.toCollection().first());
+  const pendingPickupOrders = useLiveQuery(() => getPendingPickupOrders(), []);
+
+  // Check if all orders have been confirmed for pickup
+  const allOrdersConfirmed = !pendingPickupOrders || pendingPickupOrders.length === 0;
+  const confirmedOrders = orders?.filter((o) => o.pickupConfirmedAt) || [];
 
   // Fetch route from server
   const fetchRoute = async () => {
@@ -258,6 +276,44 @@ export default function RoutePage() {
     setReturnError(null);
   };
 
+  // Confirm pickup of an order
+  const handleConfirmPickup = async (order: LocalOrder, hasIssue: boolean = false, issueNotes?: string) => {
+    setIsConfirmingPickup(order.id);
+    try {
+      await confirmPickupLocally(order.id, hasIssue, issueNotes);
+      triggerSync();
+    } catch (error) {
+      console.error('Error confirming pickup:', error);
+    } finally {
+      setIsConfirmingPickup(null);
+      if (hasIssue) {
+        setPickupIssueDialogOpen(false);
+        setPickupIssueOrder(null);
+        setPickupIssueNotes('');
+      }
+    }
+  };
+
+  // Open pickup issue dialog
+  const openPickupIssueDialog = (order: LocalOrder) => {
+    setPickupIssueOrder(order);
+    setPickupIssueDialogOpen(true);
+    setPickupIssueNotes('');
+  };
+
+  // Mark order as en-route
+  const handleMarkEnRoute = async (order: LocalOrder) => {
+    setIsMarkingEnRoute(order.id);
+    try {
+      await markEnRouteLocally(order.id);
+      triggerSync();
+    } catch (error) {
+      console.error('Error marking en-route:', error);
+    } finally {
+      setIsMarkingEnRoute(null);
+    }
+  };
+
   const handleRefresh = () => {
     fetchRoute();
     fetchAddressChangeRequests();
@@ -345,6 +401,79 @@ export default function RoutePage() {
         </Box>
       </Paper>
 
+      {/* Pickup Confirmation Section */}
+      {pendingPickupOrders && pendingPickupOrders.length > 0 && (
+        <Paper
+          sx={{
+            mx: 2,
+            mt: 2,
+            p: 2,
+            bgcolor: 'warning.light',
+            borderRadius: 2,
+          }}
+          elevation={2}
+        >
+          <Stack direction="row" alignItems="center" spacing={1} mb={2}>
+            <InventoryIcon color="warning" />
+            <Typography variant="subtitle1" fontWeight={700} color="warning.dark">
+              Confirmar Recepcion de Pedidos
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" mb={2}>
+            Confirma que recibiste correctamente cada pedido antes de salir a ruta.
+          </Typography>
+          <Stack spacing={1.5}>
+            {pendingPickupOrders.map((order) => (
+              <Paper key={order.id} variant="outlined" sx={{ p: 1.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={600}>
+                      {order.bindId}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {order.clientName}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="warning"
+                      startIcon={<WarningAmberIcon />}
+                      onClick={() => openPickupIssueDialog(order)}
+                      disabled={isConfirmingPickup !== null}
+                    >
+                      Problema
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="success"
+                      startIcon={
+                        isConfirmingPickup === order.id ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <CheckIcon />
+                        )
+                      }
+                      onClick={() => handleConfirmPickup(order)}
+                      disabled={isConfirmingPickup !== null}
+                    >
+                      Confirmar
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+          {confirmedOrders.length > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+              {confirmedOrders.length} pedido(s) confirmado(s)
+            </Typography>
+          )}
+        </Paper>
+      )}
+
       {/* Orders List */}
       <Box
         sx={{
@@ -375,6 +504,9 @@ export default function RoutePage() {
                 onCall={() => order.clientPhone && handleCall(order.clientPhone)}
                 onDeliver={() => navigate(`/delivery/${order.id}`)}
                 onReturn={() => openReturnDialog(order)}
+                onEnRoute={() => handleMarkEnRoute(order)}
+                isMarkingEnRoute={isMarkingEnRoute === order.id}
+                allOrdersConfirmed={allOrdersConfirmed}
               />
             ))}
           </Stack>
@@ -581,6 +713,66 @@ export default function RoutePage() {
         </DialogActions>
       </Dialog>
 
+      {/* Pickup Issue Dialog */}
+      <Dialog open={pickupIssueDialogOpen} onClose={() => setPickupIssueDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <WarningAmberIcon color="warning" />
+            <Typography variant="h6">Reportar Problema</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {pickupIssueOrder && (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Alert severity="info">
+                Puedes confirmar la recepcion del pedido aunque tenga un problema. Se notificara al equipo de trafico.
+              </Alert>
+
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography variant="subtitle2" fontWeight={600}>
+                  {pickupIssueOrder.bindId}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {pickupIssueOrder.clientName}
+                </Typography>
+              </Paper>
+
+              <TextField
+                label="Describe el problema *"
+                value={pickupIssueNotes}
+                onChange={(e) => setPickupIssueNotes(e.target.value)}
+                fullWidth
+                required
+                multiline
+                rows={3}
+                placeholder="Ej: Falta 1 caja del producto X, empaque danado..."
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setPickupIssueDialogOpen(false);
+              setPickupIssueOrder(null);
+              setPickupIssueNotes('');
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => pickupIssueOrder && handleConfirmPickup(pickupIssueOrder, true, pickupIssueNotes)}
+            disabled={!pickupIssueNotes.trim() || isConfirmingPickup !== null}
+            startIcon={isConfirmingPickup ? <CircularProgress size={16} /> : <WarningAmberIcon />}
+          >
+            Confirmar con Problema
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -598,10 +790,17 @@ interface OrderCardProps {
   onCall: () => void;
   onDeliver: () => void;
   onReturn: () => void;
+  onEnRoute: () => void;
+  isMarkingEnRoute: boolean;
+  allOrdersConfirmed: boolean;
 }
 
-function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn }: OrderCardProps) {
+function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn, onEnRoute, isMarkingEnRoute, allOrdersConfirmed }: OrderCardProps) {
   const isDelivered = order.status === 'DELIVERED';
+  const isConfirmed = !!order.pickupConfirmedAt;
+  const isEnRoute = !!order.enRouteAt;
+  const canStartRoute = allOrdersConfirmed && isConfirmed;
+
   const etaStart = order.estimatedArrivalStart
     ? new Date(order.estimatedArrivalStart).toLocaleTimeString('es-MX', {
         hour: '2-digit',
@@ -663,6 +862,30 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn }:
           </Box>
         </Stack>
 
+        {/* Status Indicators */}
+        {!isDelivered && (isConfirmed || isEnRoute) && (
+          <Stack direction="row" spacing={1} mb={1}>
+            {isConfirmed && (
+              <Chip
+                size="small"
+                icon={<CheckCircleIcon />}
+                label={order.pickupHasIssue ? 'Recibido (con problema)' : 'Recibido'}
+                color={order.pickupHasIssue ? 'warning' : 'success'}
+                variant="outlined"
+              />
+            )}
+            {isEnRoute && (
+              <Chip
+                size="small"
+                icon={<DirectionsCarIcon />}
+                label="En camino"
+                color="info"
+                variant="filled"
+              />
+            )}
+          </Stack>
+        )}
+
         {/* Actions */}
         {!isDelivered && (
           <Stack spacing={1}>
@@ -681,15 +904,28 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn }:
                   <PhoneIcon />
                 </IconButton>
               )}
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<CheckCircleIcon />}
-                onClick={onDeliver}
-                sx={{ flex: 1 }}
-              >
-                Entregar
-              </Button>
+              {!isEnRoute ? (
+                <Button
+                  variant="contained"
+                  color="info"
+                  startIcon={isMarkingEnRoute ? <CircularProgress size={16} color="inherit" /> : <DirectionsCarIcon />}
+                  onClick={onEnRoute}
+                  disabled={!canStartRoute || isMarkingEnRoute}
+                  sx={{ flex: 1 }}
+                >
+                  Voy en camino
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckCircleIcon />}
+                  onClick={onDeliver}
+                  sx={{ flex: 1 }}
+                >
+                  Entregar
+                </Button>
+              )}
             </Stack>
             <Button
               variant="text"
