@@ -472,6 +472,7 @@ export class OrdersService {
 
     const orders = await this.orderRepository.find({
       where: { id: In(dto.orderIds) },
+      relations: ['client'],
     });
 
     this.logger.log(`Found ${orders.length} orders for dispatch (requested: ${dto.orderIds.length})`);
@@ -516,13 +517,14 @@ export class OrdersService {
       });
       this.logger.log(`Updated order ${orderId} to IN_TRANSIT (affected: ${updateResult.affected})`);
 
-      // Encolar email de notificación
-      if (order.clientEmail && !order.dispatchEmailSent) {
+      // Encolar email de notificación - usar email del cliente como fallback
+      const recipientEmail = order.clientEmail || order.client?.email;
+      if (recipientEmail && !order.dispatchEmailSent) {
         await this.notificationQueue.add(
           'send-eta-email',
           {
             orderId,
-            clientEmail: order.clientEmail,
+            clientEmail: recipientEmail,
             clientName: order.clientName,
             driverId: dto.driverId,
             etaStart: etaStart.toISOString(),
@@ -554,7 +556,10 @@ export class OrdersService {
     evidenceData?: { type: EvidenceType; storageKey: string; isOffline?: boolean },
     driverId?: string,
   ): Promise<Order> {
-    const order = await this.orderRepository.findOne({ where: { id: orderId } });
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['client'],
+    });
     if (!order) {
       throw new NotFoundException(`Pedido ${orderId} no encontrado`);
     }
@@ -588,20 +593,25 @@ export class OrdersService {
       await this.evidenceRepository.save(evidence);
     }
 
-    // Encolar email de confirmación + encuesta CSAT
-    await this.notificationQueue.add(
-      'send-delivery-confirmation',
-      {
-        orderId,
-        clientEmail: order.clientEmail,
-        clientName: order.clientName,
-        trackingHash: trackingHash,
-      },
-      {
-        delay: 5000,
-        attempts: 3,
-      },
-    );
+    // Encolar email de confirmación + encuesta CSAT - usar email del cliente como fallback
+    const recipientEmail = order.clientEmail || order.client?.email;
+    if (recipientEmail && !order.deliveryEmailSent) {
+      await this.notificationQueue.add(
+        'send-delivery-confirmation',
+        {
+          orderId,
+          clientEmail: recipientEmail,
+          clientName: order.clientName,
+          trackingHash: trackingHash,
+        },
+        {
+          delay: 5000,
+          attempts: 3,
+        },
+      );
+
+      await this.orderRepository.update(orderId, { deliveryEmailSent: true });
+    }
 
     return this.orderRepository.findOne({ where: { id: orderId } }) as Promise<Order>;
   }
@@ -1341,7 +1351,7 @@ export class OrdersService {
   ): Promise<{ success: boolean; enRouteAt: Date }> {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
-      relations: ['assignedDriver'],
+      relations: ['assignedDriver', 'client'],
     });
 
     if (!order) {
@@ -1376,13 +1386,14 @@ export class OrdersService {
 
     this.logger.log(`Order ${orderId} marked en-route by driver ${driverId}`);
 
-    // Queue email notification to customer if email exists and not already sent
-    if (order.clientEmail && !order.enRouteEmailSent) {
+    // Queue email notification to customer - usar email del cliente como fallback
+    const recipientEmail = order.clientEmail || order.client?.email;
+    if (recipientEmail && !order.enRouteEmailSent) {
       await this.notificationQueue.add(
         'send-en-route-email',
         {
           orderId,
-          clientEmail: order.clientEmail,
+          clientEmail: recipientEmail,
           clientName: order.clientName,
           driverName: order.assignedDriver
             ? `${order.assignedDriver.firstName} ${order.assignedDriver.lastName}`
