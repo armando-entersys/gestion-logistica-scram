@@ -5,6 +5,47 @@ import Dexie, { Table } from 'dexie';
  * Arquitectura Offline-First para la PWA de choferes
  */
 
+/**
+ * APP VERSION CONTROL
+ * Incrementar este número fuerza limpieza de IndexedDB en todos los dispositivos
+ * Útil cuando hay cambios de esquema o para forzar resincronización
+ */
+const APP_DATA_VERSION = 2; // Incrementar para forzar limpieza de datos locales
+const VERSION_KEY = 'scram_app_data_version';
+
+/**
+ * Verifica la versión de datos y limpia si es necesario
+ * Llamar al inicio de la app
+ */
+export async function checkAndClearStaleData(): Promise<boolean> {
+  const storedVersion = localStorage.getItem(VERSION_KEY);
+  const currentVersion = storedVersion ? parseInt(storedVersion, 10) : 0;
+
+  if (currentVersion < APP_DATA_VERSION) {
+    console.log(`[DB] Versión de datos desactualizada (${currentVersion} -> ${APP_DATA_VERSION}). Limpiando datos locales...`);
+
+    try {
+      // Limpiar todas las tablas de IndexedDB
+      await db.orders.clear();
+      await db.pendingSync.clear();
+      await db.evidence.clear();
+      // NO limpiar session para que el usuario no tenga que re-loguearse
+
+      // Actualizar versión
+      localStorage.setItem(VERSION_KEY, APP_DATA_VERSION.toString());
+
+      console.log('[DB] Datos locales limpiados exitosamente');
+      return true; // Indica que se limpiaron datos
+    } catch (error) {
+      console.error('[DB] Error limpiando datos:', error);
+      // Aún así actualizar versión para no quedar en loop
+      localStorage.setItem(VERSION_KEY, APP_DATA_VERSION.toString());
+    }
+  }
+
+  return false; // No se limpiaron datos
+}
+
 // Types for local storage
 export interface LocalOrder {
   id: string;

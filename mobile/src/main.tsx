@@ -10,14 +10,22 @@ import '@fontsource/roboto/700.css';
 
 import App from './App';
 import { mobileTheme } from './theme/theme';
+import { checkAndClearStaleData } from './lib/db';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeProvider theme={mobileTheme}>
-      <CssBaseline />
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </ThemeProvider>
-  </React.StrictMode>
-);
+// Verificar versión de datos antes de iniciar la app
+checkAndClearStaleData().then((wasCleared) => {
+  if (wasCleared) {
+    console.log('[App] Datos locales limpiados por cambio de versión');
+  }
+
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ThemeProvider theme={mobileTheme}>
+        <CssBaseline />
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </ThemeProvider>
+    </React.StrictMode>
+  );
+});
