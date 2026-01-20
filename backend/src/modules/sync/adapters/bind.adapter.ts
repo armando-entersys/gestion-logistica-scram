@@ -599,10 +599,12 @@ export class BindAdapter {
   }
 
   /**
-   * Obtiene facturas de Bind ERP
+   * Obtiene facturas de Bind ERP con paginación
+   * Bind no respeta filtros $filter ni $orderby, por lo que necesitamos
+   * paginar para obtener todas las facturas
    */
   async fetchInvoices(): Promise<BindInvoice[]> {
-    this.logger.log('Fetching invoices from Bind ERP...');
+    this.logger.log('Fetching invoices from Bind ERP (with pagination)...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
       this.logger.warn('Bind API Key not configured');
@@ -610,21 +612,44 @@ export class BindAdapter {
     }
 
     try {
-      const response = await firstValueFrom(
-        this.httpService.get<BindApiResponse<BindInvoice>>(`${this.apiUrl}/api/Invoices`, {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          params: {
-            '$top': 100,
-          },
-        }),
-      );
+      const allInvoices: BindInvoice[] = [];
+      let skip = 0;
+      const pageSize = 100;
+      let hasMore = true;
+      const maxPages = 10; // Límite de seguridad: máximo 1000 facturas
+      let pageCount = 0;
 
-      const invoices = response.data.value || [];
-      this.logger.log(`Fetched ${invoices.length} invoices from Bind`);
-      return invoices;
+      while (hasMore && pageCount < maxPages) {
+        const response = await firstValueFrom(
+          this.httpService.get<BindApiResponse<BindInvoice>>(`${this.apiUrl}/api/Invoices`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            params: {
+              '$top': pageSize,
+              '$skip': skip,
+            },
+          }),
+        );
+
+        const pageInvoices = response.data.value || [];
+        allInvoices.push(...pageInvoices);
+
+        this.logger.log(`Fetched page ${pageCount + 1}: ${pageInvoices.length} invoices (total: ${allInvoices.length})`);
+
+        if (pageInvoices.length < pageSize) {
+          hasMore = false;
+        } else {
+          skip += pageSize;
+          pageCount++;
+          // Pausa entre páginas para evitar rate limiting
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      this.logger.log(`Fetched ${allInvoices.length} total invoices from Bind`);
+      return allInvoices;
     } catch (error) {
       this.logger.error('Failed to fetch invoices from Bind:', error.response?.data || error.message);
       throw error;
