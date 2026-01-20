@@ -224,6 +224,102 @@ export class BindWebhookService {
   }
 
   /**
+   * Importa facturas históricas desde Bind ERP
+   * Útil para cargar facturas que fueron creadas antes de la suscripción al webhook
+   *
+   * @param startDate Fecha inicio (inclusive) - formato YYYY-MM-DD
+   * @param endDate Fecha fin (inclusive) - formato YYYY-MM-DD
+   */
+  async importHistoricalInvoices(startDate: string, endDate: string): Promise<{
+    total: number;
+    imported: number;
+    skipped: number;
+    errors: number;
+    details: Array<{ invoiceNumber: string; status: string; message: string }>;
+  }> {
+    this.logger.log(`Importando facturas históricas desde ${startDate} hasta ${endDate}...`);
+
+    const results = {
+      total: 0,
+      imported: 0,
+      skipped: 0,
+      errors: 0,
+      details: [] as Array<{ invoiceNumber: string; status: string; message: string }>,
+    };
+
+    try {
+      // Obtener todas las facturas de Bind
+      const allInvoices = await this.bindAdapter.fetchInvoices();
+      this.logger.log(`Total de facturas en Bind: ${allInvoices.length}`);
+
+      // Filtrar por rango de fechas
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // Incluir todo el día final
+
+      const filteredInvoices = allInvoices.filter(invoice => {
+        const invoiceDate = new Date(invoice.InvoiceDate);
+        return invoiceDate >= start && invoiceDate <= end;
+      });
+
+      results.total = filteredInvoices.length;
+      this.logger.log(`Facturas en el rango de fechas: ${filteredInvoices.length}`);
+
+      // Procesar cada factura
+      for (const invoice of filteredInvoices) {
+        const invoiceNumber = `${invoice.Serie || 'FA'}${invoice.Number}`;
+
+        try {
+          const result = await this.processNewInvoice({
+            ID: invoice.ID,
+            Serie: invoice.Serie,
+            Number: invoice.Number,
+            Date: invoice.InvoiceDate,
+            ClientID: invoice.ClientID,
+            ClientName: invoice.ClientName,
+            RFC: invoice.RFC,
+            Total: invoice.Total,
+            Comments: '', // Las facturas de lista no tienen Comments
+          });
+
+          if (result.skipped) {
+            results.skipped++;
+            results.details.push({
+              invoiceNumber,
+              status: 'skipped',
+              message: result.message,
+            });
+          } else {
+            results.imported++;
+            results.details.push({
+              invoiceNumber,
+              status: 'imported',
+              message: result.message,
+            });
+          }
+
+          // Pausa entre facturas para evitar sobrecargar el sistema
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          results.errors++;
+          results.details.push({
+            invoiceNumber,
+            status: 'error',
+            message: error.message,
+          });
+          this.logger.error(`Error importando factura ${invoiceNumber}: ${error.message}`);
+        }
+      }
+
+      this.logger.log(`Importación completada: ${results.imported} importadas, ${results.skipped} omitidas, ${results.errors} errores`);
+      return results;
+    } catch (error) {
+      this.logger.error(`Error en importación masiva: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * Parsea una dirección de texto a objeto estructurado
    */
   private parseAddress(address: string): {

@@ -108,4 +108,45 @@ export class WebhooksController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * Endpoint para importar facturas históricas desde Bind
+   * Útil para cargar facturas creadas antes de la suscripción al webhook
+   *
+   * Ejemplo: POST /webhooks/bind/import?startDate=2025-12-01&endDate=2026-01-20
+   */
+  @Post('bind/import')
+  @ApiOperation({ summary: 'Importa facturas históricas desde Bind ERP' })
+  async importHistoricalInvoices(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    if (!startDate || !endDate) {
+      return {
+        success: false,
+        error: 'Se requieren parámetros startDate y endDate (formato YYYY-MM-DD)',
+      };
+    }
+
+    this.logger.log(`[Import] Iniciando importación de facturas desde ${startDate} hasta ${endDate}`);
+
+    try {
+      const result = await this.bindWebhookService.importHistoricalInvoices(startDate, endDate);
+
+      this.logger.log(
+        `[Import] Completado: ${result.imported} importadas, ${result.skipped} omitidas, ${result.errors} errores`,
+      );
+
+      return {
+        success: true,
+        ...result,
+      };
+    } catch (error) {
+      this.logger.error(`[Import] Error: ${error.message}`, error.stack);
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
 }
