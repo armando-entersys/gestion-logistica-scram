@@ -602,10 +602,12 @@ export class BindAdapter {
 
   /**
    * Obtiene facturas de Bind ERP con paginación
-   * Bind no respeta filtros $filter ni $orderby, por lo que necesitamos
-   * paginar para obtener todas las facturas
+   * Bind no respeta filtros $filter ni $orderby correctamente, por lo que necesitamos
+   * paginar para obtener todas las facturas y filtrar manualmente por fecha
+   *
+   * @param maxPages Número máximo de páginas a obtener (default 30 = 3000 facturas)
    */
-  async fetchInvoices(): Promise<BindInvoice[]> {
+  async fetchInvoices(maxPages: number = 30): Promise<BindInvoice[]> {
     this.logger.log('Fetching invoices from Bind ERP (with pagination)...');
 
     if (!this.apiKey || this.apiKey === 'PENDING_BIND_API_KEY') {
@@ -618,7 +620,6 @@ export class BindAdapter {
       let skip = 0;
       const pageSize = 100;
       let hasMore = true;
-      const maxPages = 10; // Límite de seguridad: máximo 1000 facturas
       let pageCount = 0;
 
       while (hasMore && pageCount < maxPages) {
