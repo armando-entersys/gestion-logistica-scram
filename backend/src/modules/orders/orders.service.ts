@@ -1489,6 +1489,7 @@ export class OrdersService {
     const order = this.orderRepository.create({
       bindId: invoiceData.bindId,
       bindInvoiceId: invoiceData.bindInvoiceId,
+      orderNumber: invoiceData.invoiceNumber, // Usar número de factura como número de orden
       invoiceNumber: invoiceData.invoiceNumber,
       orderSource: invoiceData.orderSource,
       carrierType: invoiceData.carrierType,
