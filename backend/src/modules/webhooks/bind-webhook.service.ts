@@ -258,7 +258,7 @@ export class BindWebhookService {
       end.setHours(23, 59, 59, 999); // Incluir todo el día final
 
       const filteredInvoices = allInvoices.filter(invoice => {
-        const invoiceDate = new Date(invoice.InvoiceDate);
+        const invoiceDate = new Date(invoice.Date);
         return invoiceDate >= start && invoiceDate <= end;
       });
 
@@ -274,7 +274,7 @@ export class BindWebhookService {
             ID: invoice.ID,
             Serie: invoice.Serie,
             Number: invoice.Number,
-            Date: invoice.InvoiceDate,
+            Date: invoice.Date,
             ClientID: invoice.ClientID,
             ClientName: invoice.ClientName,
             RFC: invoice.RFC,

@@ -88,12 +88,13 @@ export interface SyncClientDto {
 
 /**
  * Estructura de Factura según API de Bind ERP (GET /Invoices)
+ * Nota: El campo de fecha en Bind es "Date", no "InvoiceDate"
  */
 interface BindInvoice {
   ID: string;
   Number: number;
   Serie?: string;
-  InvoiceDate: string;
+  Date: string; // Fecha de la factura (ej: "2025-11-10T09:36:07.173")
   ClientID: string;
   ClientName: string;
   RFC?: string;
@@ -103,7 +104,8 @@ interface BindInvoice {
   OrderNumber?: number;
   EmployeeID?: string;
   EmployeeName?: string;
-  Status?: string;
+  Status?: number;
+  Comments?: string;
 }
 
 /**
@@ -711,7 +713,7 @@ export class BindAdapter {
         orphanInvoices.push({
           id: invoice.ID,
           invoiceNumber,
-          invoiceDate: invoice.InvoiceDate || '',
+          invoiceDate: invoice.Date || '',
           clientId: invoice.ClientID,
           clientName: this.cleanString(invoice.ClientName),
           employeeName: invoice.EmployeeName || 'No asignado',
