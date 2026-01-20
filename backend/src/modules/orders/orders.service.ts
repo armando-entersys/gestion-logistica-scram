@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 
 import { Order, ShipmentEvidence } from './entities';
 import { AddressChangeRequest, AddressChangeStatus } from './entities/address-change-request.entity';
-import { OrderStatus, PriorityLevel, EvidenceType, UserRole, CarrierType } from '@/common/enums';
+import { OrderStatus, PriorityLevel, EvidenceType, UserRole, CarrierType, OrderSource } from '@/common/enums';
 import {
   CreateOrderDto,
   DispatchRouteDto,
@@ -446,6 +446,7 @@ export class OrdersService {
   private getCarrierDisplayName(carrierType: CarrierType): string {
     const names: Record<CarrierType, string> = {
       [CarrierType.INTERNAL]: 'Chofer Interno',
+      [CarrierType.PROVIDER]: 'Proveedor Directo',
       [CarrierType.FEDEX]: 'FedEx',
       [CarrierType.DHL]: 'DHL',
       [CarrierType.ESTAFETA]: 'Estafeta',
@@ -1427,5 +1428,114 @@ export class OrdersService {
       },
       order: { routePosition: 'ASC' },
     });
+  }
+
+  // =============================================
+  // INVOICE-BASED ORDER CREATION (WebHooks)
+  // =============================================
+
+  /**
+   * Busca una orden por el ID de factura de Bind
+   * Usado para evitar duplicados cuando llegan webhooks
+   */
+  async findByBindInvoiceId(bindInvoiceId: string): Promise<Order | null> {
+    return this.orderRepository.findOne({
+      where: { bindInvoiceId },
+    });
+  }
+
+  /**
+   * Crea una orden de entrega desde una factura de Bind
+   * Usado por el webhook Add_Invoice
+   */
+  async createFromInvoice(invoiceData: {
+    bindId: string;
+    bindInvoiceId: string;
+    invoiceNumber: string;
+    orderSource: OrderSource;
+    carrierType: CarrierType;
+    carrierName?: string;
+    clientId?: string;
+    bindClientId?: string;
+    clientName: string;
+    clientEmail: string;
+    clientPhone?: string;
+    clientRfc?: string;
+    totalAmount: number;
+    warehouseName?: string;
+    employeeName?: string;
+    purchaseOrder?: string;
+    addressRaw: {
+      street: string;
+      number: string;
+      neighborhood: string;
+      postalCode: string;
+      city: string;
+      state: string;
+      reference?: string;
+      original?: string;
+    };
+    internalNotes?: string;
+  }): Promise<Order> {
+    this.logger.log(`Creando orden desde factura ${invoiceData.invoiceNumber}...`);
+
+    // Determinar estado inicial basado en tipo de carrier
+    // PROVIDER = solo seguimiento, no requiere ruta interna
+    const initialStatus =
+      invoiceData.carrierType === CarrierType.PROVIDER
+        ? OrderStatus.READY // Listo para que proveedor lo entregue
+        : OrderStatus.DRAFT; // Requiere planificación de ruta
+
+    const order = this.orderRepository.create({
+      bindId: invoiceData.bindId,
+      bindInvoiceId: invoiceData.bindInvoiceId,
+      invoiceNumber: invoiceData.invoiceNumber,
+      orderSource: invoiceData.orderSource,
+      carrierType: invoiceData.carrierType,
+      carrierName: invoiceData.carrierName || null,
+      clientId: invoiceData.clientId || null,
+      bindClientId: invoiceData.bindClientId || null,
+      clientName: invoiceData.clientName,
+      clientEmail: invoiceData.clientEmail,
+      clientPhone: invoiceData.clientPhone || null,
+      clientRfc: invoiceData.clientRfc || null,
+      totalAmount: invoiceData.totalAmount,
+      warehouseName: invoiceData.warehouseName || null,
+      employeeName: invoiceData.employeeName || null,
+      purchaseOrder: invoiceData.purchaseOrder || null,
+      addressRaw: invoiceData.addressRaw,
+      status: initialStatus,
+      priorityLevel: PriorityLevel.NORMAL,
+      internalNotes: invoiceData.internalNotes || null,
+    });
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    this.logger.log(
+      `Orden creada: ${savedOrder.id} | Factura: ${invoiceData.invoiceNumber} | Carrier: ${invoiceData.carrierType}`,
+    );
+
+    // Intentar geocodificar la dirección
+    if (invoiceData.addressRaw.street || invoiceData.addressRaw.original) {
+      try {
+        const addressString = invoiceData.addressRaw.original ||
+          `${invoiceData.addressRaw.street} ${invoiceData.addressRaw.number}, ${invoiceData.addressRaw.neighborhood}, ${invoiceData.addressRaw.city}, ${invoiceData.addressRaw.state} ${invoiceData.addressRaw.postalCode}`;
+
+        const geoResult = await this.geocodingService.geocodeAddress({ street: addressString });
+        if (geoResult) {
+          await this.orderRepository.update(savedOrder.id, {
+            latitude: geoResult.latitude,
+            longitude: geoResult.longitude,
+            addressGeo: () =>
+              `ST_SetSRID(ST_MakePoint(${geoResult.longitude}, ${geoResult.latitude}), 4326)`,
+          });
+          this.logger.log(`Orden ${savedOrder.id} geocodificada: ${geoResult.latitude}, ${geoResult.longitude}`);
+        }
+      } catch (geoError) {
+        this.logger.warn(`Error geocodificando orden ${savedOrder.id}: ${geoError.message}`);
+      }
+    }
+
+    return savedOrder;
   }
 }

@@ -9,7 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
+import { OrderStatus, PriorityLevel, CarrierType, OrderSource } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
 import { Client } from '@/modules/clients/entities/client.entity';
 import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
@@ -27,6 +27,22 @@ export class Order {
 
   @Column({ name: 'bind_id', type: 'varchar', length: 50, unique: true })
   bindId: string;
+
+  @Column({ name: 'bind_invoice_id', type: 'varchar', length: 50, nullable: true, comment: 'UUID de la factura en Bind (si origen es factura)' })
+  @Index('idx_orders_bind_invoice_id')
+  bindInvoiceId: string | null;
+
+  @Column({ name: 'invoice_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de factura Bind (ej: FA15821)' })
+  invoiceNumber: string | null;
+
+  @Column({
+    name: 'order_source',
+    type: 'varchar',
+    length: 20,
+    default: OrderSource.BIND_ORDER,
+    comment: 'Origen de la orden: pedido, factura o manual',
+  })
+  orderSource: OrderSource;
 
   @Column({ name: 'order_number', type: 'varchar', length: 50, nullable: true, comment: 'Número de pedido Bind (ej: PE2945)' })
   orderNumber: string | null;

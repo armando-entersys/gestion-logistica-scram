@@ -727,4 +727,44 @@ export class BindAdapter {
       throw error;
     }
   }
+
+  /**
+   * Obtiene el detalle completo de una factura por su ID
+   */
+  async getInvoiceDetail(invoiceId: string): Promise<any | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.apiUrl}/api/Invoices/${invoiceId}`, {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.warn(`Failed to fetch invoice detail ${invoiceId}: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Busca una factura por su número
+   */
+  async findInvoiceByNumber(invoiceNumber: number): Promise<any | null> {
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(`${this.apiUrl}/api/Invoices/${invoiceNumber}`, {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.warn(`Invoice ${invoiceNumber} not found: ${error.message}`);
+      return null;
+    }
+  }
 }

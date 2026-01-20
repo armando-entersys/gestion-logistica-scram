@@ -20,6 +20,10 @@ export class Client {
   @Column({ name: 'client_number', type: 'varchar', length: 50, unique: true })
   clientNumber: string;
 
+  @Column({ name: 'bind_id', type: 'varchar', length: 50, nullable: true, comment: 'UUID del cliente en Bind ERP' })
+  @Index('idx_clients_bind_id')
+  bindId: string | null;
+
   @Column({ type: 'varchar', length: 200 })
   name: string;
 

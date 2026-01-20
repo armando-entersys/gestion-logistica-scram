@@ -15,6 +15,7 @@ import { HealthModule } from './modules/health/health.module';
 import { ClientAddressesModule } from './modules/client-addresses/client-addresses.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { PushSubscriptionsModule } from './modules/push-subscriptions/push-subscriptions.module';
+import { WebhooksModule } from './modules/webhooks/webhooks.module';
 
 // Configuration
 import configuration from './config/configuration';
@@ -77,6 +78,7 @@ import { typeOrmConfig } from './config/typeorm.config';
     ClientAddressesModule,
     ClientsModule,
     PushSubscriptionsModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

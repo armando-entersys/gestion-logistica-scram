@@ -178,6 +178,7 @@ export class OrdersController {
   private getCarrierLabel(type: CarrierType): string {
     const labels: Record<CarrierType, string> = {
       [CarrierType.INTERNAL]: 'Chofer Interno',
+      [CarrierType.PROVIDER]: 'Proveedor Directo',
       [CarrierType.FEDEX]: 'FedEx',
       [CarrierType.DHL]: 'DHL',
       [CarrierType.ESTAFETA]: 'Estafeta',

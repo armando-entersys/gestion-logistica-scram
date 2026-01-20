@@ -222,6 +222,53 @@ export class ClientsService {
   }
 
   /**
+   * Find client by Bind ID (UUID)
+   */
+  async findByBindId(bindId: string): Promise<Client | null> {
+    return this.clientRepo.findOne({
+      where: { bindId },
+    });
+  }
+
+  /**
+   * Create a client from Bind ERP data (used by webhooks)
+   */
+  async createFromBind(data: {
+    bindId: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    rfc?: string;
+    city?: string;
+    state?: string;
+  }): Promise<Client> {
+    // Generate a unique client number if not provided
+    const clientNumber = `BIND-${data.bindId.substring(0, 8).toUpperCase()}`;
+
+    // Check if client already exists by bindId
+    const existing = await this.findByBindId(data.bindId);
+    if (existing) {
+      return existing;
+    }
+
+    const client = this.clientRepo.create({
+      bindId: data.bindId,
+      clientNumber,
+      name: data.name,
+      email: data.email || null,
+      phone: data.phone || null,
+      rfc: data.rfc || null,
+      bindSource: 'SYNC',
+      totalOrders: 0,
+      totalAmount: 0,
+    });
+
+    const saved = await this.clientRepo.save(client);
+    this.logger.log(`Created client from Bind webhook: ${clientNumber} - ${data.name}`);
+    return saved;
+  }
+
+  /**
    * Sync clients from Bind ERP with their addresses
    */
   async syncClients(clients: SyncClientDto[]): Promise<{ synced: number; addresses: number }> {
