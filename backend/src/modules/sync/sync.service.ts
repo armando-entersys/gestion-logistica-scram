@@ -1,10 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 
-import { BindAdapter, OrphanInvoiceDto } from './adapters/bind.adapter';
-import { DismissedInvoice } from './entities/dismissed-invoice.entity';
+import { BindAdapter } from './adapters/bind.adapter';
 import { OrdersService } from '../orders/orders.service';
 import { ClientsService } from '../clients/clients.service';
 import { ClientAddressesService } from '../client-addresses/client-addresses.service';
@@ -17,8 +14,6 @@ export class SyncService {
     private readonly bindAdapter: BindAdapter,
     private readonly ordersService: OrdersService,
     private readonly configService: ConfigService,
-    @InjectRepository(DismissedInvoice)
-    private readonly dismissedInvoiceRepository: Repository<DismissedInvoice>,
     @Inject(forwardRef(() => ClientsService))
     private readonly clientsService: ClientsService,
     private readonly clientAddressesService: ClientAddressesService,
@@ -148,83 +143,6 @@ export class SyncService {
       success: true,
       ...result,
     };
-  }
-
-  /**
-   * Obtiene facturas sin pedido asociado (huérfanas)
-   */
-  async getOrphanInvoices(): Promise<OrphanInvoiceDto[]> {
-    this.logger.log('Getting orphan invoices...');
-
-    try {
-      // Obtener IDs de facturas descartadas
-      const dismissedInvoices = await this.dismissedInvoiceRepository.find({
-        select: ['bindInvoiceId'],
-      });
-      const dismissedIds = dismissedInvoices.map(d => d.bindInvoiceId);
-
-      // Obtener facturas huérfanas de Bind
-      const orphanInvoices = await this.bindAdapter.getOrphanInvoices(dismissedIds);
-
-      return orphanInvoices;
-    } catch (error) {
-      this.logger.error('Failed to get orphan invoices:', error);
-      throw new ServiceUnavailableException({
-        message: 'Failed to fetch orphan invoices from Bind',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  }
-
-  /**
-   * Descarta una factura (no la mostrará más)
-   */
-  async dismissInvoice(
-    bindInvoiceId: string,
-    invoiceNumber: string,
-    clientName: string,
-    total: number,
-    reason: string | null,
-    dismissedById: string,
-  ): Promise<DismissedInvoice> {
-    this.logger.log(`Dismissing invoice ${bindInvoiceId}...`);
-
-    // Verificar si ya existe
-    const existing = await this.dismissedInvoiceRepository.findOne({
-      where: { bindInvoiceId },
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    const dismissedInvoice = this.dismissedInvoiceRepository.create({
-      bindInvoiceId,
-      invoiceNumber,
-      clientName,
-      total,
-      reason,
-      dismissedById,
-    });
-
-    return this.dismissedInvoiceRepository.save(dismissedInvoice);
-  }
-
-  /**
-   * Obtiene lista de facturas descartadas
-   */
-  async getDismissedInvoices(): Promise<DismissedInvoice[]> {
-    return this.dismissedInvoiceRepository.find({
-      relations: ['dismissedBy'],
-      order: { dismissedAt: 'DESC' },
-    });
-  }
-
-  /**
-   * Restaura una factura descartada (vuelve a mostrarla)
-   */
-  async restoreInvoice(bindInvoiceId: string): Promise<void> {
-    await this.dismissedInvoiceRepository.delete({ bindInvoiceId });
   }
 
   /**

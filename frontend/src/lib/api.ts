@@ -194,18 +194,6 @@ export const syncApi = {
   syncExcel: (orders: any[]) =>
     api.post('/sync/excel', { orders }),
 
-  getOrphanInvoices: () =>
-    api.get('/sync/orphan-invoices'),
-
-  dismissInvoice: (bindInvoiceId: string, invoiceNumber: string, clientName: string, total: number, reason?: string) =>
-    api.post('/sync/dismiss-invoice', { bindInvoiceId, invoiceNumber, clientName, total, reason }),
-
-  getDismissedInvoices: () =>
-    api.get('/sync/dismissed-invoices'),
-
-  restoreInvoice: (bindInvoiceId: string) =>
-    api.delete(`/sync/dismissed-invoice/${bindInvoiceId}`),
-
   syncClientAddresses: (clientBindId: string, clientNumber: string) =>
     api.post('/sync/client-addresses', { clientBindId, clientNumber }),
 };

@@ -55,13 +55,11 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import NotesIcon from '@mui/icons-material/Notes';
-import ReceiptIcon from '@mui/icons-material/Receipt';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
-import SelectAllIcon from '@mui/icons-material/SelectAll';
 
 import { ordersApi, syncApi, clientAddressesApi } from '@/lib/api';
 import EditIcon from '@mui/icons-material/Edit';
@@ -118,17 +116,6 @@ interface Order {
   updatedAt?: string;
 }
 
-interface OrphanInvoice {
-  id: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-  clientId: string;
-  clientName: string;
-  employeeName: string;
-  total: number;
-  hasOrder: boolean;
-}
-
 interface ClientAddress {
   id: string;
   clientNumber: string;
@@ -160,16 +147,6 @@ export default function ComprasPage() {
     message: '',
     severity: 'success',
   });
-  const [orphanPage, setOrphanPage] = useState(1);
-  const [dismissDialog, setDismissDialog] = useState<{ open: boolean; invoice: OrphanInvoice | null; reason: string }>({
-    open: false,
-    invoice: null,
-    reason: '',
-  });
-  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
-  const [bulkDismissOpen, setBulkDismissOpen] = useState(false);
-  const [bulkDismissReason, setBulkDismissReason] = useState('');
-
   // Client addresses state
   const [clientAddresses, setClientAddresses] = useState<ClientAddress[]>([]);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -210,15 +187,6 @@ export default function ComprasPage() {
       return response.data.data || response.data;
     },
   });
-
-  const { data: orphanInvoices, isLoading: isLoadingOrphans } = useQuery({
-    queryKey: ['orphan-invoices'],
-    queryFn: async () => {
-      const response = await syncApi.getOrphanInvoices();
-      return response.data as OrphanInvoice[];
-    },
-  });
-
 
   // Fetch client addresses when detail order is opened
   useEffect(() => {
@@ -334,73 +302,6 @@ export default function ComprasPage() {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error al revertir pedidos',
-        severity: 'error',
-      });
-    },
-  });
-
-  const dismissInvoiceMutation = useMutation({
-    mutationFn: async ({ invoice, reason }: { invoice: OrphanInvoice; reason: string }) => {
-      return syncApi.dismissInvoice(
-        invoice.id,
-        invoice.invoiceNumber,
-        invoice.clientName,
-        invoice.total,
-        reason || undefined
-      );
-    },
-    onSuccess: () => {
-      setSnackbar({
-        open: true,
-        message: 'Factura descartada correctamente',
-        severity: 'success',
-      });
-      setDismissDialog({ open: false, invoice: null, reason: '' });
-      queryClient.invalidateQueries({ queryKey: ['orphan-invoices'] });
-    },
-    onError: (error: any) => {
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.message || 'Error al descartar factura',
-        severity: 'error',
-      });
-    },
-  });
-
-  const bulkDismissMutation = useMutation({
-    mutationFn: async ({ invoiceIds, reason }: { invoiceIds: string[]; reason: string }) => {
-      // Dismiss each invoice in sequence
-      const results = [];
-      for (const id of invoiceIds) {
-        const invoice = orphanInvoices?.find((inv: OrphanInvoice) => inv.id === id);
-        if (invoice) {
-          const result = await syncApi.dismissInvoice(
-            invoice.id,
-            invoice.invoiceNumber,
-            invoice.clientName,
-            invoice.total,
-            reason || undefined
-          );
-          results.push(result);
-        }
-      }
-      return { dismissed: results.length };
-    },
-    onSuccess: (data) => {
-      setSnackbar({
-        open: true,
-        message: `${data.dismissed} facturas descartadas correctamente`,
-        severity: 'success',
-      });
-      setBulkDismissOpen(false);
-      setBulkDismissReason('');
-      setSelectedInvoiceIds([]);
-      queryClient.invalidateQueries({ queryKey: ['orphan-invoices'] });
-    },
-    onError: (error: any) => {
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.message || 'Error al descartar facturas',
         severity: 'error',
       });
     },
@@ -574,21 +475,6 @@ export default function ComprasPage() {
     }
   };
 
-  const toggleInvoiceSelection = (id: string) => {
-    setSelectedInvoiceIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllInvoices = () => {
-    if (!orphanInvoices) return;
-    if (selectedInvoiceIds.length === orphanInvoices.length) {
-      setSelectedInvoiceIds([]);
-    } else {
-      setSelectedInvoiceIds(orphanInvoices.map((inv: OrphanInvoice) => inv.id));
-    }
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -690,15 +576,7 @@ export default function ComprasPage() {
   useEffect(() => {
     setDraftPage(1);
     setReadyPage(1);
-    setOrphanPage(1);
   }, [search]);
-
-  // Pagination for orphan invoices
-  const orphanTotalPages = Math.ceil((orphanInvoices?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedOrphanInvoices = (orphanInvoices || []).slice(
-    (orphanPage - 1) * ITEMS_PER_PAGE,
-    orphanPage * ITEMS_PER_PAGE
-  );
 
   // Helper to parse dates without timezone shift
   // Date-only strings like "2026-01-16" are interpreted as UTC by JavaScript
@@ -1020,32 +898,6 @@ export default function ComprasPage() {
             sx={{
               flex: 1,
               cursor: 'pointer',
-              border: activeTab === 2 ? 2 : 0,
-              borderColor: 'error.main',
-              transition: 'all 0.2s'
-            }}
-            onClick={() => setActiveTab(2)}
-          >
-            <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: 'error.light', width: 40, height: 40 }}>
-                  <ReceiptIcon color="error" fontSize="small" />
-                </Avatar>
-                <Box>
-                  <Typography variant="h5" fontWeight={700}>
-                    {orphanInvoices?.length || 0}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Facturas sin Pedido
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-          <Card
-            sx={{
-              flex: 1,
-              cursor: 'pointer',
               transition: 'all 0.2s',
               '&:hover': { bgcolor: 'secondary.50' }
             }}
@@ -1092,7 +944,6 @@ export default function ComprasPage() {
           <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
             <Tab label={`Pendientes (${draftOrders.length})`} />
             <Tab label={`Liberados (${readyOrders.length})`} />
-            <Tab label={`Facturas sin Pedido (${orphanInvoices?.length || 0})`} />
           </Tabs>
         </Paper>
       </Box>
@@ -1184,144 +1035,6 @@ export default function ComprasPage() {
                       count={readyTotalPages}
                       page={readyPage}
                       onChange={(_, p) => setReadyPage(p)}
-                      size="small"
-                      color="primary"
-                    />
-                  </Box>
-                )}
-              </>
-            )}
-          </Paper>
-        )}
-
-        {activeTab === 2 && (
-          <Paper sx={{ p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-              <Box>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  Facturas sin Pedido Asociado
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Reportar con asesores para que creen el pedido, o descartar si no requiere envio
-                </Typography>
-              </Box>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<SelectAllIcon />}
-                  onClick={handleSelectAllInvoices}
-                  disabled={!orphanInvoices?.length}
-                >
-                  {selectedInvoiceIds.length === (orphanInvoices?.length || 0) && orphanInvoices?.length
-                    ? `Deseleccionar (${selectedInvoiceIds.length})`
-                    : `Seleccionar Todas (${orphanInvoices?.length || 0})`}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  size="small"
-                  startIcon={bulkDismissMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
-                  onClick={() => setBulkDismissOpen(true)}
-                  disabled={selectedInvoiceIds.length === 0 || bulkDismissMutation.isPending}
-                >
-                  Descartar ({selectedInvoiceIds.length})
-                </Button>
-              </Stack>
-            </Stack>
-
-            {isLoadingOrphans ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress />
-              </Box>
-            ) : paginatedOrphanInvoices.length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 8 }}>
-                <CheckCircleIcon sx={{ fontSize: 64, color: 'success.main', mb: 2 }} />
-                <Typography color="text.secondary">
-                  No hay facturas sin pedido asociado
-                </Typography>
-              </Box>
-            ) : (
-              <>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: 'grey.50' }}>
-                        <TableCell padding="checkbox" sx={{ width: 40 }}></TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Factura</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Fecha</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Cliente</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Asesor/Vendedor</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>Total</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 600, width: 80 }}>Acción</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {paginatedOrphanInvoices.map((invoice: OrphanInvoice) => (
-                        <TableRow
-                          key={invoice.id}
-                          hover
-                          selected={selectedInvoiceIds.includes(invoice.id)}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell padding="checkbox" onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Checkbox checked={selectedInvoiceIds.includes(invoice.id)} size="small" />
-                          </TableCell>
-                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                              <ErrorOutlineIcon color="error" fontSize="small" />
-                              <Typography variant="body2" fontWeight={600} color="error.main">
-                                {invoice.invoiceNumber}
-                              </Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatDateShort(invoice.invoiceDate)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
-                              {invoice.clientName}
-                            </Typography>
-                          </TableCell>
-                          <TableCell onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Chip
-                              size="small"
-                              icon={<PersonIcon />}
-                              label={invoice.employeeName}
-                              variant="outlined"
-                              color="primary"
-                              sx={{ height: 24 }}
-                            />
-                          </TableCell>
-                          <TableCell align="right" onClick={() => toggleInvoiceSelection(invoice.id)}>
-                            <Typography variant="body2" fontWeight={500}>
-                              ${invoice.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 }) || '0.00'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            <Tooltip title="Descartar (No requiere pedido)">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => setDismissDialog({ open: true, invoice, reason: '' })}
-                              >
-                                <DeleteOutlineIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                {orphanTotalPages > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-                    <Pagination
-                      count={orphanTotalPages}
-                      page={orphanPage}
-                      onChange={(_, p) => setOrphanPage(p)}
                       size="small"
                       color="primary"
                     />
@@ -1676,75 +1389,6 @@ export default function ComprasPage() {
         )}
       </Dialog>
 
-      {/* Dismiss Invoice Dialog */}
-      <Dialog
-        open={dismissDialog.open}
-        onClose={() => setDismissDialog({ open: false, invoice: null, reason: '' })}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <DeleteOutlineIcon color="error" />
-            <Typography variant="h6">Descartar Factura</Typography>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          {dismissDialog.invoice && (
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Esta factura se marcara como descartada y no aparecera en la lista de facturas sin pedido.
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 2, mt: 2, bgcolor: 'grey.50' }}>
-                <Typography variant="subtitle2" fontWeight={600}>
-                  {dismissDialog.invoice.invoiceNumber}
-                </Typography>
-                <Typography variant="body2">
-                  {dismissDialog.invoice.clientName}
-                </Typography>
-                <Typography variant="body2" color="primary.main" fontWeight={500}>
-                  ${dismissDialog.invoice.total?.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
-                </Typography>
-              </Paper>
-              <TextField
-                fullWidth
-                multiline
-                rows={2}
-                label="Motivo del descarte (opcional)"
-                placeholder="Ej: Servicio sin materiales, ya se creo el pedido, etc."
-                value={dismissDialog.reason}
-                onChange={(e) => setDismissDialog({ ...dismissDialog, reason: e.target.value })}
-                sx={{ mt: 2 }}
-              />
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setDismissDialog({ open: false, invoice: null, reason: '' })}
-            variant="outlined"
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => {
-              if (dismissDialog.invoice) {
-                dismissInvoiceMutation.mutate({
-                  invoice: dismissDialog.invoice,
-                  reason: dismissDialog.reason,
-                });
-              }
-            }}
-            disabled={dismissInvoiceMutation.isPending}
-            startIcon={dismissInvoiceMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
-          >
-            Descartar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Delete Confirmation Dialog */}
       <Dialog
         open={deleteConfirmOpen}
@@ -1779,51 +1423,6 @@ export default function ComprasPage() {
             startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
           >
             Eliminar {selectedDraftIds.length} Pedido{selectedDraftIds.length !== 1 ? 's' : ''}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Bulk Dismiss Invoices Dialog */}
-      <Dialog
-        open={bulkDismissOpen}
-        onClose={() => setBulkDismissOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
-          <DeleteOutlineIcon />
-          Descartar Facturas en Bloque
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            Esta accion descartara <strong>{selectedInvoiceIds.length}</strong> factura{selectedInvoiceIds.length !== 1 ? 's' : ''} seleccionada{selectedInvoiceIds.length !== 1 ? 's' : ''}.
-          </Typography>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            Las facturas descartadas no apareceran en la lista de facturas sin pedido.
-          </Alert>
-          <TextField
-            fullWidth
-            multiline
-            rows={2}
-            label="Motivo del descarte (opcional)"
-            placeholder="Ej: Servicios sin materiales, pedidos ya creados, etc."
-            value={bulkDismissReason}
-            onChange={(e) => setBulkDismissReason(e.target.value)}
-            sx={{ mt: 2 }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setBulkDismissOpen(false)}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => bulkDismissMutation.mutate({ invoiceIds: selectedInvoiceIds, reason: bulkDismissReason })}
-            disabled={bulkDismissMutation.isPending}
-            startIcon={bulkDismissMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
-          >
-            Descartar {selectedInvoiceIds.length} Factura{selectedInvoiceIds.length !== 1 ? 's' : ''}
           </Button>
         </DialogActions>
       </Dialog>
