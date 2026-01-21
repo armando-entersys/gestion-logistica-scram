@@ -171,6 +171,8 @@ export default function ComprasPage() {
   const [syncProgress, setSyncProgress] = useState<number>(0);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed'>('idle');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  // Sync date - default to today
+  const [syncDate, setSyncDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
   // Check auth
   useEffect(() => {
@@ -217,7 +219,7 @@ export default function ComprasPage() {
       setSyncStatus('syncing');
       setSyncProgress(0);
 
-      const response = await syncApi.syncBind();
+      const response = await syncApi.syncBind(syncDate);
       const { jobId } = response.data;
 
       // 2. Polling hasta que termine
@@ -442,6 +444,39 @@ export default function ComprasPage() {
   });
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  // State for editing promised date
+  const [editingPromisedDate, setEditingPromisedDate] = useState(false);
+  const [newPromisedDate, setNewPromisedDate] = useState<string>('');
+
+  const updatePromisedDateMutation = useMutation({
+    mutationFn: async ({ orderId, promisedDate }: { orderId: string; promisedDate: string }) => {
+      return ordersApi.updatePromisedDate(orderId, promisedDate);
+    },
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: 'Fecha de pedido actualizada',
+        severity: 'success',
+      });
+      setEditingPromisedDate(false);
+      queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
+      // Update local detailOrder
+      if (detailOrder && newPromisedDate) {
+        setDetailOrder({
+          ...detailOrder,
+          promisedDate: newPromisedDate,
+        });
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al actualizar fecha',
+        severity: 'error',
+      });
+    },
+  });
 
   const deleteDraftMutation = useMutation({
     mutationFn: async () => {
@@ -813,6 +848,15 @@ export default function ComprasPage() {
                 </Button>
               </span>
             </Tooltip>
+            <TextField
+              type="date"
+              size="small"
+              value={syncDate}
+              onChange={(e) => setSyncDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ width: 150 }}
+              disabled={syncStatus === 'syncing'}
+            />
             <Button
               variant="contained"
               color={syncStatus === 'completed' ? 'success' : syncStatus === 'failed' ? 'error' : 'secondary'}
@@ -825,7 +869,7 @@ export default function ComprasPage() {
                 ? `Sincronizando... ${syncProgress}%`
                 : syncStatus === 'completed'
                 ? 'Completado!'
-                : 'Sincronizar Bind'}
+                : 'Sincronizar'}
             </Button>
             <Button
               variant="outlined"
@@ -1300,18 +1344,72 @@ export default function ComprasPage() {
 
                 <Grid item xs={6}>
                   <Paper variant="outlined" sx={{ p: 2 }}>
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-                      <CalendarTodayIcon color="primary" fontSize="small" />
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        Fechas
-                      </Typography>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <CalendarTodayIcon color="primary" fontSize="small" />
+                        <Typography variant="subtitle2" fontWeight={600}>
+                          Fechas
+                        </Typography>
+                      </Stack>
+                      {(detailOrder.status === 'DRAFT' || detailOrder.status === 'READY') && !editingPromisedDate && (
+                        <Tooltip title="Editar fecha de pedido">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              setEditingPromisedDate(true);
+                              setNewPromisedDate(detailOrder.promisedDate ? detailOrder.promisedDate.split('T')[0] : '');
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Stack>
                     <Typography variant="caption" color="text.secondary" display="block">
                       Creado: {formatDate(detailOrder.createdAt)}
                     </Typography>
-                    {detailOrder.promisedDate && (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        Prometido: {new Date(detailOrder.promisedDate).toLocaleDateString('es-MX')}
+                    {editingPromisedDate ? (
+                      <Box sx={{ mt: 1 }}>
+                        <TextField
+                          type="date"
+                          size="small"
+                          fullWidth
+                          label="F. Pedido"
+                          value={newPromisedDate}
+                          onChange={(e) => setNewPromisedDate(e.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ mb: 1 }}
+                        />
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={!newPromisedDate || updatePromisedDateMutation.isPending}
+                            onClick={() => {
+                              if (detailOrder && newPromisedDate) {
+                                updatePromisedDateMutation.mutate({
+                                  orderId: detailOrder.id,
+                                  promisedDate: newPromisedDate,
+                                });
+                              }
+                            }}
+                            startIcon={updatePromisedDateMutation.isPending ? <CircularProgress size={14} /> : null}
+                          >
+                            Guardar
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setEditingPromisedDate(false)}
+                          >
+                            Cancelar
+                          </Button>
+                        </Stack>
+                      </Box>
+                    ) : (
+                      <Typography variant="caption" color={detailOrder.promisedDate ? 'primary.main' : 'text.disabled'} display="block" fontWeight={500}>
+                        F. Pedido: {detailOrder.promisedDate ? new Date(detailOrder.promisedDate).toLocaleDateString('es-MX') : 'Sin fecha'}
                       </Typography>
                     )}
                   </Paper>

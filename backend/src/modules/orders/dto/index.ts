@@ -1,7 +1,7 @@
 import { IsString, IsOptional, IsNumber, IsEnum, IsBoolean, IsArray, IsUUID, ValidateNested, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { OrderStatus, PriorityLevel, CarrierType } from '@/common/enums';
+import { OrderStatus, PriorityLevel, CarrierType, OrderSource } from '@/common/enums';
 
 export class AddressDto {
   @ApiPropertyOptional()
@@ -46,9 +46,24 @@ export class AddressDto {
 }
 
 export class CreateOrderDto {
-  @ApiProperty({ description: 'ID único del ERP Bind (UUID del pedido)' })
+  @ApiProperty({ description: 'ID único del ERP Bind (UUID del pedido o factura)' })
   @IsString()
   bindId: string;
+
+  @ApiPropertyOptional({ description: 'UUID de la factura en Bind (si origen es factura)' })
+  @IsOptional()
+  @IsString()
+  bindInvoiceId?: string;
+
+  @ApiPropertyOptional({ description: 'Número de factura Bind (ej: FA15821)' })
+  @IsOptional()
+  @IsString()
+  invoiceNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Origen de la orden: BIND_ORDER, BIND_INVOICE, MANUAL', enum: OrderSource })
+  @IsOptional()
+  @IsEnum(OrderSource)
+  orderSource?: OrderSource;
 
   @ApiPropertyOptional({ description: 'Número de pedido visible (ej: PE2945)' })
   @IsOptional()
@@ -283,6 +298,16 @@ export class ConfirmPickupDto {
   @IsOptional()
   @IsString()
   issueNotes?: string;
+}
+
+export class UpdatePromisedDateDto {
+  @ApiProperty({ description: 'UUID del pedido' })
+  @IsUUID()
+  orderId: string;
+
+  @ApiProperty({ description: 'Nueva fecha de pedido/emisión (YYYY-MM-DD)' })
+  @IsString()
+  promisedDate: string;
 }
 
 export class OrderFilterDto {

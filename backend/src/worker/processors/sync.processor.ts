@@ -499,6 +499,8 @@ export class SyncProcessor extends WorkerHost {
     this.logger.log(`Found ${allInvoices.length} invoices for ${dateStr}`);
 
     // Fetch details for each invoice to get Address
+    // IMPORTANT: The list endpoint returns 'Date' but the detail endpoint returns 'CreationDate'
+    // We need to preserve the Date from the list and merge with detail data
     const invoicesWithDetails: BindInvoice[] = [];
     for (let i = 0; i < allInvoices.length; i++) {
       const inv = allInvoices[i];
@@ -511,7 +513,14 @@ export class SyncProcessor extends WorkerHost {
             },
           }),
         );
-        invoicesWithDetails.push(response.data);
+        // Merge detail data with list data, preserving Date from list
+        // Detail endpoint uses CreationDate instead of Date
+        const detailData = response.data;
+        const mergedInvoice: BindInvoice = {
+          ...detailData,
+          Date: inv.Date || (detailData as any).CreationDate || detailData.Date,
+        };
+        invoicesWithDetails.push(mergedInvoice);
 
         if ((i + 1) % 10 === 0) {
           this.logger.log(`Fetched details for ${i + 1}/${allInvoices.length} invoices`);

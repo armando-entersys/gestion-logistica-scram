@@ -32,6 +32,7 @@ import {
   AssignCarrierDto,
   UpdateLocationDto,
   UpdateAddressDto,
+  UpdatePromisedDateDto,
   SubmitCsatDto,
   OrderFilterDto,
   RequestAddressChangeDto,
@@ -326,6 +327,18 @@ export class OrdersController {
   @ApiOperation({ summary: 'Update order address and re-geocode' })
   updateAddress(@Body() dto: UpdateAddressDto) {
     return this.ordersService.updateAddress(dto);
+  }
+
+  /**
+   * Update order promised date (F. Pedido / Fecha de emisión)
+   */
+  @Patch('promised-date')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update order promised date' })
+  updatePromisedDate(@Body() dto: UpdatePromisedDateDto) {
+    return this.ordersService.updatePromisedDate(dto);
   }
 
   // =============================================

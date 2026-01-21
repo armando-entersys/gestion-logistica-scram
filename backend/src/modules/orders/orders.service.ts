@@ -734,6 +734,30 @@ export class OrdersService {
   }
 
   /**
+   * Actualizar fecha de pedido (promisedDate / F. Pedido)
+   */
+  async updatePromisedDate(dto: { orderId: string; promisedDate: string }): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: dto.orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Pedido ${dto.orderId} no encontrado`);
+    }
+
+    // Parse date string (YYYY-MM-DD) to Date object
+    const dateValue = new Date(dto.promisedDate + 'T12:00:00');
+
+    await this.orderRepository.update(dto.orderId, {
+      promisedDate: dateValue,
+    });
+
+    this.logger.log(`Updated promisedDate for order ${dto.orderId} to ${dto.promisedDate}`);
+
+    return this.orderRepository.findOne({ where: { id: dto.orderId } }) as Promise<Order>;
+  }
+
+  /**
    * RF-09: Portal de Visibilidad - Agregar nota interna
    */
   async addInternalNote(orderId: string, note: string, user: any): Promise<Order> {

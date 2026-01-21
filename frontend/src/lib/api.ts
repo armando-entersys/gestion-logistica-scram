@@ -123,6 +123,10 @@ export const ordersApi = {
   // Return order (driver)
   returnOrder: (orderId: string, reason: string, notes?: string) =>
     api.post('/orders/return', { orderId, reason, notes }),
+
+  // Update promised date (F. Pedido)
+  updatePromisedDate: (orderId: string, promisedDate: string) =>
+    api.patch('/orders/promised-date', { orderId, promisedDate }),
 };
 
 // Users API
@@ -137,8 +141,9 @@ export const usersApi = {
 // Sync API
 export const syncApi = {
   // Inicia sync asíncrono, retorna jobId
-  syncBind: () =>
-    api.post<{ success: boolean; jobId: string; message: string }>('/sync/bind'),
+  // date: fecha de facturas a sincronizar (YYYY-MM-DD), si no se especifica usa hoy
+  syncBind: (date?: string) =>
+    api.post<{ success: boolean; jobId: string; date: string; message: string }>('/sync/bind', { date }),
 
   // Consulta estado del job
   getSyncStatus: (jobId: string) =>
