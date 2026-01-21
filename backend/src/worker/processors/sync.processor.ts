@@ -10,7 +10,7 @@ import { firstValueFrom } from 'rxjs';
 import { Order } from '@/modules/orders/entities/order.entity';
 import { Client } from '@/modules/clients/entities/client.entity';
 import { ClientAddress } from '@/modules/client-addresses/entities/client-address.entity';
-import { OrderStatus } from '@/common/enums';
+import { OrderStatus, OrderSource } from '@/common/enums';
 
 interface BindOrderList {
   ID: string;
@@ -47,6 +47,7 @@ interface BindClient {
 
 interface SyncJobPayload {
   userId: string;
+  date?: string; // Fecha de facturas a sincronizar (YYYY-MM-DD)
 }
 
 interface SyncJobResult {
@@ -54,6 +55,28 @@ interface SyncJobResult {
   clients: { synced: number };
   orders: { created: number; updated: number; errors: string[] };
   message: string;
+}
+
+interface BindInvoice {
+  ID: string;
+  UUID?: string;
+  Series?: string;
+  Number: number;
+  ClientID: string;
+  ClientName: string;
+  Date: string;
+  Total: number;
+  Subtotal?: number;
+  Status?: string;
+  StatusCode?: number;
+  Address?: string;
+  Comments?: string;
+  RFC?: string;
+  ClientPhoneNumber?: string;
+  WarehouseName?: string;
+  CreatedByName?: string;
+  Products?: any[];
+  Services?: any[];
 }
 
 @Processor('sync')
@@ -81,7 +104,8 @@ export class SyncProcessor extends WorkerHost {
   }
 
   async process(job: Job<SyncJobPayload>): Promise<SyncJobResult> {
-    this.logger.log(`Processing sync job [${job.id}]`);
+    const syncDate = job.data.date || new Date().toISOString().split('T')[0];
+    this.logger.log(`Processing sync job [${job.id}] for date: ${syncDate}`);
     this.logger.log(`Using API URL: ${this.apiUrl}`);
     this.logger.log(`API Key configured: ${this.apiKey ? 'YES' : 'NO'}`);
 
@@ -112,21 +136,21 @@ export class SyncProcessor extends WorkerHost {
         clientIdToNumberMap.set(client.ID, client.Number?.toString() || client.ID);
       }
 
-      // Pause before fetching orders
+      // Pause before fetching invoices
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Step 3: Get existing order bind_ids
       const existingBindIds = await this.getExistingBindIds();
       await job.updateProgress(45);
 
-      // Step 4: Fetch orders from Bind (differential)
-      this.logger.log('Step 3: Fetching orders from Bind...');
-      const orders = await this.fetchOrders(existingBindIds);
+      // Step 4: Fetch INVOICES from Bind by date (NEW LOGIC)
+      this.logger.log(`Step 3: Fetching invoices from Bind for ${syncDate}...`);
+      const invoices = await this.fetchInvoicesByDate(syncDate);
       await job.updateProgress(70);
 
-      // Step 5: Sync orders to DB
-      this.logger.log(`Step 4: Syncing ${orders.length} orders to DB...`);
-      const orderResult = await this.syncOrders(orders, clientIdToNumberMap);
+      // Step 5: Sync invoices as orders to DB
+      this.logger.log(`Step 4: Syncing ${invoices.length} invoices as orders to DB...`);
+      const orderResult = await this.syncInvoicesAsOrders(invoices, clientIdToNumberMap, existingBindIds);
       await job.updateProgress(100);
 
       const result: SyncJobResult = {
@@ -137,7 +161,7 @@ export class SyncProcessor extends WorkerHost {
           updated: orderResult.updated,
           errors: orderResult.errors,
         },
-        message: `Sync completed: ${orderResult.created} orders created, ${clientResult.synced} clients synced`,
+        message: `Sync completed (${syncDate}): ${orderResult.created} orders created from invoices, ${clientResult.synced} clients synced`,
       };
 
       this.logger.log(result.message);
@@ -413,6 +437,187 @@ export class SyncProcessor extends WorkerHost {
       } catch (error) {
         this.logger.warn(`Failed to sync order ${order.ID}: ${error.message}`);
         errors.push(`${order.Serie || 'PE'}${order.Number}: ${error.message}`);
+      }
+    }
+
+    return { created, updated, errors };
+  }
+
+  /**
+   * Fetch invoices from Bind by emission date
+   */
+  private async fetchInvoicesByDate(dateStr: string): Promise<BindInvoice[]> {
+    const allInvoices: BindInvoice[] = [];
+    let skip = 0;
+    const pageSize = 100;
+    const maxPages = 30; // Safety limit
+
+    this.logger.log(`Fetching invoices for date: ${dateStr}`);
+
+    for (let page = 0; page < maxPages; page++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<{ value: BindInvoice[] }>(`${this.apiUrl}/api/Invoices`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            params: {
+              '$top': pageSize,
+              '$skip': skip,
+              '$orderby': 'Date desc',
+            },
+          }),
+        );
+
+        const pageInvoices = response.data.value || [];
+        if (pageInvoices.length === 0) break;
+
+        // Filter by target date
+        for (const inv of pageInvoices) {
+          const invDate = inv.Date?.split('T')[0];
+          if (invDate === dateStr) {
+            allInvoices.push(inv);
+          }
+        }
+
+        // If we've passed the target date, stop
+        const lastInvoiceDate = pageInvoices[pageInvoices.length - 1]?.Date?.split('T')[0];
+        if (lastInvoiceDate && lastInvoiceDate < dateStr) {
+          this.logger.log(`Reached invoices before ${dateStr}, stopping pagination`);
+          break;
+        }
+
+        skip += pageSize;
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (error: any) {
+        this.logger.error(`Error fetching invoices: ${error.message}`);
+        throw error;
+      }
+    }
+
+    this.logger.log(`Found ${allInvoices.length} invoices for ${dateStr}`);
+
+    // Fetch details for each invoice to get Address
+    const invoicesWithDetails: BindInvoice[] = [];
+    for (let i = 0; i < allInvoices.length; i++) {
+      const inv = allInvoices[i];
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<BindInvoice>(`${this.apiUrl}/api/Invoices/${inv.ID}`, {
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }),
+        );
+        invoicesWithDetails.push(response.data);
+
+        if ((i + 1) % 10 === 0) {
+          this.logger.log(`Fetched details for ${i + 1}/${allInvoices.length} invoices`);
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error: any) {
+        this.logger.warn(`Failed to fetch invoice ${inv.ID}: ${error.message}`);
+        // Use list data without details
+        invoicesWithDetails.push(inv);
+      }
+    }
+
+    return invoicesWithDetails;
+  }
+
+  /**
+   * Sync invoices as orders to DB
+   */
+  private async syncInvoicesAsOrders(
+    invoices: BindInvoice[],
+    clientIdToNumberMap: Map<string, string>,
+    existingBindIds: Set<string>,
+  ): Promise<{ created: number; updated: number; errors: string[] }> {
+    let created = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const invoice of invoices) {
+      try {
+        // Skip if already exists
+        if (existingBindIds.has(invoice.ID)) {
+          this.logger.debug(`Invoice ${invoice.ID} already exists, skipping`);
+          continue;
+        }
+
+        const invoiceNumber = `${invoice.Series || 'FA'}${invoice.Number}`;
+
+        // Fix clientNumber if it's a UUID
+        let clientNumber = invoice.ClientID;
+        if (clientIdToNumberMap.has(invoice.ClientID)) {
+          clientNumber = clientIdToNumberMap.get(invoice.ClientID)!;
+        }
+
+        // Look up client to get the UUID for the relationship
+        let clientId: string | null = null;
+        const client = await this.clientRepository.findOne({ where: { clientNumber } });
+        if (client) {
+          clientId = client.id;
+        }
+
+        // Parse address from invoice
+        const rawAddress = invoice.Address || '';
+        const addressInfo = this.parseAddress(rawAddress);
+
+        // Check if VIP
+        const isVip = this.detectVip(invoice.Comments);
+
+        // Create/get the client address
+        let deliveryAddressId: string | null = null;
+        if (rawAddress && clientNumber) {
+          deliveryAddressId = await this.upsertClientAddress(clientNumber, {
+            street: rawAddress,
+            number: '',
+            neighborhood: '',
+            postalCode: addressInfo.postalCode,
+            city: '',
+            state: '',
+          }, invoice.ID);
+        }
+
+        // Insert the order from invoice
+        await this.orderRepository.insert({
+          bindId: invoice.ID,
+          bindInvoiceId: invoice.ID,
+          orderNumber: invoiceNumber,
+          invoiceNumber: invoiceNumber,
+          orderSource: OrderSource.BIND_INVOICE,
+          clientNumber,
+          clientId,
+          deliveryAddressId,
+          clientName: this.cleanString(invoice.ClientName),
+          clientEmail: '',
+          clientPhone: invoice.ClientPhoneNumber || null,
+          clientRfc: invoice.RFC || null,
+          addressRaw: {
+            street: rawAddress,
+            number: '',
+            neighborhood: '',
+            postalCode: '',
+            city: '',
+            state: '',
+            reference: invoice.Comments?.substring(0, 300),
+          },
+          totalAmount: invoice.Total || 0,
+          isVip,
+          promisedDate: this.parseBindDate(invoice.Date),
+          status: OrderStatus.DRAFT,
+          warehouseName: invoice.WarehouseName || null,
+          employeeName: invoice.CreatedByName || null,
+          bindClientId: invoice.ClientID,
+        });
+        created++;
+        this.logger.log(`Created order from invoice ${invoiceNumber}`);
+      } catch (error: any) {
+        this.logger.warn(`Failed to sync invoice ${invoice.ID}: ${error.message}`);
+        errors.push(`${invoice.Series || 'FA'}${invoice.Number}: ${error.message}`);
       }
     }
 
