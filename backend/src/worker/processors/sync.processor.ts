@@ -582,6 +582,9 @@ export class SyncProcessor extends WorkerHost {
           }, invoice.ID);
         }
 
+        // Log invoice date for debugging
+        this.logger.log(`Invoice ${invoiceNumber}: Date=${invoice.Date}, parsed=${this.parseBindDate(invoice.Date)}`);
+
         // Insert the order from invoice
         await this.orderRepository.insert({
           bindId: invoice.ID,
