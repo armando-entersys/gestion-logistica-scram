@@ -23,16 +23,27 @@ export class SyncController {
    * RF-01: Sincronización ASÍNCRONA con Bind ERP
    * Encola el job y retorna inmediatamente con el jobId
    * El frontend debe hacer polling a /sync/status/:jobId
+   * @param date Fecha de facturas a sincronizar (formato: YYYY-MM-DD). Si no se especifica, usa hoy.
    */
   @Post('bind')
   @Roles(UserRole.PURCHASING, UserRole.ADMIN)
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Start async sync from Bind ERP' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Fecha de facturas (YYYY-MM-DD)', example: '2026-01-20' },
+      },
+    },
+  })
   @ApiResponse({ status: 202, description: 'Sync job queued' })
-  async syncFromBind(@Request() req: any) {
+  async syncFromBind(@Request() req: any, @Body() body?: { date?: string }) {
+    const syncDate = body?.date || new Date().toISOString().split('T')[0];
+
     const job = await this.syncQueue.add(
       'sync-bind',
-      { userId: req.user.id },
+      { userId: req.user.id, date: syncDate },
       {
         removeOnComplete: { age: 3600 }, // Keep completed jobs for 1 hour
         removeOnFail: { age: 86400 }, // Keep failed jobs for 24 hours
@@ -42,7 +53,8 @@ export class SyncController {
     return {
       success: true,
       jobId: job.id,
-      message: 'Sincronización iniciada. Consulta el estado en /sync/status/' + job.id,
+      date: syncDate,
+      message: `Sincronización de facturas del ${syncDate} iniciada. Consulta el estado en /sync/status/${job.id}`,
     };
   }
 
