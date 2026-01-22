@@ -91,7 +91,7 @@ export class BindWebhookService {
 
       // 6. Crear la orden de entrega
       const order = await this.ordersService.createFromInvoice({
-        bindId: `INV-${invoice.ID}`, // Prefijo para distinguir de pedidos
+        bindId: invoice.ID, // UUID directo, igual que sync processor
         bindInvoiceId: invoice.ID,
         invoiceNumber,
         orderSource: OrderSource.BIND_INVOICE,

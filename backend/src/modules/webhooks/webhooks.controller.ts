@@ -45,13 +45,23 @@ export class WebhooksController {
 
   /**
    * Endpoint receptor de WebHook Add_Invoice de Bind ERP
+   * DESHABILITADO: Solo se sincroniza manualmente desde el botón
    * Se activa automáticamente cuando se crea una nueva factura en Bind
    */
   @Post('bind/invoice')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Recibe webhook de nueva factura desde Bind ERP' })
+  @ApiOperation({ summary: 'Recibe webhook de nueva factura desde Bind ERP (DESHABILITADO)' })
   @ApiBody({ description: 'Payload de factura de Bind' })
   async handleBindInvoice(@Body() payload: BindInvoiceWebhookPayload) {
+    // DESHABILITADO: Solo sincronización manual por ahora
+    this.logger.log(`[WebHook] IGNORADO - Recibida factura de Bind: ${payload.Serie || 'FA'}${payload.Number}`);
+    return {
+      success: true,
+      message: 'Webhook deshabilitado - usar sincronización manual',
+      ignored: true,
+    };
+
+    /* CÓDIGO ORIGINAL COMENTADO
     this.logger.log(`[WebHook] Recibida factura de Bind: ${payload.Serie || 'FA'}${payload.Number}`);
     this.logger.debug(`[WebHook] Payload: ${JSON.stringify(payload)}`);
 
@@ -73,6 +83,7 @@ export class WebhooksController {
         error: error.message,
       };
     }
+    */
   }
 
   /**
