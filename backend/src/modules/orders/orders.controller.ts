@@ -269,7 +269,7 @@ export class OrdersController {
    */
   @Post('assign')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Assign driver to orders' })
   assignDriver(@Body() dto: AssignDriverDto) {
@@ -282,7 +282,7 @@ export class OrdersController {
    */
   @Post('assign-carrier')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Assign external carrier (courier) to orders' })
@@ -296,7 +296,7 @@ export class OrdersController {
    */
   @Post('dispatch')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Dispatch route and send ETA notifications' })
