@@ -851,99 +851,87 @@ export default function ComprasPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Header */}
       <AppBar position="static" color="default" elevation={1}>
-        <Toolbar>
-          <InventoryIcon sx={{ mr: 2, color: 'primary.main' }} />
+        <Toolbar sx={{ gap: 2 }}>
+          <InventoryIcon sx={{ color: 'primary.main' }} />
           <Box sx={{ flexGrow: 1 }}>
             <Typography variant="h6" component="h1" fontWeight={600}>
               Panel de Compras
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Sincronizacion y liberacion de pedidos
-            </Typography>
           </Box>
-          <Stack direction="row" spacing={1}>
-            <Tooltip title="Geocodificar direcciones para mostrar en mapa">
+
+          {/* Grupo de Sincronización */}
+          <Paper
+            elevation={0}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              p: 0.75,
+              bgcolor: 'grey.100',
+              borderRadius: 2
+            }}
+          >
+            <Tooltip title="Sincronizar catálogo de clientes desde Bind">
               <Button
-                variant="outlined"
-                color="primary"
-                startIcon={geocodeMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <MyLocationIcon />}
-                onClick={() => geocodeMutation.mutate()}
-                disabled={geocodeMutation.isPending}
+                variant={clientsSyncStatus === 'completed' ? 'contained' : 'outlined'}
+                color={clientsSyncStatus === 'completed' ? 'success' : clientsSyncStatus === 'failed' ? 'error' : 'primary'}
+                size="small"
+                startIcon={clientsSyncStatus === 'syncing' ? <CircularProgress size={16} color="inherit" /> : <PeopleIcon />}
+                onClick={() => syncClientsMutation.mutate()}
+                disabled={clientsSyncStatus === 'syncing' || syncStatus === 'syncing'}
+                sx={{ minWidth: 120 }}
               >
-                Geocodificar
+                {clientsSyncStatus === 'syncing'
+                  ? `${clientsSyncProgress}%`
+                  : clientsSyncStatus === 'completed'
+                  ? 'Clientes ✓'
+                  : 'Clientes'}
               </Button>
             </Tooltip>
-            <Tooltip title={selectedDraftIds.length === draftOrders.length ? "Deseleccionar todos" : "Seleccionar todos los borradores"}>
+
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
+            <Tooltip title="Fecha de facturas a sincronizar">
+              <TextField
+                type="date"
+                size="small"
+                value={syncDate}
+                onChange={(e) => setSyncDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  width: 140,
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'white',
+                  }
+                }}
+                disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
+              />
+            </Tooltip>
+
+            <Tooltip title="Sincronizar pedidos/facturas de la fecha seleccionada">
               <Button
-                variant="outlined"
-                color="primary"
-                onClick={handleSelectAllDrafts}
-                disabled={draftOrders.length === 0}
+                variant="contained"
+                color={syncStatus === 'completed' ? 'success' : syncStatus === 'failed' ? 'error' : 'primary'}
+                size="small"
+                startIcon={syncStatus === 'syncing' ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
+                onClick={() => syncBindMutation.mutate()}
+                disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
+                sx={{ minWidth: 120 }}
               >
-                {selectedDraftIds.length === draftOrders.length && draftOrders.length > 0
-                  ? `Deseleccionar (${selectedDraftIds.length})`
-                  : `Seleccionar Todos (${draftOrders.length})`}
+                {syncStatus === 'syncing'
+                  ? `${syncProgress}%`
+                  : syncStatus === 'completed'
+                  ? 'Pedidos ✓'
+                  : 'Pedidos'}
               </Button>
             </Tooltip>
-            <Tooltip title="Eliminar los pedidos seleccionados">
-              <span>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={deleteDraftMutation.isPending ? <CircularProgress size={20} color="inherit" /> : <DeleteOutlineIcon />}
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={deleteDraftMutation.isPending || selectedDraftIds.length === 0}
-                >
-                  Eliminar ({selectedDraftIds.length})
-                </Button>
-              </span>
-            </Tooltip>
-            <Button
-              variant="outlined"
-              color={clientsSyncStatus === 'completed' ? 'success' : clientsSyncStatus === 'failed' ? 'error' : 'primary'}
-              startIcon={clientsSyncStatus === 'syncing' ? <CircularProgress size={20} color="inherit" /> : <PeopleIcon />}
-              onClick={() => syncClientsMutation.mutate()}
-              disabled={clientsSyncStatus === 'syncing' || syncStatus === 'syncing'}
-              sx={{ minWidth: 160 }}
-            >
-              {clientsSyncStatus === 'syncing'
-                ? `Clientes ${clientsSyncProgress}%`
-                : clientsSyncStatus === 'completed'
-                ? 'Clientes OK'
-                : 'Sync Clientes'}
-            </Button>
-            <TextField
-              type="date"
-              size="small"
-              value={syncDate}
-              onChange={(e) => setSyncDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ width: 150 }}
-              disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
-            />
-            <Button
-              variant="contained"
-              color={syncStatus === 'completed' ? 'success' : syncStatus === 'failed' ? 'error' : 'secondary'}
-              startIcon={syncStatus === 'syncing' ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
-              onClick={() => syncBindMutation.mutate()}
-              disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
-              sx={{ minWidth: 180 }}
-            >
-              {syncStatus === 'syncing'
-                ? `Pedidos ${syncProgress}%`
-                : syncStatus === 'completed'
-                ? 'Pedidos OK'
-                : 'Sync Pedidos'}
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<LogoutIcon />}
-              onClick={handleLogout}
-            >
-              Salir
-            </Button>
-          </Stack>
+          </Paper>
+
+          <Tooltip title="Cerrar sesión">
+            <IconButton color="default" onClick={handleLogout}>
+              <LogoutIcon />
+            </IconButton>
+          </Tooltip>
         </Toolbar>
       </AppBar>
 
@@ -1030,23 +1018,75 @@ export default function ComprasPage() {
         </Stack>
       </Box>
 
-      {/* Search and Tabs */}
+      {/* Search and Action Bar */}
       <Box sx={{ px: 2 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Buscar por cliente, ID Bind o RFC..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon color="action" />
-              </InputAdornment>
-            ),
-          }}
-          sx={{ mb: 2 }}
-        />
+        <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2 }}>
+          <TextField
+            size="small"
+            placeholder="Buscar por cliente, ID Bind o RFC..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ flex: 1, maxWidth: 400 }}
+          />
+
+          <Box sx={{ flex: 1 }} />
+
+          {/* Action buttons */}
+          <Stack direction="row" spacing={1}>
+            <Tooltip title="Geocodificar direcciones sin coordenadas">
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                startIcon={geocodeMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <MyLocationIcon />}
+                onClick={() => geocodeMutation.mutate()}
+                disabled={geocodeMutation.isPending}
+              >
+                Geocodificar
+              </Button>
+            </Tooltip>
+
+            {activeTab === 0 && (
+              <>
+                <Tooltip title={selectedDraftIds.length === draftOrders.length ? "Deseleccionar todos" : "Seleccionar todos los borradores"}>
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    onClick={handleSelectAllDrafts}
+                    disabled={draftOrders.length === 0}
+                  >
+                    {selectedDraftIds.length === draftOrders.length && draftOrders.length > 0
+                      ? `Deseleccionar (${selectedDraftIds.length})`
+                      : `Seleccionar Todo`}
+                  </Button>
+                </Tooltip>
+
+                <Tooltip title="Eliminar pedidos seleccionados">
+                  <span>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+                      onClick={() => setDeleteConfirmOpen(true)}
+                      disabled={deleteDraftMutation.isPending || selectedDraftIds.length === 0}
+                    >
+                      Eliminar ({selectedDraftIds.length})
+                    </Button>
+                  </span>
+                </Tooltip>
+              </>
+            )}
+          </Stack>
+        </Stack>
 
         <Paper sx={{ mb: 2 }}>
           <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)}>
