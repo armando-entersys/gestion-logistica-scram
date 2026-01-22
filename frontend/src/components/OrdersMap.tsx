@@ -26,9 +26,10 @@ interface OrdersMapProps {
   onOrderClick: (id: string) => void;
 }
 
-// Default center (Monterrey, Mexico)
-const DEFAULT_CENTER: [number, number] = [25.6866, -100.3161];
-const DEFAULT_ZOOM = 12;
+// Centro de Distribución SCRAM - Cuautitlán Izcalli
+// Pingüicas Lote 16, Manzana 138, Bosques de Morelos, C.P. 54760
+const SCRAM_CENTER: [number, number] = [19.6505, -99.2168];
+const DEFAULT_ZOOM = 11;
 
 // Custom marker icons with optional number
 const createIcon = (color: string, isSelected: boolean, number?: number) => {
@@ -74,21 +75,80 @@ const getMarkerColor = (status: string, priorityLevel: number, isSelected: boole
   return '#0284c7'; // Listo/Ready - Info Blue
 };
 
+// Icono especial para SCRAM (punto de partida)
+const createScramIcon = () => {
+  const html = `
+    <div style="
+      background-color: #7c3aed;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 4px solid white;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <span style="
+        color: white;
+        font-weight: 700;
+        font-size: 10px;
+        text-align: center;
+        line-height: 1.1;
+      ">SCRAM</span>
+    </div>
+  `;
+
+  return L.divIcon({
+    html,
+    className: 'scram-marker',
+    iconSize: [42, 42],
+    iconAnchor: [21, 21],
+    popupAnchor: [0, -21],
+  });
+};
+
 export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const polylineRef = useRef<L.Polyline | null>(null);
+  const scramMarkerRef = useRef<L.Marker | null>(null);
 
   // Initialize map
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    mapRef.current = L.map(mapContainerRef.current).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    mapRef.current = L.map(mapContainerRef.current).setView(SCRAM_CENTER, DEFAULT_ZOOM);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(mapRef.current);
+
+    // Agregar marcador de SCRAM (punto de partida)
+    scramMarkerRef.current = L.marker(SCRAM_CENTER, {
+      icon: createScramIcon(),
+      zIndexOffset: 2000, // Siempre encima de otros marcadores
+    });
+
+    const scramPopup = `
+      <div style="min-width: 200px; font-family: system-ui, sans-serif;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <div style="background: #7c3aed; color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700;">ORIGEN</div>
+        </div>
+        <strong style="color: #0f172a; font-size: 14px;">Centro de Distribución SCRAM</strong>
+        <hr style="margin: 8px 0; border: none; border-top: 1px solid #e2e8f0;"/>
+        <div style="color: #64748b; font-size: 12px; line-height: 1.4;">
+          Pingüicas Lote 16, Manzana 138<br/>
+          Bosques de Morelos<br/>
+          Cuautitlán Izcalli, C.P. 54760<br/>
+          Estado de México
+        </div>
+      </div>
+    `;
+
+    scramMarkerRef.current.bindPopup(scramPopup);
+    scramMarkerRef.current.addTo(mapRef.current);
 
     return () => {
       if (mapRef.current) {
@@ -125,8 +185,14 @@ export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersM
       selectedOrderPositions[id] = index + 1;
     });
 
-    // Collect route coordinates for polyline (selected orders in order)
+    // Collect route coordinates for polyline (starting from SCRAM)
     const routeCoords: [number, number][] = [];
+
+    // Si hay pedidos seleccionados, la ruta empieza desde SCRAM
+    if (selectedIds.length > 0) {
+      routeCoords.push(SCRAM_CENTER);
+    }
+
     selectedIds.forEach((id) => {
       const order = ordersWithCoords.find((o) => o.id === id);
       if (order && order.latitude && order.longitude) {
@@ -134,7 +200,7 @@ export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersM
       }
     });
 
-    // Draw route polyline if there are 2+ selected orders
+    // Draw route polyline if there are selected orders (starts from SCRAM)
     if (routeCoords.length >= 2) {
       polylineRef.current = L.polyline(routeCoords, {
         color: '#1e40af',

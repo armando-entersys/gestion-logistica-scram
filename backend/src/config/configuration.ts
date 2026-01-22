@@ -42,5 +42,12 @@ export default () => ({
     averageStopTimeMinutes: parseInt(process.env.AVERAGE_STOP_TIME_MINUTES || '30', 10),
     trafficBufferPercent: parseInt(process.env.TRAFFIC_BUFFER_PERCENT || '15', 10),
     maxOrdersPerDriver: parseInt(process.env.MAX_ORDERS_PER_DRIVER || '15', 10),
+    // Centro de Distribución SCRAM - Punto de partida para cálculo de ETA
+    // Pingüicas Lote 16, Manzana 138, Bosques de Morelos, Cuautitlán Izcalli, C.P. 54760, Estado de México
+    baseLocation: {
+      latitude: parseFloat(process.env.BASE_LOCATION_LAT || '19.6505'),
+      longitude: parseFloat(process.env.BASE_LOCATION_LNG || '-99.2168'),
+      address: 'Pingüicas Lote 16, Manzana 138, Bosques de Morelos, Cuautitlán Izcalli, C.P. 54760, Estado de México',
+    },
   },
 });

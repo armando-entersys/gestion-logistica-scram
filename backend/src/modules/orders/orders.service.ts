@@ -425,18 +425,24 @@ export class OrdersService {
       ? dto.carrierName
       : this.getCarrierDisplayName(dto.carrierType);
 
+    // Parsear fecha y hora de entrega si se proporcionan
+    const deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate + 'T12:00:00') : null;
+    const deliveryTime = dto.deliveryTime || null;
+
     await this.orderRepository.update(
       { id: In(dto.orderIds) },
       {
         carrierType: dto.carrierType,
         carrierName: carrierName,
         carrierTrackingNumber: dto.trackingNumber || null,
+        carrierDeliveryDate: deliveryDate,
+        carrierDeliveryTime: deliveryTime,
         status: OrderStatus.IN_TRANSIT, // Cambiar a En Ruta cuando se asigna paquetería
         assignedDriverId: null, // No hay chofer interno
       },
     );
 
-    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders`);
+    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders (deliveryDate: ${dto.deliveryDate}, deliveryTime: ${dto.deliveryTime})`);
     return { assigned: dto.orderIds.length };
   }
 
@@ -521,6 +527,8 @@ export class OrdersService {
       // Encolar email de notificación - usar email del cliente como fallback
       const recipientEmail = order.clientEmail || order.client?.email;
       if (recipientEmail && !order.dispatchEmailSent) {
+        // Usar jobId único para evitar correos duplicados
+        const jobId = `eta-${orderId}-${new Date().toISOString().split('T')[0]}`;
         await this.notificationQueue.add(
           'send-eta-email',
           {
@@ -534,6 +542,7 @@ export class OrdersService {
             routePosition: position,
           },
           {
+            jobId, // Previene duplicados con el mismo jobId
             attempts: 3,
             backoff: { type: 'exponential', delay: 5000 },
           },
@@ -597,6 +606,8 @@ export class OrdersService {
     // Encolar email de confirmación + encuesta CSAT - usar email del cliente como fallback
     const recipientEmail = order.clientEmail || order.client?.email;
     if (recipientEmail && !order.deliveryEmailSent) {
+      // Usar jobId único para evitar correos duplicados
+      const jobId = `delivery-${orderId}-${new Date().toISOString().split('T')[0]}`;
       await this.notificationQueue.add(
         'send-delivery-confirmation',
         {
@@ -606,6 +617,7 @@ export class OrdersService {
           trackingHash: trackingHash,
         },
         {
+          jobId, // Previene duplicados con el mismo jobId
           delay: 5000,
           attempts: 3,
         },
@@ -1414,6 +1426,8 @@ export class OrdersService {
     // Queue email notification to customer - usar email del cliente como fallback
     const recipientEmail = order.clientEmail || order.client?.email;
     if (recipientEmail && !order.enRouteEmailSent) {
+      // Usar jobId único para evitar correos duplicados
+      const jobId = `enroute-${orderId}-${new Date().toISOString().split('T')[0]}`;
       await this.notificationQueue.add(
         'send-en-route-email',
         {
@@ -1428,6 +1442,7 @@ export class OrdersService {
           trackingHash: trackingHash,
         },
         {
+          jobId, // Previene duplicados con el mismo jobId
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
         },

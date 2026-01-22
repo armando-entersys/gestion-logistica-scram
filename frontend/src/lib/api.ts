@@ -85,8 +85,15 @@ export const ordersApi = {
   getCarrierTypes: () =>
     api.get('/orders/carrier-types'),
 
-  assignCarrier: (orderIds: string[], carrierType: string, carrierName?: string, trackingNumber?: string) =>
-    api.post('/orders/assign-carrier', { orderIds, carrierType, carrierName, trackingNumber }),
+  assignCarrier: (
+    orderIds: string[],
+    carrierType: string,
+    carrierName?: string,
+    trackingNumber?: string,
+    deliveryDate?: string,
+    deliveryTime?: string
+  ) =>
+    api.post('/orders/assign-carrier', { orderIds, carrierType, carrierName, trackingNumber, deliveryDate, deliveryTime }),
 
   geocodePending: () =>
     api.post('/orders/geocode-pending'),

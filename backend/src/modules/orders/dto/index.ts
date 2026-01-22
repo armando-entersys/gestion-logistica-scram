@@ -233,6 +233,16 @@ export class AssignCarrierDto {
   @IsOptional()
   @IsString()
   trackingNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Fecha de entrega por paquetería/proveedor (YYYY-MM-DD)' })
+  @IsOptional()
+  @IsString()
+  deliveryDate?: string;
+
+  @ApiPropertyOptional({ description: 'Hora de entrega por paquetería/proveedor (HH:mm)' })
+  @IsOptional()
+  @IsString()
+  deliveryTime?: string;
 }
 
 export class UpdateAddressDto {

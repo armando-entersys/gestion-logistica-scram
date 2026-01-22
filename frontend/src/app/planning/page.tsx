@@ -184,6 +184,8 @@ export default function PlanningPage() {
   const [selectedCarrierType, setSelectedCarrierType] = useState('');
   const [carrierName, setCarrierName] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrierDeliveryDate, setCarrierDeliveryDate] = useState('');
+  const [carrierDeliveryTime, setCarrierDeliveryTime] = useState('');
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -376,7 +378,9 @@ export default function PlanningPage() {
         selectedOrderIds,
         selectedCarrierType,
         selectedCarrierType === 'OTHER' ? carrierName : undefined,
-        trackingNumber || undefined
+        trackingNumber || undefined,
+        carrierDeliveryDate || undefined,
+        carrierDeliveryTime || undefined
       );
     },
     onSuccess: (response) => {
@@ -385,6 +389,8 @@ export default function PlanningPage() {
       setSelectedCarrierType('');
       setCarrierName('');
       setTrackingNumber('');
+      setCarrierDeliveryDate('');
+      setCarrierDeliveryTime('');
       setCarrierDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
     },
@@ -1094,15 +1100,15 @@ export default function PlanningPage() {
       </Dialog>
 
       <Dialog open={carrierDialogOpen} onClose={() => setCarrierDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Asignar Paquetería</DialogTitle>
+        <DialogTitle>Asignar Paquetería / Proveedor</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             {selectedOrderIds.length} pedido(s) seleccionado(s)
           </Typography>
           <Stack spacing={2}>
             <FormControl fullWidth size="small">
-              <InputLabel>Paquetería</InputLabel>
-              <Select value={selectedCarrierType} label="Paquetería" onChange={(e) => setSelectedCarrierType(e.target.value)}>
+              <InputLabel>Tipo de envío</InputLabel>
+              <Select value={selectedCarrierType} label="Tipo de envío" onChange={(e) => setSelectedCarrierType(e.target.value)}>
                 {carrierTypes?.filter((ct) => ct.value !== 'INTERNAL').map((c) => (
                   <MenuItem key={c.value} value={c.value}>{c.label}</MenuItem>
                 ))}
@@ -1112,6 +1118,26 @@ export default function PlanningPage() {
               <TextField size="small" fullWidth label="Nombre de paquetería" value={carrierName} onChange={(e) => setCarrierName(e.target.value)} />
             )}
             <TextField size="small" fullWidth label="Número de guía (opcional)" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)} />
+            <TextField
+              size="small"
+              fullWidth
+              label="Fecha de entrega"
+              type="date"
+              value={carrierDeliveryDate}
+              onChange={(e) => setCarrierDeliveryDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              helperText="Fecha real o estimada de entrega"
+            />
+            <TextField
+              size="small"
+              fullWidth
+              label="Hora de entrega (opcional)"
+              type="time"
+              value={carrierDeliveryTime}
+              onChange={(e) => setCarrierDeliveryTime(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              helperText="Hora aproximada de entrega"
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

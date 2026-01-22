@@ -176,6 +176,14 @@ export class ClientAddressesService {
   }
 
   /**
+   * Check if a string looks like a UUID (to filter out Bind address IDs)
+   */
+  private isUUID(str: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str.trim());
+  }
+
+  /**
    * Parse raw address text from Bind and upsert
    * Address format varies but typically: "Street Number, Neighborhood, PostalCode City, State"
    */
@@ -185,6 +193,18 @@ export class ClientAddressesService {
     source: 'SYNC' | 'MANUAL' = 'SYNC',
   ): Promise<ClientAddress | null> {
     if (!addressText || addressText.trim() === '') {
+      return null;
+    }
+
+    // Skip if the text is a UUID (Bind sometimes returns address IDs instead of text)
+    if (this.isUUID(addressText)) {
+      this.logger.warn(`Skipping address for client ${clientNumber}: received UUID instead of address text: ${addressText}`);
+      return null;
+    }
+
+    // Skip if the text is too short to be a valid address (e.g., less than 10 chars)
+    if (addressText.trim().length < 10) {
+      this.logger.debug(`Skipping address for client ${clientNumber}: text too short: ${addressText}`);
       return null;
     }
 

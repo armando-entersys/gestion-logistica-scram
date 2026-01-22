@@ -286,6 +286,22 @@ export class Order {
   })
   carrierTrackingNumber: string | null;
 
+  @Column({
+    name: 'carrier_delivery_date',
+    type: 'date',
+    nullable: true,
+    comment: 'Fecha real de entrega por paquetería/proveedor',
+  })
+  carrierDeliveryDate: Date | null;
+
+  @Column({
+    name: 'carrier_delivery_time',
+    type: 'time',
+    nullable: true,
+    comment: 'Hora estimada de entrega por paquetería/proveedor',
+  })
+  carrierDeliveryTime: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
