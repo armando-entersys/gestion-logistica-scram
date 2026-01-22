@@ -513,12 +513,13 @@ export class SyncProcessor extends WorkerHost {
             },
           }),
         );
-        // Merge detail data with list data, preserving Date from list
-        // Detail endpoint uses CreationDate instead of Date
+        // Merge detail data with list data, preserving Date and Total from list
+        // Detail endpoint uses CreationDate instead of Date, and doesn't include Total
         const detailData = response.data;
         const mergedInvoice: BindInvoice = {
           ...detailData,
           Date: inv.Date || (detailData as any).CreationDate || detailData.Date,
+          Total: inv.Total ?? detailData.Total ?? 0,
         };
         invoicesWithDetails.push(mergedInvoice);
 
