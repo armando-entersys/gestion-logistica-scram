@@ -147,10 +147,14 @@ export const usersApi = {
 
 // Sync API
 export const syncApi = {
-  // Inicia sync asíncrono, retorna jobId
+  // Inicia sync asíncrono de PEDIDOS, retorna jobId
   // date: fecha de facturas a sincronizar (YYYY-MM-DD), si no se especifica usa hoy
   syncBind: (date?: string) =>
     api.post<{ success: boolean; jobId: string; date: string; message: string }>('/sync/bind', { date }),
+
+  // Inicia sync asíncrono de CLIENTES, retorna jobId
+  syncClients: () =>
+    api.post<{ success: boolean; jobId: string; message: string }>('/sync/clients'),
 
   // Consulta estado del job
   getSyncStatus: (jobId: string) =>
@@ -160,8 +164,9 @@ export const syncApi = {
       progress: number;
       result?: {
         success: boolean;
-        clients: { synced: number };
-        orders: { created: number; updated: number; errors: string[] };
+        synced?: number; // Para sync de clientes
+        clients?: { synced: number }; // Para sync de pedidos
+        orders?: { created: number; updated: number; errors: string[] };
         message: string;
       };
       failedReason?: string;

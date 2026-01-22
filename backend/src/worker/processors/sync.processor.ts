@@ -50,10 +50,20 @@ interface SyncJobPayload {
   date?: string; // Fecha de facturas a sincronizar (YYYY-MM-DD)
 }
 
+interface SyncClientsJobPayload {
+  userId: string;
+}
+
 interface SyncJobResult {
   success: boolean;
   clients: { synced: number };
   orders: { created: number; updated: number; errors: string[] };
+  message: string;
+}
+
+interface SyncClientsJobResult {
+  success: boolean;
+  synced: number;
   message: string;
 }
 
@@ -103,9 +113,60 @@ export class SyncProcessor extends WorkerHost {
     this.logger.log(`SyncProcessor initialized - API URL: ${this.apiUrl}, API Key configured: ${this.apiKey ? 'YES (' + this.apiKey.substring(0, 8) + '...)' : 'NO'}`);
   }
 
-  async process(job: Job<SyncJobPayload>): Promise<SyncJobResult> {
+  async process(job: Job<SyncJobPayload | SyncClientsJobPayload>): Promise<SyncJobResult | SyncClientsJobResult> {
+    // Route to appropriate handler based on job name
+    if (job.name === 'sync-clients') {
+      return this.processClientsSync(job as Job<SyncClientsJobPayload>);
+    }
+    // Default: sync-bind (orders/invoices only)
+    return this.processOrdersSync(job as Job<SyncJobPayload>);
+  }
+
+  /**
+   * Process clients sync job (sync-clients)
+   */
+  private async processClientsSync(job: Job<SyncClientsJobPayload>): Promise<SyncClientsJobResult> {
+    this.logger.log(`Processing clients sync job [${job.id}]`);
+
+    if (!this.apiKey) {
+      const errorMsg = 'BIND_API_KEY not configured. Check worker environment variables.';
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    try {
+      await job.updateProgress(10);
+
+      // Fetch all clients from Bind
+      this.logger.log('Fetching clients from Bind...');
+      const clients = await this.fetchClients();
+      await job.updateProgress(50);
+
+      // Sync clients to DB
+      this.logger.log(`Syncing ${clients.length} clients to DB...`);
+      const clientResult = await this.syncClients(clients);
+      await job.updateProgress(100);
+
+      const result: SyncClientsJobResult = {
+        success: true,
+        synced: clientResult.synced,
+        message: `Clientes sincronizados: ${clientResult.synced}`,
+      };
+
+      this.logger.log(result.message);
+      return result;
+    } catch (error) {
+      this.logger.error(`Clients sync job failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Process orders sync job (sync-bind) - Only invoices/orders, no clients
+   */
+  private async processOrdersSync(job: Job<SyncJobPayload>): Promise<SyncJobResult> {
     const syncDate = job.data.date || new Date().toISOString().split('T')[0];
-    this.logger.log(`Processing sync job [${job.id}] for date: ${syncDate}`);
+    this.logger.log(`Processing orders sync job [${job.id}] for date: ${syncDate}`);
     this.logger.log(`Using API URL: ${this.apiUrl}`);
     this.logger.log(`API Key configured: ${this.apiKey ? 'YES' : 'NO'}`);
 
@@ -120,54 +181,50 @@ export class SyncProcessor extends WorkerHost {
       // Update progress
       await job.updateProgress(5);
 
-      // Step 1: Fetch clients (just the list, no details)
-      this.logger.log('Step 1: Fetching clients from Bind...');
+      // Step 1: Fetch clients to build ID -> Number map (needed for orders, but don't sync them)
+      this.logger.log('Step 1: Fetching clients from Bind (for mapping only)...');
       const clients = await this.fetchClients();
       await job.updateProgress(20);
-
-      // Step 2: Sync clients to DB
-      this.logger.log(`Step 2: Syncing ${clients.length} clients to DB...`);
-      const clientResult = await this.syncClients(clients);
-      await job.updateProgress(40);
 
       // Build client ID -> Number map for orders
       const clientIdToNumberMap = new Map<string, string>();
       for (const client of clients) {
         clientIdToNumberMap.set(client.ID, client.Number?.toString() || client.ID);
       }
+      this.logger.log(`Built client ID to number map with ${clientIdToNumberMap.size} entries`);
 
       // Pause before fetching invoices
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Step 3: Get existing order bind_ids
+      // Step 2: Get existing order bind_ids
       const existingBindIds = await this.getExistingBindIds();
-      await job.updateProgress(45);
+      await job.updateProgress(40);
 
-      // Step 4: Fetch INVOICES from Bind by date (NEW LOGIC)
-      this.logger.log(`Step 3: Fetching invoices from Bind for ${syncDate}...`);
+      // Step 3: Fetch INVOICES from Bind by date
+      this.logger.log(`Step 2: Fetching invoices from Bind for ${syncDate}...`);
       const invoices = await this.fetchInvoicesByDate(syncDate);
       await job.updateProgress(70);
 
-      // Step 5: Sync invoices as orders to DB
-      this.logger.log(`Step 4: Syncing ${invoices.length} invoices as orders to DB...`);
+      // Step 4: Sync invoices as orders to DB
+      this.logger.log(`Step 3: Syncing ${invoices.length} invoices as orders to DB...`);
       const orderResult = await this.syncInvoicesAsOrders(invoices, clientIdToNumberMap, existingBindIds);
       await job.updateProgress(100);
 
       const result: SyncJobResult = {
         success: true,
-        clients: { synced: clientResult.synced },
+        clients: { synced: 0 }, // No clients synced in this job
         orders: {
           created: orderResult.created,
           updated: orderResult.updated,
           errors: orderResult.errors,
         },
-        message: `Sync completed (${syncDate}): ${orderResult.created} orders created from invoices, ${clientResult.synced} clients synced`,
+        message: `Pedidos sincronizados (${syncDate}): ${orderResult.created} nuevos`,
       };
 
       this.logger.log(result.message);
       return result;
     } catch (error) {
-      this.logger.error(`Sync job failed: ${error.message}`);
+      this.logger.error(`Orders sync job failed: ${error.message}`);
       throw error;
     }
   }

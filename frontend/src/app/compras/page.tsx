@@ -173,6 +173,9 @@ export default function ComprasPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   // Sync date - default to today
   const [syncDate, setSyncDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  // Clients sync state
+  const [clientsSyncProgress, setClientsSyncProgress] = useState<number>(0);
+  const [clientsSyncStatus, setClientsSyncStatus] = useState<'idle' | 'syncing' | 'completed' | 'failed'>('idle');
 
   // Check auth
   useEffect(() => {
@@ -238,7 +241,7 @@ export default function ComprasPage() {
       const data = result.result;
       setSnackbar({
         open: true,
-        message: `Sincronizacion completada: ${data?.orders?.created || 0} nuevos, ${data?.clients?.synced || 0} clientes`,
+        message: `Pedidos sincronizados: ${data?.orders?.created || 0} nuevos`,
         severity: 'success',
       });
       queryClient.invalidateQueries({ queryKey: ['compras-orders'] });
@@ -253,7 +256,7 @@ export default function ComprasPage() {
       setSyncStatus('failed');
       setSnackbar({
         open: true,
-        message: error.message || 'Error al sincronizar con Bind ERP',
+        message: error.message || 'Error al sincronizar pedidos con Bind ERP',
         severity: 'error',
       });
 
@@ -261,6 +264,53 @@ export default function ComprasPage() {
       setTimeout(() => {
         setSyncStatus('idle');
         setSyncProgress(0);
+      }, 3000);
+    },
+  });
+
+  const syncClientsMutation = useMutation({
+    mutationFn: async () => {
+      setClientsSyncStatus('syncing');
+      setClientsSyncProgress(0);
+
+      const response = await syncApi.syncClients();
+      const { jobId } = response.data;
+
+      const result = await syncApi.waitForSync(jobId, (progress) => {
+        setClientsSyncProgress(progress);
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return result;
+    },
+    onSuccess: (result) => {
+      setClientsSyncStatus('completed');
+      const data = result.result;
+      setSnackbar({
+        open: true,
+        message: `Clientes sincronizados: ${data?.synced || 0}`,
+        severity: 'success',
+      });
+
+      setTimeout(() => {
+        setClientsSyncStatus('idle');
+        setClientsSyncProgress(0);
+      }, 3000);
+    },
+    onError: (error: any) => {
+      setClientsSyncStatus('failed');
+      setSnackbar({
+        open: true,
+        message: error.message || 'Error al sincronizar clientes con Bind ERP',
+        severity: 'error',
+      });
+
+      setTimeout(() => {
+        setClientsSyncStatus('idle');
+        setClientsSyncProgress(0);
       }, 3000);
     },
   });
@@ -848,6 +898,20 @@ export default function ComprasPage() {
                 </Button>
               </span>
             </Tooltip>
+            <Button
+              variant="outlined"
+              color={clientsSyncStatus === 'completed' ? 'success' : clientsSyncStatus === 'failed' ? 'error' : 'primary'}
+              startIcon={clientsSyncStatus === 'syncing' ? <CircularProgress size={20} color="inherit" /> : <PeopleIcon />}
+              onClick={() => syncClientsMutation.mutate()}
+              disabled={clientsSyncStatus === 'syncing' || syncStatus === 'syncing'}
+              sx={{ minWidth: 160 }}
+            >
+              {clientsSyncStatus === 'syncing'
+                ? `Clientes ${clientsSyncProgress}%`
+                : clientsSyncStatus === 'completed'
+                ? 'Clientes OK'
+                : 'Sync Clientes'}
+            </Button>
             <TextField
               type="date"
               size="small"
@@ -855,21 +919,21 @@ export default function ComprasPage() {
               onChange={(e) => setSyncDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
               sx={{ width: 150 }}
-              disabled={syncStatus === 'syncing'}
+              disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
             />
             <Button
               variant="contained"
               color={syncStatus === 'completed' ? 'success' : syncStatus === 'failed' ? 'error' : 'secondary'}
               startIcon={syncStatus === 'syncing' ? <CircularProgress size={20} color="inherit" /> : <SyncIcon />}
               onClick={() => syncBindMutation.mutate()}
-              disabled={syncStatus === 'syncing'}
+              disabled={syncStatus === 'syncing' || clientsSyncStatus === 'syncing'}
               sx={{ minWidth: 180 }}
             >
               {syncStatus === 'syncing'
-                ? `Sincronizando... ${syncProgress}%`
+                ? `Pedidos ${syncProgress}%`
                 : syncStatus === 'completed'
-                ? 'Completado!'
-                : 'Sincronizar'}
+                ? 'Pedidos OK'
+                : 'Sync Pedidos'}
             </Button>
             <Button
               variant="outlined"

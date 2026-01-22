@@ -20,15 +20,16 @@ export class SyncController {
   ) {}
 
   /**
-   * RF-01: Sincronización ASÍNCRONA con Bind ERP
+   * RF-01: Sincronización ASÍNCRONA de PEDIDOS con Bind ERP
    * Encola el job y retorna inmediatamente con el jobId
    * El frontend debe hacer polling a /sync/status/:jobId
+   * NOTA: Este endpoint solo sincroniza pedidos/facturas, no clientes
    * @param date Fecha de facturas a sincronizar (formato: YYYY-MM-DD). Si no se especifica, usa hoy.
    */
   @Post('bind')
   @Roles(UserRole.PURCHASING, UserRole.ADMIN)
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Start async sync from Bind ERP' })
+  @ApiOperation({ summary: 'Start async orders sync from Bind ERP (only orders/invoices)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -37,7 +38,7 @@ export class SyncController {
       },
     },
   })
-  @ApiResponse({ status: 202, description: 'Sync job queued' })
+  @ApiResponse({ status: 202, description: 'Orders sync job queued' })
   async syncFromBind(@Request() req: any, @Body() body?: { date?: string }) {
     const syncDate = body?.date || new Date().toISOString().split('T')[0];
 
@@ -54,7 +55,34 @@ export class SyncController {
       success: true,
       jobId: job.id,
       date: syncDate,
-      message: `Sincronización de facturas del ${syncDate} iniciada. Consulta el estado en /sync/status/${job.id}`,
+      message: `Sincronización de pedidos del ${syncDate} iniciada. Consulta el estado en /sync/status/${job.id}`,
+    };
+  }
+
+  /**
+   * Sincronización ASÍNCRONA de CLIENTES con Bind ERP
+   * Encola el job y retorna inmediatamente con el jobId
+   * El frontend debe hacer polling a /sync/status/:jobId
+   */
+  @Post('clients')
+  @Roles(UserRole.PURCHASING, UserRole.ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Start async clients sync from Bind ERP' })
+  @ApiResponse({ status: 202, description: 'Clients sync job queued' })
+  async syncClients(@Request() req: any) {
+    const job = await this.syncQueue.add(
+      'sync-clients',
+      { userId: req.user.id },
+      {
+        removeOnComplete: { age: 3600 },
+        removeOnFail: { age: 86400 },
+      },
+    );
+
+    return {
+      success: true,
+      jobId: job.id,
+      message: `Sincronización de clientes iniciada. Consulta el estado en /sync/status/${job.id}`,
     };
   }
 
