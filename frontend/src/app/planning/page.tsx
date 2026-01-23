@@ -187,11 +187,12 @@ export default function PlanningPage() {
   const [carrierDeliveryDate, setCarrierDeliveryDate] = useState('');
   const [carrierDeliveryTime, setCarrierDeliveryTime] = useState('');
 
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
     open: false,
     message: '',
     severity: 'success',
   });
+  const [missingCoordsCount, setMissingCoordsCount] = useState(0);
 
   // POD viewer dialog state
   const [podDialogOpen, setPodDialogOpen] = useState(false);
@@ -984,19 +985,43 @@ export default function PlanningPage() {
             </Stack>
           </Box>
           <Box sx={{ flex: 1, position: 'relative' }}>
-            <OrdersMap orders={filteredOrders} selectedIds={selectedOrderIds} onOrderClick={toggleOrderSelection} />
+            <OrdersMap
+              orders={filteredOrders}
+              selectedIds={selectedOrderIds}
+              onOrderClick={toggleOrderSelection}
+              onMissingCoordsCount={setMissingCoordsCount}
+            />
             {selectedOrderIds.length > 0 && (
-              <Chip
-                label={`${selectedOrderIds.length} seleccionados`}
-                size="small"
+              <Stack
+                direction="row"
+                spacing={1}
                 sx={{
                   position: 'absolute',
                   bottom: 16,
                   left: 16,
-                  bgcolor: 'rgba(255,255,255,0.95)',
-                  boxShadow: 1,
                 }}
-              />
+              >
+                <Chip
+                  label={`${selectedOrderIds.length} seleccionados`}
+                  size="small"
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.95)',
+                    boxShadow: 1,
+                  }}
+                />
+                {missingCoordsCount > 0 && (
+                  <Chip
+                    icon={<WarningAmberIcon sx={{ fontSize: '16px !important' }} />}
+                    label={`${missingCoordsCount} sin ubicación`}
+                    size="small"
+                    color="warning"
+                    sx={{
+                      bgcolor: 'rgba(255,255,255,0.95)',
+                      boxShadow: 1,
+                    }}
+                  />
+                )}
+              </Stack>
             )}
           </Box>
         </Box>

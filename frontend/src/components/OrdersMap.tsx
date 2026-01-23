@@ -24,6 +24,7 @@ interface OrdersMapProps {
   orders: Order[];
   selectedIds: string[];
   onOrderClick: (id: string) => void;
+  onMissingCoordsCount?: (count: number) => void;
 }
 
 // Centro de Distribución SCRAM - Cuautitlán Izcalli
@@ -108,7 +109,7 @@ const createScramIcon = () => {
   });
 };
 
-export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersMapProps) {
+export default function OrdersMap({ orders, selectedIds, onOrderClick, onMissingCoordsCount }: OrdersMapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -176,6 +177,17 @@ export default function OrdersMap({ orders, selectedIds, onOrderClick }: OrdersM
     const ordersWithCoords = orders.filter(
       (order) => order.latitude && order.longitude
     );
+
+    // Count selected orders without coordinates
+    const selectedWithoutCoords = selectedIds.filter((id) => {
+      const order = orders.find((o) => o.id === id);
+      return order && (!order.latitude || !order.longitude);
+    });
+
+    // Notify parent about missing coords
+    if (onMissingCoordsCount) {
+      onMissingCoordsCount(selectedWithoutCoords.length);
+    }
 
     if (ordersWithCoords.length === 0) return;
 
