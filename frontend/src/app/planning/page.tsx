@@ -467,33 +467,42 @@ export default function PlanningPage() {
     mutationFn: async () => {
       if (!editingOrder) throw new Error('No hay pedido seleccionado');
       // Actualizar dirección con geocodificación
-      return ordersApi.updateAddress(editingOrder.id, editAddress, true);
+      const response = await ordersApi.updateAddress(editingOrder.id, editAddress, true);
+      return response;
     },
     onSuccess: (response) => {
       const data = response.data;
-      setSnackbar({
-        open: true,
-        message: data.latitude && data.longitude
-          ? `Geocodificado: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`
-          : 'Dirección guardada (sin coordenadas encontradas)',
-        severity: data.latitude ? 'success' : 'warning'
-      });
-      // Actualizar el pedido en edición con las nuevas coordenadas
-      if (editingOrder && data.latitude && data.longitude) {
-        setEditingOrder({
-          ...editingOrder,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          addressRaw: {
-            ...editingOrder.addressRaw,
-            ...editAddress,
-          }
+      if (data && data.latitude && data.longitude) {
+        setSnackbar({
+          open: true,
+          message: `Geocodificado: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`,
+          severity: 'success'
+        });
+        // Actualizar el pedido en edición con las nuevas coordenadas
+        if (editingOrder) {
+          setEditingOrder({
+            ...editingOrder,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            addressRaw: {
+              ...editingOrder.addressRaw,
+              ...editAddress,
+            }
+          });
+        }
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Dirección guardada pero no se encontraron coordenadas',
+          severity: 'warning'
         });
       }
       queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
     },
     onError: (error: any) => {
-      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al geocodificar', severity: 'error' });
+      console.error('Error geocodificando:', error);
+      const msg = error.response?.data?.message || error.message || 'Error al geocodificar';
+      setSnackbar({ open: true, message: msg, severity: 'error' });
     },
   });
 
