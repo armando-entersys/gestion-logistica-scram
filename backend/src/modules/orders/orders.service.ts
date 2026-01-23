@@ -400,14 +400,19 @@ export class OrdersService {
       warning = `Advertencia: El chofer ha superado la carga recomendada (${totalAfterAssign}/${maxOrdersPerDriver} pedidos). ¿Desea continuar?`;
     }
 
-    await this.orderRepository.update(
-      { id: In(dto.orderIds) },
-      {
+    // Asignar cada pedido con su posición en la ruta según el orden del array
+    for (let i = 0; i < dto.orderIds.length; i++) {
+      const orderId = dto.orderIds[i];
+      const position = i + 1;
+
+      await this.orderRepository.update(orderId, {
         assignedDriverId: dto.driverId,
         status: OrderStatus.READY,
-      },
-    );
+        routePosition: position,
+      });
+    }
 
+    this.logger.log(`Assigned ${dto.orderIds.length} orders to driver ${dto.driverId} with route positions`);
     return { assigned: dto.orderIds.length, warning };
   }
 
