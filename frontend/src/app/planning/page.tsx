@@ -1537,17 +1537,15 @@ export default function PlanningPage() {
             Cancelar
           </Button>
           <Stack direction="row" spacing={1}>
-            {editingOrder?.status !== 'IN_TRANSIT' && (
-              <Button
-                variant="outlined"
-                color="info"
-                onClick={() => geocodeSingleMutation.mutate()}
-                disabled={geocodeSingleMutation.isPending || !editAddress.street || !editingOrder}
-                startIcon={geocodeSingleMutation.isPending ? <CircularProgress size={16} /> : <MyLocationIcon />}
-              >
-                Solo Geocodificar
-              </Button>
-            )}
+            <Button
+              variant="outlined"
+              color="info"
+              onClick={() => geocodeSingleMutation.mutate()}
+              disabled={geocodeSingleMutation.isPending || !editAddress.street || !editingOrder}
+              startIcon={geocodeSingleMutation.isPending ? <CircularProgress size={16} /> : <MyLocationIcon />}
+            >
+              Geocodificar
+            </Button>
             <Button
               variant="contained"
               color={editingOrder?.status === 'IN_TRANSIT' ? 'warning' : 'primary'}
@@ -1555,7 +1553,7 @@ export default function PlanningPage() {
               disabled={addressMutation.isPending || !editAddress.street}
               startIcon={addressMutation.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
             >
-              {editingOrder?.status === 'IN_TRANSIT' ? 'Solicitar Cambio' : 'Guardar y Geocodificar'}
+              {editingOrder?.status === 'IN_TRANSIT' ? 'Solicitar Cambio' : 'Guardar'}
             </Button>
           </Stack>
         </DialogActions>
