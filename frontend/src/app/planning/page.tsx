@@ -1311,21 +1311,21 @@ export default function PlanningPage() {
                             }}
                           >
                             <Stack direction="row" justifyContent="space-between" alignItems="center">
-                              <Box sx={{ minWidth: 0, flex: 1 }}>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
-                                  <Typography variant="body2" fontWeight={500} noWrap>
+                              <Box sx={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                                <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexWrap: 'nowrap' }}>
+                                  <Typography variant="body2" fontWeight={500} noWrap sx={{ flexShrink: 1, minWidth: 0 }}>
                                     {addr.label || displayAddr.substring(0, 30) || 'Sin nombre'}
                                   </Typography>
                                   {addr.isDefault && (
-                                    <Chip size="small" label="Principal" color="success" sx={{ height: 16, '& .MuiChip-label': { px: 0.5, fontSize: '0.6rem' } }} />
+                                    <Chip size="small" label="Principal" color="success" sx={{ height: 16, flexShrink: 0, '& .MuiChip-label': { px: 0.5, fontSize: '0.6rem' } }} />
                                   )}
                                   {addr.latitude && addr.longitude && (
                                     <Tooltip title="Con coordenadas">
-                                      <LocationOnIcon sx={{ fontSize: 14, color: 'success.main' }} />
+                                      <LocationOnIcon sx={{ fontSize: 14, color: 'success.main', flexShrink: 0 }} />
                                     </Tooltip>
                                   )}
                                 </Stack>
-                                <Typography variant="caption" color="text.secondary" noWrap>
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {displayAddr || 'Sin dirección completa'}
                                 </Typography>
                               </Box>
@@ -1333,7 +1333,7 @@ export default function PlanningPage() {
                                 <IconButton
                                   size="small"
                                   onClick={(e) => deleteSavedAddress(addr.id, e)}
-                                  sx={{ ml: 1, color: 'error.main', '&:hover': { bgcolor: 'error.50' } }}
+                                  sx={{ ml: 1, flexShrink: 0, color: 'error.main', '&:hover': { bgcolor: 'error.50' } }}
                                 >
                                   <DeleteIcon sx={{ fontSize: 18 }} />
                                 </IconButton>
