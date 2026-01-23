@@ -43,6 +43,7 @@ import {
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SendIcon from '@mui/icons-material/Send';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
+import MyLocationIcon from '@mui/icons-material/MyLocation';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import PersonIcon from '@mui/icons-material/Person';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -458,6 +459,41 @@ export default function PlanningPage() {
     },
     onError: (error: any) => {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error al actualizar dirección', severity: 'error' });
+    },
+  });
+
+  // Geocodificar solo (sin cerrar el modal)
+  const geocodeSingleMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingOrder) throw new Error('No hay pedido seleccionado');
+      // Actualizar dirección con geocodificación
+      return ordersApi.updateAddress(editingOrder.id, editAddress, true);
+    },
+    onSuccess: (response) => {
+      const data = response.data;
+      setSnackbar({
+        open: true,
+        message: data.latitude && data.longitude
+          ? `Geocodificado: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`
+          : 'Dirección guardada (sin coordenadas encontradas)',
+        severity: data.latitude ? 'success' : 'warning'
+      });
+      // Actualizar el pedido en edición con las nuevas coordenadas
+      if (editingOrder && data.latitude && data.longitude) {
+        setEditingOrder({
+          ...editingOrder,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          addressRaw: {
+            ...editingOrder.addressRaw,
+            ...editAddress,
+          }
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al geocodificar', severity: 'error' });
     },
   });
 
@@ -1496,19 +1532,32 @@ export default function PlanningPage() {
             </Stack>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
           <Button onClick={() => setEditDialogOpen(false)} variant="outlined">
             Cancelar
           </Button>
-          <Button
-            variant="contained"
-            color={editingOrder?.status === 'IN_TRANSIT' ? 'warning' : 'primary'}
-            onClick={() => addressMutation.mutate()}
-            disabled={addressMutation.isPending || !editAddress.street}
-            startIcon={addressMutation.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
-          >
-            {editingOrder?.status === 'IN_TRANSIT' ? 'Solicitar Cambio' : 'Guardar y Geocodificar'}
-          </Button>
+          <Stack direction="row" spacing={1}>
+            {editingOrder?.status !== 'IN_TRANSIT' && (
+              <Button
+                variant="outlined"
+                color="info"
+                onClick={() => geocodeSingleMutation.mutate()}
+                disabled={geocodeSingleMutation.isPending || !editAddress.street || !editingOrder}
+                startIcon={geocodeSingleMutation.isPending ? <CircularProgress size={16} /> : <MyLocationIcon />}
+              >
+                Solo Geocodificar
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color={editingOrder?.status === 'IN_TRANSIT' ? 'warning' : 'primary'}
+              onClick={() => addressMutation.mutate()}
+              disabled={addressMutation.isPending || !editAddress.street}
+              startIcon={addressMutation.isPending ? <CircularProgress size={16} /> : <SaveIcon />}
+            >
+              {editingOrder?.status === 'IN_TRANSIT' ? 'Solicitar Cambio' : 'Guardar y Geocodificar'}
+            </Button>
+          </Stack>
         </DialogActions>
       </Dialog>
 
