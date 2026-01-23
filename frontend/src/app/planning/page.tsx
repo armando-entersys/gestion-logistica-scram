@@ -296,14 +296,12 @@ export default function PlanningPage() {
   const filteredOrders = useMemo(() => {
     let result = orders;
 
-    // Filter by tab
+    // Filter by tab: 0=Activos(READY), 1=En Ruta(IN_TRANSIT), 2=Entregados(DELIVERED)
     if (statusFilter === 0) {
-      result = result.filter((o) => o.status === 'READY' || o.status === 'IN_TRANSIT');
-    } else if (statusFilter === 1) {
       result = result.filter((o) => o.status === 'READY');
-    } else if (statusFilter === 2) {
+    } else if (statusFilter === 1) {
       result = result.filter((o) => o.status === 'IN_TRANSIT');
-    } else if (statusFilter === 3) {
+    } else if (statusFilter === 2) {
       result = result.filter((o) => o.status === 'DELIVERED');
     }
 
@@ -929,8 +927,7 @@ export default function PlanningPage() {
               '& .MuiTab-root': { minHeight: 40, py: 0, fontSize: '0.8125rem' },
             }}
           >
-            <Tab label={`Activos (${stats.active})`} />
-            <Tab label={`Listos (${stats.ready})`} />
+            <Tab label={`Activos (${stats.ready})`} />
             <Tab label={`En Ruta (${stats.inTransit})`} />
             <Tab label={`Entregados (${stats.delivered})`} />
           </Tabs>
