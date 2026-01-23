@@ -1053,38 +1053,34 @@ export default function ComprasPage() {
               </Button>
             </Tooltip>
 
-            {activeTab === 0 && (
-              <>
-                <Tooltip title={selectedDraftIds.length === draftOrders.length ? "Deseleccionar todos" : "Seleccionar todos los borradores"}>
-                  <Button
-                    variant="outlined"
-                    color="primary"
-                    size="small"
-                    onClick={handleSelectAllDrafts}
-                    disabled={draftOrders.length === 0}
-                  >
-                    {selectedDraftIds.length === draftOrders.length && draftOrders.length > 0
-                      ? `Deseleccionar (${selectedDraftIds.length})`
-                      : `Seleccionar Todo`}
-                  </Button>
-                </Tooltip>
+            <Tooltip title={selectedDraftIds.length === draftOrders.length ? "Deseleccionar todos" : "Seleccionar todos los borradores"}>
+              <Button
+                variant="outlined"
+                color="primary"
+                size="small"
+                onClick={handleSelectAllDrafts}
+                disabled={draftOrders.length === 0}
+              >
+                {selectedDraftIds.length === draftOrders.length && draftOrders.length > 0
+                  ? `Deseleccionar (${selectedDraftIds.length})`
+                  : `Seleccionar Todo`}
+              </Button>
+            </Tooltip>
 
-                <Tooltip title="Eliminar pedidos seleccionados">
-                  <span>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
-                      onClick={() => setDeleteConfirmOpen(true)}
-                      disabled={deleteDraftMutation.isPending || selectedDraftIds.length === 0}
-                    >
-                      Eliminar ({selectedDraftIds.length})
-                    </Button>
-                  </span>
-                </Tooltip>
-              </>
-            )}
+            <Tooltip title="Eliminar pedidos seleccionados">
+              <span>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  size="small"
+                  startIcon={deleteDraftMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={deleteDraftMutation.isPending || selectedDraftIds.length === 0}
+                >
+                  Eliminar ({selectedDraftIds.length})
+                </Button>
+              </span>
+            </Tooltip>
           </Stack>
         </Stack>
 

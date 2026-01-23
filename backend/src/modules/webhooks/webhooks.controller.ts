@@ -9,6 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { BindWebhookService } from './bind-webhook.service';
 import { WebhooksService } from './webhooks.service';
 
@@ -41,49 +43,70 @@ export class WebhooksController {
   constructor(
     private readonly bindWebhookService: BindWebhookService,
     private readonly webhooksService: WebhooksService,
+    @InjectQueue('sync') private readonly syncQueue: Queue,
   ) {}
 
   /**
    * Endpoint receptor de WebHook Add_Invoice de Bind ERP
-   * DESHABILITADO: Solo se sincroniza manualmente desde el botón
-   * Se activa automáticamente cuando se crea una nueva factura en Bind
+   * Cuando llega una factura nueva, agrega un job de sync para la fecha de la factura
+   * Esto usa la misma lógica de deduplicación que el botón de sincronizar
    */
   @Post('bind/invoice')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Recibe webhook de nueva factura desde Bind ERP (DESHABILITADO)' })
+  @ApiOperation({ summary: 'Recibe webhook de nueva factura desde Bind ERP' })
   @ApiBody({ description: 'Payload de factura de Bind' })
   async handleBindInvoice(@Body() payload: BindInvoiceWebhookPayload) {
-    // DESHABILITADO: Solo sincronización manual por ahora
-    this.logger.log(`[WebHook] IGNORADO - Recibida factura de Bind: ${payload.Serie || 'FA'}${payload.Number}`);
-    return {
-      success: true,
-      message: 'Webhook deshabilitado - usar sincronización manual',
-      ignored: true,
-    };
-
-    /* CÓDIGO ORIGINAL COMENTADO
-    this.logger.log(`[WebHook] Recibida factura de Bind: ${payload.Serie || 'FA'}${payload.Number}`);
-    this.logger.debug(`[WebHook] Payload: ${JSON.stringify(payload)}`);
+    const invoiceNumber = `${payload.Serie || 'FA'}${payload.Number}`;
+    this.logger.log(`[WebHook] Recibida factura de Bind: ${invoiceNumber}`);
 
     try {
-      const result = await this.bindWebhookService.processNewInvoice(payload);
+      // Extraer la fecha de la factura (formato YYYY-MM-DD)
+      const invoiceDate = payload.Date ? payload.Date.split('T')[0] : new Date().toISOString().split('T')[0];
 
-      this.logger.log(`[WebHook] Factura procesada: ${result.message}`);
+      // Agregar job a la cola de sync con la fecha de la factura
+      // Esto sincronizará todas las facturas de ese día usando la misma lógica del botón
+      const job = await this.syncQueue.add(
+        'sync-bind',
+        {
+          userId: 'webhook',
+          startDate: invoiceDate,
+          endDate: invoiceDate,
+          source: 'webhook',
+          triggeredBy: invoiceNumber,
+        },
+        {
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+          // Evitar duplicados: si ya hay un job para esta fecha, no agregar otro
+          jobId: `webhook-sync-${invoiceDate}`,
+        },
+      );
+
+      this.logger.log(`[WebHook] Job de sync agregado para fecha ${invoiceDate}, jobId: ${job.id}`);
+
       return {
         success: true,
-        message: result.message,
-        orderId: result.orderId,
-        carrierType: result.carrierType,
+        message: `Sincronización programada para ${invoiceDate}`,
+        jobId: job.id,
+        invoiceNumber,
       };
     } catch (error) {
-      this.logger.error(`[WebHook] Error procesando factura: ${error.message}`, error.stack);
-      // Retornamos 200 para que Bind no reintente, pero indicamos el error
+      // Si el job ya existe (duplicado), es OK
+      if (error.message?.includes('Job already exists')) {
+        this.logger.log(`[WebHook] Job de sync ya existe para esta fecha, ignorando duplicado`);
+        return {
+          success: true,
+          message: 'Sincronización ya programada',
+          invoiceNumber,
+        };
+      }
+
+      this.logger.error(`[WebHook] Error: ${error.message}`, error.stack);
       return {
         success: false,
         error: error.message,
       };
     }
-    */
   }
 
   /**

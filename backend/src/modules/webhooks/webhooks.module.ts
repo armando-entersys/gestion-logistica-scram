@@ -1,6 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 
 import { WebhooksController } from './webhooks.controller';
 import { WebhooksService } from './webhooks.service';
@@ -15,6 +15,7 @@ import { ClientsModule } from '../clients/clients.module';
       timeout: 30000,
       maxRedirects: 5,
     }),
+    BullModule.registerQueue({ name: 'sync' }),
     forwardRef(() => SyncModule),
     forwardRef(() => OrdersModule),
     forwardRef(() => ClientsModule),
