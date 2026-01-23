@@ -472,18 +472,21 @@ export default function PlanningPage() {
     },
     onSuccess: (response) => {
       const data = response.data;
-      if (data && data.latitude && data.longitude) {
+      const lat = data?.latitude ? parseFloat(data.latitude) : null;
+      const lng = data?.longitude ? parseFloat(data.longitude) : null;
+
+      if (lat && lng) {
         setSnackbar({
           open: true,
-          message: `Geocodificado: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`,
+          message: `Geocodificado: ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
           severity: 'success'
         });
         // Actualizar el pedido en edición con las nuevas coordenadas
         if (editingOrder) {
           setEditingOrder({
             ...editingOrder,
-            latitude: data.latitude,
-            longitude: data.longitude,
+            latitude: lat,
+            longitude: lng,
             addressRaw: {
               ...editingOrder.addressRaw,
               ...editAddress,
