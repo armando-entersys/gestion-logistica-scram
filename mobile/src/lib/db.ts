@@ -51,7 +51,7 @@ export interface LocalOrder {
   id: string;
   bindId: string;
   clientName: string;
-  clientEmail: string;
+  clientEmail?: string;
   clientPhone?: string;
   addressRaw: {
     street: string;
@@ -176,14 +176,19 @@ export async function getActiveRoute(): Promise<LocalOrder[]> {
 
 /**
  * Mark order as delivered (Optimistic UI)
+ * Removes order from local DB since delivered orders don't appear in active route
  */
 export async function markOrderDeliveredLocally(orderId: string): Promise<void> {
-  await db.orders.update(orderId, {
-    status: 'DELIVERED',
-    isLocalOnly: true,
-  });
+  // Verify order exists before updating
+  const order = await db.orders.get(orderId);
+  if (!order) {
+    console.error(`[markOrderDeliveredLocally] Order ${orderId} not found in local DB`);
+    throw new Error(`Pedido ${orderId} no encontrado`);
+  }
 
-  // Queue for sync
+  console.log(`[markOrderDeliveredLocally] Marking order ${orderId} as delivered. Current status: ${order.status}`);
+
+  // Queue for sync FIRST (to ensure evidence is synced)
   await db.pendingSync.add({
     type: 'delivery',
     payload: { orderId },
@@ -191,6 +196,10 @@ export async function markOrderDeliveredLocally(orderId: string): Promise<void> 
     attempts: 0,
     status: 'pending',
   });
+
+  // Delete from local DB - delivered orders don't need to be shown
+  await db.orders.delete(orderId);
+  console.log(`[markOrderDeliveredLocally] Order ${orderId} removed from local DB`);
 }
 
 /**
