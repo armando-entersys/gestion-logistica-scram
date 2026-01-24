@@ -63,22 +63,28 @@ export function useSync() {
 
       switch (item.type) {
         case 'delivery': {
-          // Get local evidence for this order
-          const evidence = await db.evidence
+          // Get ALL local evidence for this order (don't filter by uploaded status)
+          // This ensures we always send evidence even if it was previously marked
+          const evidenceList = await db.evidence
             .where('orderId')
             .equals(item.payload.orderId)
-            .and((e) => !e.uploaded)
-            .first();
+            .toArray();
 
           const payload: any = {};
 
+          // Find the most recent evidence with data
+          const evidence = evidenceList.find((e) => e.dataUrl);
+
           if (evidence && evidence.dataUrl) {
             // Send base64 data directly to server
+            console.log(`[Sync] Sending evidence for order ${item.payload.orderId}, type: ${evidence.type}`);
             payload.type = evidence.type;
             payload.base64Data = evidence.dataUrl;
             payload.isOffline = true;
             payload.capturedLatitude = evidence.latitude;
             payload.capturedLongitude = evidence.longitude;
+          } else {
+            console.warn(`[Sync] No evidence found for order ${item.payload.orderId}`);
           }
 
           await axios.patch(
@@ -87,30 +93,20 @@ export function useSync() {
             { headers }
           );
 
-          // Mark evidence as uploaded
-          if (evidence) {
-            await db.evidence.update(evidence.id!, {
-              uploaded: true,
-            });
+          // Mark all evidence for this order as uploaded
+          for (const ev of evidenceList) {
+            if (ev.id) {
+              await db.evidence.update(ev.id, { uploaded: true });
+            }
           }
           break;
         }
 
         case 'evidence': {
-          const evidence = await db.evidence.get(item.payload.evidenceId);
-          if (!evidence) {
-            console.warn(`Evidence ${item.payload.evidenceId} not found`);
-            return true; // Remove from queue
-          }
-
-          // Upload evidence separately if not already uploaded as part of delivery
-          if (!evidence.uploaded && evidence.dataUrl) {
-            // For standalone evidence upload, we could create a dedicated endpoint
-            // For now, just mark as uploaded since delivery will handle it
-            await db.evidence.update(evidence.id!, {
-              uploaded: true,
-            });
-          }
+          // Evidence is now handled as part of 'delivery' sync
+          // Just remove this item from queue without doing anything
+          // The delivery sync will find and upload the evidence
+          console.log(`[Sync] Evidence item ${item.payload.evidenceId} - skipping (handled by delivery)`);
           break;
         }
 
