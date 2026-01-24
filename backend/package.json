@@ -25,6 +25,7 @@
     "typeorm:migration:revert": "npm run typeorm -- migration:revert -d src/config/typeorm.config.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.18.0",
     "@nestjs/axios": "^3.0.1",
     "@nestjs/bullmq": "^10.0.1",
     "@nestjs/common": "^10.3.0",

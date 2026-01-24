@@ -27,6 +27,7 @@ import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
 import { ClientsService } from '@/modules/clients/clients.service';
 import { PushSubscriptionsService } from '@/modules/push-subscriptions/push-subscriptions.service';
+import { StorageService } from '@/modules/storage/storage.service';
 
 @Injectable()
 export class OrdersService {
@@ -46,6 +47,7 @@ export class OrdersService {
     private readonly clientAddressesService: ClientAddressesService,
     private readonly clientsService: ClientsService,
     private readonly pushService: PushSubscriptionsService,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -565,10 +567,18 @@ export class OrdersService {
   /**
    * RF-04: Prueba de Entrega (POD)
    * DRIVER solo puede marcar pedidos asignados a él
+   * Accepts either storageKey (legacy) or base64Data (new) for evidence
    */
   async markAsDelivered(
     orderId: string,
-    evidenceData?: { type: EvidenceType; storageKey: string; isOffline?: boolean },
+    evidenceData?: {
+      type?: EvidenceType;
+      storageKey?: string;
+      base64Data?: string;
+      isOffline?: boolean;
+      capturedLatitude?: number;
+      capturedLongitude?: number;
+    },
     driverId?: string,
   ): Promise<Order> {
     const order = await this.orderRepository.findOne({
@@ -597,15 +607,37 @@ export class OrdersService {
       trackingHash: trackingHash,
     });
 
-    if (evidenceData) {
-      const evidence = this.evidenceRepository.create({
-        orderId,
-        type: evidenceData.type,
-        storageKey: evidenceData.storageKey,
-        isOfflineUpload: evidenceData.isOffline || false,
-        capturedAt: now,
-      });
-      await this.evidenceRepository.save(evidence);
+    if (evidenceData && (evidenceData.storageKey || evidenceData.base64Data)) {
+      let storageKey = evidenceData.storageKey;
+      const evidenceType = evidenceData.type || EvidenceType.PHOTO; // Default to PHOTO
+
+      // If base64Data is provided, save it to storage
+      if (evidenceData.base64Data) {
+        try {
+          storageKey = await this.storageService.saveBase64File(
+            evidenceData.base64Data,
+            evidenceType,
+            orderId,
+          );
+          this.logger.log(`Saved evidence for order ${orderId}: ${storageKey}`);
+        } catch (error) {
+          this.logger.error(`Failed to save evidence for order ${orderId}: ${error.message}`);
+          // Continue without evidence if storage fails
+        }
+      }
+
+      if (storageKey) {
+        const evidence = this.evidenceRepository.create({
+          orderId,
+          type: evidenceType,
+          storageKey: storageKey,
+          isOfflineUpload: evidenceData.isOffline || false,
+          capturedAt: now,
+          capturedLatitude: evidenceData.capturedLatitude || null,
+          capturedLongitude: evidenceData.capturedLongitude || null,
+        });
+        await this.evidenceRepository.save(evidence);
+      }
     }
 
     // Encolar email de confirmación + encuesta CSAT - usar email del cliente como fallback

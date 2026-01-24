@@ -350,6 +350,7 @@ export class OrdersController {
   /**
    * Mark order as delivered with evidence
    * RF-04: Prueba de Entrega (POD)
+   * Accepts either storageKey (legacy) or base64Data (new) for evidence
    */
   @Patch(':id/deliver')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -358,7 +359,14 @@ export class OrdersController {
   @ApiOperation({ summary: 'Mark order as delivered with evidence (POD)' })
   markAsDelivered(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { type: EvidenceType; storageKey: string; isOffline?: boolean },
+    @Body() body: {
+      type?: EvidenceType;
+      storageKey?: string;
+      base64Data?: string;
+      isOffline?: boolean;
+      capturedLatitude?: number;
+      capturedLongitude?: number;
+    },
     @CurrentUser('id') driverId: string,
   ) {
     return this.ordersService.markAsDelivered(id, body, driverId);

@@ -11,6 +11,7 @@ import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesModule } from '@/modules/client-addresses/client-addresses.module';
 import { ClientsModule } from '@/modules/clients/clients.module';
 import { PushSubscriptionsModule } from '@/modules/push-subscriptions/push-subscriptions.module';
+import { StorageModule } from '@/modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PushSubscriptionsModule } from '@/modules/push-subscriptions/push-subsc
     ClientAddressesModule,
     ClientsModule,
     PushSubscriptionsModule,
+    StorageModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, GeocodingService],

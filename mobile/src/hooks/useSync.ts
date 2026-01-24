@@ -72,12 +72,13 @@ export function useSync() {
 
           const payload: any = {};
 
-          if (evidence) {
-            // In production, would upload to S3 first
-            // For now, simulate with a storage key
+          if (evidence && evidence.dataUrl) {
+            // Send base64 data directly to server
             payload.type = evidence.type;
-            payload.storageKey = `evidence/${item.payload.orderId}/${Date.now()}`;
+            payload.base64Data = evidence.dataUrl;
             payload.isOffline = true;
+            payload.capturedLatitude = evidence.latitude;
+            payload.capturedLongitude = evidence.longitude;
           }
 
           await axios.patch(
@@ -90,7 +91,6 @@ export function useSync() {
           if (evidence) {
             await db.evidence.update(evidence.id!, {
               uploaded: true,
-              storageKey: payload.storageKey,
             });
           }
           break;
@@ -103,13 +103,14 @@ export function useSync() {
             return true; // Remove from queue
           }
 
-          // In production: upload to S3/MinIO
-          // For now, just mark as uploaded
-          const storageKey = `evidence/${evidence.orderId}/${Date.now()}`;
-          await db.evidence.update(evidence.id!, {
-            uploaded: true,
-            storageKey,
-          });
+          // Upload evidence separately if not already uploaded as part of delivery
+          if (!evidence.uploaded && evidence.dataUrl) {
+            // For standalone evidence upload, we could create a dedicated endpoint
+            // For now, just mark as uploaded since delivery will handle it
+            await db.evidence.update(evidence.id!, {
+              uploaded: true,
+            });
+          }
           break;
         }
 

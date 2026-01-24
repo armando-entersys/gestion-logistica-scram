@@ -226,7 +226,11 @@ export default function PlanningPage() {
 
   // Get evidence URL
   const getEvidenceUrl = (storageKey: string) => {
-    // Assuming storage is relative to API URL or a CDN
+    // If storageKey is already a full URL (R2), return as-is
+    if (storageKey.startsWith('http://') || storageKey.startsWith('https://')) {
+      return storageKey;
+    }
+    // Legacy: relative path, serve through backend
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     return `${apiUrl.replace('/api/v1', '')}/storage/${storageKey}`;
   };

@@ -58,3 +58,5 @@ temp/
 # Misc
 *.tgz
 *.gz
+gcs-key.json
+backend/gcs-key.json
