@@ -85,6 +85,12 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:notificaciones@scram2k.com}
+      # Google Cloud Storage for evidence images
+      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-mi-infraestructura-web}
+      GCS_BUCKET_NAME: ${GCS_BUCKET_NAME:-scram-evidence}
+      GCS_KEY_FILE: /app/gcs-key.json
+    volumes:
+      - ./gcs-key.json:/app/gcs-key.json:ro
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik"

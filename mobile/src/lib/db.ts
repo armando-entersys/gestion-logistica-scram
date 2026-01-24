@@ -10,7 +10,7 @@ import Dexie, { Table } from 'dexie';
  * Incrementar este número fuerza limpieza de IndexedDB en todos los dispositivos
  * Útil cuando hay cambios de esquema o para forzar resincronización
  */
-const APP_DATA_VERSION = 2; // Incrementar para forzar limpieza de datos locales
+const APP_DATA_VERSION = 3; // Incrementar para forzar limpieza de datos locales
 const VERSION_KEY = 'scram_app_data_version';
 
 /**
