@@ -192,10 +192,24 @@ export class OrdersController {
   }
 
   /**
+   * Get pending address change requests for driver
+   * Driver sees their pending requests to approve/reject
+   * IMPORTANTE: Debe estar ANTES de la ruta :id para evitar conflictos
+   */
+  @Get('address-change-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.DRIVER)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get pending address change requests for driver' })
+  getDriverAddressChangeRequests(@CurrentUser('id') driverId: string) {
+    return this.ordersService.getDriverPendingAddressChanges(driverId);
+  }
+
+  /**
    * Get single order details
    * - Todos los roles autenticados pueden ver detalles
    * - DRIVER: Solo puede ver órdenes asignadas a él
-   * IMPORTANTE: Debe estar DESPUÉS de rutas específicas (stats/dashboard, my-route)
+   * IMPORTANTE: Debe estar DESPUÉS de rutas específicas (stats/dashboard, my-route, address-change-requests)
    */
   @Get(':id')
   @UseGuards(JwtAuthGuard)
@@ -464,19 +478,6 @@ export class OrdersController {
     @CurrentUser('id') requesterId: string,
   ) {
     return this.ordersService.requestAddressChange(dto, requesterId);
-  }
-
-  /**
-   * Get pending address change requests for driver
-   * Driver sees their pending requests to approve/reject
-   */
-  @Get('address-change-requests')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.DRIVER)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get pending address change requests for driver' })
-  getDriverAddressChangeRequests(@CurrentUser('id') driverId: string) {
-    return this.ordersService.getDriverPendingAddressChanges(driverId);
   }
 
   /**
