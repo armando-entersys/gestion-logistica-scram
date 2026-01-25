@@ -220,6 +220,8 @@ export default function PlanningPage() {
 
   // Open POD viewer
   const openPodViewer = (order: Order) => {
+    console.log('Opening POD for order:', order.orderNumber);
+    console.log('Evidences:', JSON.stringify(order.evidences, null, 2));
     setPodOrder(order);
     setPodDialogOpen(true);
   };
