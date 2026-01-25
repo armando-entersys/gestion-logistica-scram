@@ -63,28 +63,37 @@ export function useSync() {
 
       switch (item.type) {
         case 'delivery': {
-          // Get ALL local evidence for this order (don't filter by uploaded status)
-          // This ensures we always send evidence even if it was previously marked
+          // Get ALL local evidence for this order
           const evidenceList = await db.evidence
             .where('orderId')
             .equals(item.payload.orderId)
             .toArray();
 
+          // Build array of evidence items to send
+          const evidenceItems = evidenceList
+            .filter((e) => e.dataUrl)
+            .map((e) => ({
+              type: e.type,
+              base64Data: e.dataUrl,
+              isOffline: true,
+              capturedLatitude: e.latitude,
+              capturedLongitude: e.longitude,
+            }));
+
+          console.log(`[Sync] Sending ${evidenceItems.length} evidence items for order ${item.payload.orderId}`);
+
           const payload: any = {};
 
-          // Find the most recent evidence with data
-          const evidence = evidenceList.find((e) => e.dataUrl);
-
-          if (evidence && evidence.dataUrl) {
-            // Send base64 data directly to server
-            console.log(`[Sync] Sending evidence for order ${item.payload.orderId}, type: ${evidence.type}`);
-            payload.type = evidence.type;
-            payload.base64Data = evidence.dataUrl;
-            payload.isOffline = true;
-            payload.capturedLatitude = evidence.latitude;
-            payload.capturedLongitude = evidence.longitude;
-          } else {
-            console.warn(`[Sync] No evidence found for order ${item.payload.orderId}`);
+          // Send as array if multiple, single object for backwards compatibility
+          if (evidenceItems.length > 1) {
+            payload.evidences = evidenceItems;
+          } else if (evidenceItems.length === 1) {
+            // Single evidence - backwards compatible format
+            payload.type = evidenceItems[0].type;
+            payload.base64Data = evidenceItems[0].base64Data;
+            payload.isOffline = evidenceItems[0].isOffline;
+            payload.capturedLatitude = evidenceItems[0].capturedLatitude;
+            payload.capturedLongitude = evidenceItems[0].capturedLongitude;
           }
 
           await axios.patch(

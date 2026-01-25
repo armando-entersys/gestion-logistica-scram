@@ -578,6 +578,14 @@ export class OrdersService {
       isOffline?: boolean;
       capturedLatitude?: number;
       capturedLongitude?: number;
+      // Support for multiple evidence items
+      evidences?: Array<{
+        type?: EvidenceType;
+        base64Data?: string;
+        isOffline?: boolean;
+        capturedLatitude?: number;
+        capturedLongitude?: number;
+      }>;
     },
     driverId?: string,
   ): Promise<Order> {
@@ -607,22 +615,29 @@ export class OrdersService {
       trackingHash: trackingHash,
     });
 
-    if (evidenceData && (evidenceData.storageKey || evidenceData.base64Data)) {
-      let storageKey = evidenceData.storageKey;
-      const evidenceType = evidenceData.type || EvidenceType.PHOTO; // Default to PHOTO
+    // Helper function to save a single evidence item
+    const saveEvidence = async (item: {
+      type?: EvidenceType;
+      storageKey?: string;
+      base64Data?: string;
+      isOffline?: boolean;
+      capturedLatitude?: number;
+      capturedLongitude?: number;
+    }) => {
+      let storageKey = item.storageKey;
+      const evidenceType = item.type || EvidenceType.PHOTO;
 
-      // If base64Data is provided, save it to storage
-      if (evidenceData.base64Data) {
+      if (item.base64Data) {
         try {
           storageKey = await this.storageService.saveBase64File(
-            evidenceData.base64Data,
+            item.base64Data,
             evidenceType,
             orderId,
           );
-          this.logger.log(`Saved evidence for order ${orderId}: ${storageKey}`);
+          this.logger.log(`Saved ${evidenceType} evidence for order ${orderId}: ${storageKey}`);
         } catch (error) {
-          this.logger.error(`Failed to save evidence for order ${orderId}: ${error.message}`);
-          // Continue without evidence if storage fails
+          this.logger.error(`Failed to save ${evidenceType} evidence for order ${orderId}: ${error.message}`);
+          return;
         }
       }
 
@@ -631,13 +646,25 @@ export class OrdersService {
           orderId,
           type: evidenceType,
           storageKey: storageKey,
-          isOfflineUpload: evidenceData.isOffline || false,
+          isOfflineUpload: item.isOffline || false,
           capturedAt: now,
-          capturedLatitude: evidenceData.capturedLatitude || null,
-          capturedLongitude: evidenceData.capturedLongitude || null,
+          capturedLatitude: item.capturedLatitude || null,
+          capturedLongitude: item.capturedLongitude || null,
         });
         await this.evidenceRepository.save(evidence);
       }
+    };
+
+    // Handle multiple evidence items (new format)
+    if (evidenceData?.evidences && evidenceData.evidences.length > 0) {
+      this.logger.log(`Processing ${evidenceData.evidences.length} evidence items for order ${orderId}`);
+      for (const item of evidenceData.evidences) {
+        await saveEvidence(item);
+      }
+    }
+    // Handle single evidence item (backwards compatible)
+    else if (evidenceData && (evidenceData.storageKey || evidenceData.base64Data)) {
+      await saveEvidence(evidenceData);
     }
 
     // Encolar email de confirmación + encuesta CSAT - usar email del cliente como fallback
