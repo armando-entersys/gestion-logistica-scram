@@ -46,7 +46,7 @@ import {
   db,
   saveOrdersLocally,
   getActiveRoute,
-  clearSession,
+  clearAllData,
   getSession,
   LocalOrder,
   confirmPickupLocally,
@@ -174,7 +174,8 @@ export default function RoutePage() {
   }, []);
 
   const handleLogout = async () => {
-    await clearSession();
+    // Clear all local data (orders, pending sync, evidence, session)
+    await clearAllData();
     navigate('/login');
   };
 
