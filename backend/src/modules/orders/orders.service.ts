@@ -507,10 +507,24 @@ export class OrdersService {
 
       const position = i + 1;
 
-      // Calcular ventana ETA
+      // Calcular ventana ETA en zona horaria de México (America/Mexico_City = UTC-6)
       const [hours, minutes] = startTime.split(':').map(Number);
-      const baseTime = new Date();
-      baseTime.setHours(hours, minutes, 0, 0);
+
+      // Crear fecha en UTC pero ajustada para México
+      // México está en UTC-6, así que sumamos 6 horas al tiempo local deseado
+      const now = new Date();
+      const mexicoOffset = 6; // UTC-6 for Mexico City (standard time)
+
+      // Construir la fecha/hora base en UTC que corresponde a la hora local de México
+      const baseTime = new Date(Date.UTC(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        hours + mexicoOffset, // Ajustar a UTC
+        minutes,
+        0,
+        0
+      ));
 
       const minutesToAdd = i * avgStopTime;
       const bufferMinutes = Math.ceil(minutesToAdd * (bufferPercent / 100));
