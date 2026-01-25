@@ -671,7 +671,8 @@ export class OrdersService {
 
     // Handle multiple evidence items (new format)
     if (evidenceData?.evidences && evidenceData.evidences.length > 0) {
-      this.logger.log(`Processing ${evidenceData.evidences.length} evidence items for order ${orderId}`);
+      const types = evidenceData.evidences.map(e => e.type || 'undefined').join(', ');
+      this.logger.log(`Processing ${evidenceData.evidences.length} evidence items for order ${orderId}, types: [${types}]`);
       for (const item of evidenceData.evidences) {
         await saveEvidence(item);
       }

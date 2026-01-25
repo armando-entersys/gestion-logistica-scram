@@ -1613,16 +1613,20 @@ export default function PlanningPage() {
                     Evidencias capturadas:
                   </Typography>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                    {podOrder.evidences.map((evidence) => (
+                    {podOrder.evidences.map((evidence) => {
+                      // Determine if it's a photo - check type (case-insensitive) or fallback to storageKey
+                      const isPhoto = evidence.type?.toUpperCase() === 'PHOTO' ||
+                        evidence.storageKey?.toLowerCase().includes('photo');
+                      return (
                       <Paper key={evidence.id} variant="outlined" sx={{ p: 2, flex: 1 }}>
                         <Stack spacing={1} alignItems="center">
-                          {evidence.type === 'PHOTO' ? (
+                          {isPhoto ? (
                             <PhotoCameraIcon sx={{ fontSize: 40, color: 'primary.main' }} />
                           ) : (
                             <GestureIcon sx={{ fontSize: 40, color: 'secondary.main' }} />
                           )}
                           <Typography variant="body2" fontWeight={500}>
-                            {evidence.type === 'PHOTO' ? 'Fotografía' : 'Firma'}
+                            {isPhoto ? 'Fotografía' : 'Firma'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {formatDateTime(evidence.capturedAt || evidence.createdAt)}
@@ -1662,7 +1666,8 @@ export default function PlanningPage() {
                           </Box>
                         </Stack>
                       </Paper>
-                    ))}
+                    );
+                    })}
                   </Stack>
                 </Box>
               ) : (

@@ -380,6 +380,14 @@ export class OrdersController {
       isOffline?: boolean;
       capturedLatitude?: number;
       capturedLongitude?: number;
+      // Support for multiple evidence items (photo + signature)
+      evidences?: Array<{
+        type?: EvidenceType;
+        base64Data?: string;
+        isOffline?: boolean;
+        capturedLatitude?: number;
+        capturedLongitude?: number;
+      }>;
     },
     @CurrentUser('id') driverId: string,
   ) {
