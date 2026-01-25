@@ -147,10 +147,9 @@ export default function DeliveryPage() {
   const handleSubmit = async () => {
     if (!orderId) return;
 
-    const dataUrl = evidenceType === 'PHOTO' ? photoDataUrl : signatureDataUrl;
-
-    if (!dataUrl) {
-      setError('Por favor captura evidencia antes de confirmar');
+    // Require at least one evidence (photo or signature)
+    if (!photoDataUrl && !signatureDataUrl) {
+      setError('Por favor captura al menos una evidencia (foto o firma)');
       return;
     }
 
@@ -175,16 +174,30 @@ export default function DeliveryPage() {
         console.warn('Could not get location');
       }
 
-      // Save evidence locally
-      await saveEvidenceLocally({
-        orderId,
-        type: evidenceType,
-        dataUrl,
-        capturedAt: new Date().toISOString(),
-        latitude,
-        longitude,
-        uploaded: false,
-      });
+      // Save ALL captured evidence (photo AND signature if both exist)
+      if (photoDataUrl) {
+        await saveEvidenceLocally({
+          orderId,
+          type: 'PHOTO',
+          dataUrl: photoDataUrl,
+          capturedAt: new Date().toISOString(),
+          latitude,
+          longitude,
+          uploaded: false,
+        });
+      }
+
+      if (signatureDataUrl) {
+        await saveEvidenceLocally({
+          orderId,
+          type: 'SIGNATURE',
+          dataUrl: signatureDataUrl,
+          capturedAt: new Date().toISOString(),
+          latitude,
+          longitude,
+          uploaded: false,
+        });
+      }
 
       // Mark order as delivered (Optimistic UI)
       await markOrderDeliveredLocally(orderId);
@@ -261,14 +274,48 @@ export default function DeliveryPage() {
         >
           <Tab
             value="PHOTO"
-            icon={<CameraAltIcon />}
-            label="Foto"
+            icon={
+              <Box sx={{ position: 'relative' }}>
+                <CameraAltIcon color={photoDataUrl ? 'success' : 'inherit'} />
+                {photoDataUrl && (
+                  <CheckCircleIcon
+                    sx={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      fontSize: 14,
+                      color: 'success.main',
+                      bgcolor: 'background.paper',
+                      borderRadius: '50%',
+                    }}
+                  />
+                )}
+              </Box>
+            }
+            label={photoDataUrl ? 'Foto ✓' : 'Foto'}
             iconPosition="top"
           />
           <Tab
             value="SIGNATURE"
-            icon={<DrawIcon />}
-            label="Firma"
+            icon={
+              <Box sx={{ position: 'relative' }}>
+                <DrawIcon color={signatureDataUrl ? 'success' : 'inherit'} />
+                {signatureDataUrl && (
+                  <CheckCircleIcon
+                    sx={{
+                      position: 'absolute',
+                      top: -4,
+                      right: -8,
+                      fontSize: 14,
+                      color: 'success.main',
+                      bgcolor: 'background.paper',
+                      borderRadius: '50%',
+                    }}
+                  />
+                )}
+              </Box>
+            }
+            label={signatureDataUrl ? 'Firma ✓' : 'Firma'}
             iconPosition="top"
           />
         </Tabs>
