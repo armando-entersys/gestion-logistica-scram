@@ -17,7 +17,7 @@ export class EmailService {
 
   // STAGING MODE: Redirect all customer emails to these addresses for testing
   // TODO: Remove this override when going to production
-  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx, hpe@scram2k.com';
+  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx, hpe@scram2k.com, alex@scram2k.com';
 
   constructor(private readonly configService: ConfigService) {
     this.from = this.configService.get('email.from') || 'notificaciones@scram2k.com';
