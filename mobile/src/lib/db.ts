@@ -220,6 +220,8 @@ export async function markOrderDeliveredLocally(orderId: string): Promise<void> 
 
 /**
  * Save evidence locally
+ * Note: Evidence is NOT queued to pendingSync anymore.
+ * It will be uploaded as part of the 'delivery' sync when markOrderDeliveredLocally() is called.
  */
 export async function saveEvidenceLocally(evidence: Omit<LocalEvidence, 'id'>): Promise<number> {
   const id = await db.evidence.add({
@@ -227,18 +229,9 @@ export async function saveEvidenceLocally(evidence: Omit<LocalEvidence, 'id'>): 
     uploaded: false,
   });
 
-  // Queue for sync
-  await db.pendingSync.add({
-    type: 'evidence',
-    payload: {
-      orderId: evidence.orderId,
-      evidenceId: id,
-      type: evidence.type,
-    },
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-    status: 'pending',
-  });
+  // NOTE: We no longer add 'evidence' to pendingSync.
+  // The evidence will be found and uploaded when the 'delivery' sync runs.
+  // This prevents race conditions and duplicate syncs.
 
   return id;
 }
