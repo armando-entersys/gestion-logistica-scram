@@ -630,6 +630,7 @@ export class OrdersService {
     });
 
     // Helper function to save a single evidence item
+    // Only ONE evidence of each type (PHOTO/SIGNATURE) is allowed per order
     const saveEvidence = async (item: {
       type?: EvidenceType;
       storageKey?: string;
@@ -656,6 +657,13 @@ export class OrdersService {
       }
 
       if (storageKey) {
+        // Delete any existing evidence of the same type for this order
+        // This ensures only ONE photo and ONE signature per order
+        await this.evidenceRepository.delete({
+          orderId,
+          type: evidenceType,
+        });
+
         const evidence = this.evidenceRepository.create({
           orderId,
           type: evidenceType,
