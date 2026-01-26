@@ -149,10 +149,26 @@ export const db = new SCRAMDatabase();
  * Save orders from server to local database
  * IMPORTANT: Clears existing orders first to prevent mixing data from different drivers
  * when they share a device without proper logout
+ * Also filters out orders that are pending delivery sync (already delivered locally)
  */
 export async function saveOrdersLocally(orders: LocalOrder[]): Promise<void> {
   const now = new Date().toISOString();
-  const ordersWithSync = orders.map((order) => ({
+
+  // Get order IDs that are pending delivery sync (delivered locally but not yet synced)
+  const pendingDeliveries = await db.pendingSync
+    .where('type')
+    .equals('delivery')
+    .toArray();
+  const pendingDeliveryOrderIds = new Set(pendingDeliveries.map((p) => p.payload.orderId));
+
+  // Filter out orders that are pending delivery sync - they've been delivered locally
+  const filteredOrders = orders.filter((order) => !pendingDeliveryOrderIds.has(order.id));
+
+  if (pendingDeliveryOrderIds.size > 0) {
+    console.log(`[saveOrdersLocally] Filtering out ${pendingDeliveryOrderIds.size} orders pending delivery sync`);
+  }
+
+  const ordersWithSync = filteredOrders.map((order) => ({
     ...order,
     lastSyncedAt: now,
     isLocalOnly: false,
