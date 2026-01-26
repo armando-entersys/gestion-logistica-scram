@@ -102,10 +102,11 @@ export function useSync() {
             { headers }
           );
 
-          // Mark all evidence for this order as uploaded
+          // Delete evidence from IndexedDB after successful upload
+          // This prevents re-uploading the same evidence on subsequent syncs
           for (const ev of evidenceList) {
             if (ev.id) {
-              await db.evidence.update(ev.id, { uploaded: true });
+              await db.evidence.delete(ev.id);
             }
           }
           break;
