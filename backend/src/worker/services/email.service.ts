@@ -15,9 +15,9 @@ export class EmailService {
   private readonly from: string;
   private readonly transporter: nodemailer.Transporter;
 
-  // STAGING MODE: Redirect all customer emails to this address for testing
+  // STAGING MODE: Redirect all customer emails to these addresses for testing
   // TODO: Remove this override when going to production
-  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx';
+  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx, hpe@scram2k.com';
 
   constructor(private readonly configService: ConfigService) {
     this.from = this.configService.get('email.from') || 'notificaciones@scram2k.com';
