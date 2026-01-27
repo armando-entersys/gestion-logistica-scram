@@ -115,8 +115,26 @@ export class OrdersController {
   @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get dashboard statistics' })
-  getDashboardStats() {
-    return this.ordersService.getDashboardStats();
+  getDashboardStats(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.ordersService.getDashboardStats(startDate, endDate);
+  }
+
+  /**
+   * Export orders for report
+   */
+  @Get('report/export')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Export orders for report' })
+  getOrdersForReport(
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.ordersService.getOrdersForReport(startDate, endDate);
   }
 
   /**

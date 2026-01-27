@@ -1103,71 +1103,226 @@ export class OrdersService {
 
   /**
    * Dashboard statistics (ADMIN, DIRECTOR)
+   * Returns KPIs for the specified date range (defaults to today)
    */
-  async getDashboardStats(): Promise<{
+  async getDashboardStats(startDate?: string, endDate?: string): Promise<{
+    // Counts
     total: number;
+    delivered: number;
+    inTransit: number;
+    pending: number;
+    returned: number;
+    // Metrics
+    deliveryRate: number;
+    totalRevenue: number;
+    avgCsat: number | null;
+    csatCount: number;
+    activeDrivers: number;
+    // Breakdown
     byStatus: Record<string, number>;
     byPriority: Record<string, number>;
-    avgCsat: number | null;
-    todayDelivered: number;
-    todayPending: number;
+    byDriver: Array<{
+      driverId: string;
+      driverName: string;
+      total: number;
+      delivered: number;
+      pending: number;
+    }>;
+    // Time series for chart (last 7 days)
+    dailyDeliveries: Array<{ date: string; count: number }>;
   }> {
-    const total = await this.orderRepository.count();
+    // Calculate date range (default to today in Mexico timezone)
+    const now = new Date();
+    // Adjust for Mexico timezone (UTC-6)
+    const mexicoOffset = -6 * 60;
+    const localNow = new Date(now.getTime() + (mexicoOffset + now.getTimezoneOffset()) * 60000);
 
+    let start: Date;
+    let end: Date;
+
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      // Default to today
+      start = new Date(localNow);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(localNow);
+      end.setHours(23, 59, 59, 999);
+    }
+
+    // Status counts for the date range
     const statusCounts = await this.orderRepository
       .createQueryBuilder('order')
       .select('order.status', 'status')
       .addSelect('COUNT(*)', 'count')
+      .where('order.createdAt >= :start', { start })
+      .andWhere('order.createdAt <= :end', { end })
       .groupBy('order.status')
       .getRawMany();
-
-    const priorityCounts = await this.orderRepository
-      .createQueryBuilder('order')
-      .select('order.priorityLevel', 'priority')
-      .addSelect('COUNT(*)', 'count')
-      .groupBy('order.priorityLevel')
-      .getRawMany();
-
-    const csatResult = await this.orderRepository
-      .createQueryBuilder('order')
-      .select('AVG(order.csatScore)', 'avg')
-      .where('order.csatScore IS NOT NULL')
-      .getRawOne();
-
-    // Estadísticas del día
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayDelivered = await this.orderRepository.count({
-      where: {
-        status: OrderStatus.DELIVERED,
-      },
-    });
-
-    const todayPending = await this.orderRepository.count({
-      where: {
-        status: In([OrderStatus.READY, OrderStatus.IN_TRANSIT]),
-      },
-    });
 
     const byStatus: Record<string, number> = {};
     for (const item of statusCounts) {
       byStatus[item.status] = parseInt(item.count, 10);
     }
 
+    const total = Object.values(byStatus).reduce((a, b) => a + b, 0);
+    const delivered = byStatus['DELIVERED'] || 0;
+    const inTransit = byStatus['IN_TRANSIT'] || 0;
+    const pending = byStatus['READY'] || 0;
+    const returned = byStatus['RETURNED'] || 0;
+
+    // Priority counts
+    const priorityCounts = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('order.priorityLevel', 'priority')
+      .addSelect('COUNT(*)', 'count')
+      .where('order.createdAt >= :start', { start })
+      .andWhere('order.createdAt <= :end', { end })
+      .groupBy('order.priorityLevel')
+      .getRawMany();
+
     const byPriority: Record<string, number> = {};
     for (const item of priorityCounts) {
       byPriority[item.priority] = parseInt(item.count, 10);
     }
 
+    // Revenue for delivered orders in range
+    const revenueResult = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('SUM(order.totalAmount)', 'total')
+      .where('order.status = :status', { status: OrderStatus.DELIVERED })
+      .andWhere('order.deliveredAt >= :start', { start })
+      .andWhere('order.deliveredAt <= :end', { end })
+      .getRawOne();
+
+    // CSAT for delivered orders in range
+    const csatResult = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('AVG(order.csatScore)', 'avg')
+      .addSelect('COUNT(order.csatScore)', 'count')
+      .where('order.csatScore IS NOT NULL')
+      .andWhere('order.deliveredAt >= :start', { start })
+      .andWhere('order.deliveredAt <= :end', { end })
+      .getRawOne();
+
+    // Active drivers (drivers with orders in the range)
+    const activeDriversResult = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('COUNT(DISTINCT order.assignedDriverId)', 'count')
+      .where('order.assignedDriverId IS NOT NULL')
+      .andWhere('order.createdAt >= :start', { start })
+      .andWhere('order.createdAt <= :end', { end })
+      .getRawOne();
+
+    // Stats by driver
+    const driverStats = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.assignedDriver', 'driver')
+      .select('order.assignedDriverId', 'driverId')
+      .addSelect("CONCAT(driver.firstName, ' ', driver.lastName)", 'driverName')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect(`SUM(CASE WHEN order.status = 'DELIVERED' THEN 1 ELSE 0 END)`, 'delivered')
+      .addSelect(`SUM(CASE WHEN order.status IN ('READY', 'IN_TRANSIT') THEN 1 ELSE 0 END)`, 'pending')
+      .where('order.assignedDriverId IS NOT NULL')
+      .andWhere('order.createdAt >= :start', { start })
+      .andWhere('order.createdAt <= :end', { end })
+      .groupBy('order.assignedDriverId')
+      .addGroupBy('driver.firstName')
+      .addGroupBy('driver.lastName')
+      .orderBy('total', 'DESC')
+      .getRawMany();
+
+    // Daily deliveries for last 7 days (for chart)
+    const sevenDaysAgo = new Date(localNow);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const dailyDeliveriesRaw = await this.orderRepository
+      .createQueryBuilder('order')
+      .select("DATE(order.deliveredAt)", 'date')
+      .addSelect('COUNT(*)', 'count')
+      .where('order.status = :status', { status: OrderStatus.DELIVERED })
+      .andWhere('order.deliveredAt >= :start', { start: sevenDaysAgo })
+      .groupBy("DATE(order.deliveredAt)")
+      .orderBy('date', 'ASC')
+      .getRawMany();
+
+    // Fill in missing dates with 0
+    const dailyDeliveries: Array<{ date: string; count: number }> = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(sevenDaysAgo);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+      const found = dailyDeliveriesRaw.find(d => d.date?.toString().startsWith(dateStr));
+      dailyDeliveries.push({
+        date: dateStr,
+        count: found ? parseInt(found.count, 10) : 0,
+      });
+    }
+
     return {
       total,
+      delivered,
+      inTransit,
+      pending,
+      returned,
+      deliveryRate: total > 0 ? Math.round((delivered / total) * 100) : 0,
+      totalRevenue: revenueResult?.total ? parseFloat(revenueResult.total) : 0,
+      avgCsat: csatResult?.avg ? parseFloat(csatResult.avg) : null,
+      csatCount: csatResult?.count ? parseInt(csatResult.count, 10) : 0,
+      activeDrivers: activeDriversResult?.count ? parseInt(activeDriversResult.count, 10) : 0,
       byStatus,
       byPriority,
-      avgCsat: csatResult?.avg ? parseFloat(csatResult.avg) : null,
-      todayDelivered,
-      todayPending,
+      byDriver: driverStats.map(d => ({
+        driverId: d.driverId,
+        driverName: d.driverName || 'Sin asignar',
+        total: parseInt(d.total, 10),
+        delivered: parseInt(d.delivered, 10),
+        pending: parseInt(d.pending, 10),
+      })),
+      dailyDeliveries,
     };
+  }
+
+  /**
+   * Get orders for report export
+   */
+  async getOrdersForReport(startDate: string, endDate: string): Promise<any[]> {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const orders = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.assignedDriver', 'driver')
+      .where('order.createdAt >= :start', { start })
+      .andWhere('order.createdAt <= :end', { end })
+      .orderBy('order.createdAt', 'DESC')
+      .getMany();
+
+    return orders.map(order => ({
+      id: order.id,
+      bindId: order.bindId,
+      orderNumber: order.orderNumber,
+      clientName: order.clientName,
+      clientEmail: order.clientEmail,
+      clientPhone: order.clientPhone,
+      address: order.addressRaw ?
+        `${order.addressRaw.street} ${order.addressRaw.number}, ${order.addressRaw.neighborhood}, ${order.addressRaw.city}` : '',
+      status: order.status,
+      priorityLevel: order.priorityLevel,
+      totalAmount: order.totalAmount,
+      driverName: order.assignedDriver ?
+        `${order.assignedDriver.firstName} ${order.assignedDriver.lastName}` : 'Sin asignar',
+      createdAt: order.createdAt,
+      deliveredAt: order.deliveredAt,
+      csatScore: order.csatScore,
+      csatFeedback: order.csatFeedback,
+    }));
   }
 
   // =============================================

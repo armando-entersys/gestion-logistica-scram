@@ -52,8 +52,11 @@ export const ordersApi = {
   getById: (id: string) =>
     api.get(`/orders/${id}`),
 
-  getStats: () =>
-    api.get('/orders/stats/dashboard'),
+  getStats: (startDate?: string, endDate?: string) =>
+    api.get('/orders/stats/dashboard', { params: { startDate, endDate } }),
+
+  exportReport: (startDate: string, endDate: string) =>
+    api.get('/orders/report/export', { params: { startDate, endDate } }),
 
   assign: (driverId: string, orderIds: string[]) =>
     api.post('/orders/assign', { driverId, orderIds }),

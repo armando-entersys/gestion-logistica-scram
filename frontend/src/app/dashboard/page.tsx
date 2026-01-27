@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -17,6 +17,16 @@ import {
   CircularProgress,
   Avatar,
   LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  IconButton,
+  Chip,
+  Divider,
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import DashboardIcon from '@mui/icons-material/Dashboard';
@@ -27,11 +37,47 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import PeopleIcon from '@mui/icons-material/People';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import StarIcon from '@mui/icons-material/Star';
+import DownloadIcon from '@mui/icons-material/Download';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import UndoIcon from '@mui/icons-material/Undo';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 import { ordersApi } from '@/lib/api';
 
+interface DashboardStats {
+  total: number;
+  delivered: number;
+  inTransit: number;
+  pending: number;
+  returned: number;
+  deliveryRate: number;
+  totalRevenue: number;
+  avgCsat: number | null;
+  csatCount: number;
+  activeDrivers: number;
+  byStatus: Record<string, number>;
+  byPriority: Record<string, number>;
+  byDriver: Array<{
+    driverId: string;
+    driverName: string;
+    total: number;
+    delivered: number;
+    pending: number;
+  }>;
+  dailyDeliveries: Array<{ date: string; count: number }>;
+}
+
 export default function DashboardPage() {
   const router = useRouter();
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
 
   // Check auth
   useEffect(() => {
@@ -41,10 +87,10 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  const { data: stats, isLoading } = useQuery({
-    queryKey: ['dashboard-stats'],
+  const { data: stats, isLoading, refetch } = useQuery<DashboardStats>({
+    queryKey: ['dashboard-stats', startDate, endDate],
     queryFn: async () => {
-      const response = await ordersApi.getStats();
+      const response = await ordersApi.getStats(startDate, endDate);
       return response.data;
     },
   });
@@ -55,18 +101,102 @@ export default function DashboardPage() {
     router.push('/login');
   };
 
-  // Mock data for demo - replace with real API data
-  const kpis = {
-    totalOrders: stats?.total || 0,
-    delivered: stats?.delivered || 0,
-    inTransit: stats?.inTransit || 0,
-    pending: stats?.pending || 0,
-    deliveryRate: stats?.total > 0 ? Math.round((stats?.delivered / stats?.total) * 100) : 0,
-    avgDeliveryTime: '45 min',
-    totalRevenue: stats?.totalRevenue || 0,
-    avgCsat: stats?.avgCsat || 4.2,
-    activeDrivers: stats?.activeDrivers || 0,
+  const handleExportCSV = async () => {
+    try {
+      const response = await ordersApi.exportReport(startDate, endDate);
+      const orders = response.data;
+
+      // Convert to CSV
+      const headers = [
+        'ID Bind',
+        'Numero Pedido',
+        'Cliente',
+        'Email',
+        'Telefono',
+        'Direccion',
+        'Estado',
+        'Prioridad',
+        'Monto',
+        'Chofer',
+        'Fecha Creacion',
+        'Fecha Entrega',
+        'CSAT',
+        'Comentario CSAT',
+      ];
+
+      const statusMap: Record<string, string> = {
+        DRAFT: 'Borrador',
+        READY: 'Listo',
+        IN_TRANSIT: 'En Transito',
+        DELIVERED: 'Entregado',
+        RETURNED: 'Devuelto',
+      };
+
+      const rows = orders.map((order: any) => [
+        order.bindId || '',
+        order.orderNumber || '',
+        order.clientName || '',
+        order.clientEmail || '',
+        order.clientPhone || '',
+        `"${(order.address || '').replace(/"/g, '""')}"`,
+        statusMap[order.status] || order.status,
+        order.priorityLevel || '',
+        order.totalAmount || 0,
+        order.driverName || '',
+        order.createdAt ? new Date(order.createdAt).toLocaleString('es-MX') : '',
+        order.deliveredAt ? new Date(order.deliveredAt).toLocaleString('es-MX') : '',
+        order.csatScore || '',
+        `"${(order.csatFeedback || '').replace(/"/g, '""')}"`,
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map((row: string[]) => row.join(',')),
+      ].join('\n');
+
+      // Download file
+      const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `reporte-pedidos-${startDate}-a-${endDate}.csv`;
+      link.click();
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      alert('Error al exportar el reporte');
+    }
   };
+
+  const setDateRange = (range: 'today' | 'yesterday' | 'week' | 'month') => {
+    const today = new Date();
+    let start = new Date();
+    let end = new Date();
+
+    switch (range) {
+      case 'today':
+        // Already set to today
+        break;
+      case 'yesterday':
+        start.setDate(today.getDate() - 1);
+        end.setDate(today.getDate() - 1);
+        break;
+      case 'week':
+        start.setDate(today.getDate() - 7);
+        break;
+      case 'month':
+        start.setDate(today.getDate() - 30);
+        break;
+    }
+
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr + 'T12:00:00');
+    return date.toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+
+  const maxDailyDeliveries = Math.max(...(stats?.dailyDeliveries?.map(d => d.count) || [1]));
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -82,15 +212,69 @@ export default function DashboardPage() {
               KPIs y metricas de operacion
             </Typography>
           </Box>
-          <Button
-            variant="outlined"
-            startIcon={<LogoutIcon />}
-            onClick={handleLogout}
-          >
-            Salir
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<AssignmentIcon />}
+              onClick={() => router.push('/planning')}
+            >
+              Planeacion
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<LogoutIcon />}
+              onClick={handleLogout}
+            >
+              Salir
+            </Button>
+          </Stack>
         </Toolbar>
       </AppBar>
+
+      {/* Date Range Selector */}
+      <Paper sx={{ p: 2, mx: 3, mt: 3, mb: 0 }} elevation={1}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CalendarTodayIcon color="action" />
+            <Typography variant="subtitle2" color="text.secondary">
+              Periodo:
+            </Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              sx={{ width: 150 }}
+            />
+            <Typography color="text.secondary">a</Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              sx={{ width: 150 }}
+            />
+            <IconButton onClick={() => refetch()} size="small" color="primary">
+              <RefreshIcon />
+            </IconButton>
+          </Stack>
+          <Stack direction="row" spacing={1}>
+            <Chip label="Hoy" onClick={() => setDateRange('today')} variant={startDate === endDate ? 'filled' : 'outlined'} />
+            <Chip label="Ayer" onClick={() => setDateRange('yesterday')} variant="outlined" />
+            <Chip label="7 dias" onClick={() => setDateRange('week')} variant="outlined" />
+            <Chip label="30 dias" onClick={() => setDateRange('month')} variant="outlined" />
+            <Divider orientation="vertical" flexItem />
+            <Button
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportCSV}
+              size="small"
+            >
+              Exportar CSV
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
 
       {/* Main Content */}
       <Box sx={{ p: 3, flex: 1 }}>
@@ -101,7 +285,7 @@ export default function DashboardPage() {
         ) : (
           <Grid container spacing={3}>
             {/* Main KPIs Row */}
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -110,7 +294,7 @@ export default function DashboardPage() {
                         Total Pedidos
                       </Typography>
                       <Typography variant="h3" fontWeight={700}>
-                        {kpis.totalOrders}
+                        {stats?.total || 0}
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'primary.light' }}>
@@ -121,7 +305,7 @@ export default function DashboardPage() {
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -130,7 +314,7 @@ export default function DashboardPage() {
                         Entregados
                       </Typography>
                       <Typography variant="h3" fontWeight={700} color="success.main">
-                        {kpis.delivered}
+                        {stats?.delivered || 0}
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'success.light' }}>
@@ -141,7 +325,7 @@ export default function DashboardPage() {
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -149,19 +333,19 @@ export default function DashboardPage() {
                       <Typography variant="overline" color="text.secondary">
                         En Ruta
                       </Typography>
-                      <Typography variant="h3" fontWeight={700} color="primary.main">
-                        {kpis.inTransit}
+                      <Typography variant="h3" fontWeight={700} color="info.main">
+                        {stats?.inTransit || 0}
                       </Typography>
                     </Box>
-                    <Avatar sx={{ bgcolor: 'primary.light' }}>
-                      <ScheduleIcon color="primary" />
+                    <Avatar sx={{ bgcolor: 'info.light' }}>
+                      <ScheduleIcon color="info" />
                     </Avatar>
                   </Stack>
                 </CardContent>
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={3}>
+            <Grid item xs={6} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -170,7 +354,7 @@ export default function DashboardPage() {
                         Tasa de Entrega
                       </Typography>
                       <Typography variant="h3" fontWeight={700}>
-                        {kpis.deliveryRate}%
+                        {stats?.deliveryRate || 0}%
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'secondary.light' }}>
@@ -179,7 +363,7 @@ export default function DashboardPage() {
                   </Stack>
                   <LinearProgress
                     variant="determinate"
-                    value={kpis.deliveryRate}
+                    value={stats?.deliveryRate || 0}
                     sx={{ mt: 2, height: 8, borderRadius: 4 }}
                   />
                 </CardContent>
@@ -187,16 +371,16 @@ export default function DashboardPage() {
             </Grid>
 
             {/* Secondary KPIs Row */}
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
                     <Box>
                       <Typography variant="overline" color="text.secondary">
-                        Ingresos del Dia
+                        Ingresos
                       </Typography>
                       <Typography variant="h4" fontWeight={700} color="success.main">
-                        ${kpis.totalRevenue.toLocaleString()}
+                        ${(stats?.totalRevenue || 0).toLocaleString()}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         MXN
@@ -210,7 +394,7 @@ export default function DashboardPage() {
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={12} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -220,7 +404,7 @@ export default function DashboardPage() {
                       </Typography>
                       <Stack direction="row" alignItems="baseline" spacing={1}>
                         <Typography variant="h4" fontWeight={700}>
-                          {kpis.avgCsat.toFixed(1)}
+                          {stats?.avgCsat?.toFixed(1) || '-'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           / 5
@@ -232,11 +416,14 @@ export default function DashboardPage() {
                             key={star}
                             sx={{
                               fontSize: 20,
-                              color: star <= Math.round(kpis.avgCsat) ? 'warning.main' : 'grey.300',
+                              color: star <= Math.round(stats?.avgCsat || 0) ? 'warning.main' : 'grey.300',
                             }}
                           />
                         ))}
                       </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        {stats?.csatCount || 0} respuestas
+                      </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'warning.light', width: 56, height: 56 }}>
                       <StarIcon color="warning" sx={{ fontSize: 32 }} />
@@ -246,7 +433,7 @@ export default function DashboardPage() {
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={4}>
+            <Grid item xs={6} md={3}>
               <Card sx={{ height: '100%' }}>
                 <CardContent>
                   <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
@@ -255,10 +442,10 @@ export default function DashboardPage() {
                         Choferes Activos
                       </Typography>
                       <Typography variant="h4" fontWeight={700}>
-                        {kpis.activeDrivers}
+                        {stats?.activeDrivers || 0}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        En operacion hoy
+                        Con pedidos asignados
                       </Typography>
                     </Box>
                     <Avatar sx={{ bgcolor: 'info.light', width: 56, height: 56 }}>
@@ -269,50 +456,167 @@ export default function DashboardPage() {
               </Card>
             </Grid>
 
-            {/* Pending Orders */}
+            <Grid item xs={6} md={3}>
+              <Card sx={{ height: '100%' }}>
+                <CardContent>
+                  <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                    <Box>
+                      <Typography variant="overline" color="text.secondary">
+                        Devoluciones
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700} color="warning.main">
+                        {stats?.returned || 0}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Pedidos devueltos
+                      </Typography>
+                    </Box>
+                    <Avatar sx={{ bgcolor: 'warning.light', width: 56, height: 56 }}>
+                      <UndoIcon color="warning" sx={{ fontSize: 32 }} />
+                    </Avatar>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Daily Deliveries Chart */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: '100%' }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  Entregas Ultimos 7 Dias
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', height: 200, gap: 1, mt: 2 }}>
+                  {stats?.dailyDeliveries?.map((day) => (
+                    <Box key={day.date} sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <Typography variant="caption" fontWeight={600} sx={{ mb: 0.5 }}>
+                        {day.count}
+                      </Typography>
+                      <Box
+                        sx={{
+                          width: '100%',
+                          height: maxDailyDeliveries > 0 ? `${(day.count / maxDailyDeliveries) * 150}px` : '4px',
+                          minHeight: 4,
+                          bgcolor: 'primary.main',
+                          borderRadius: 1,
+                          transition: 'height 0.3s',
+                        }}
+                      />
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, fontSize: 10 }}>
+                        {formatDate(day.date)}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Driver Stats Table */}
+            <Grid item xs={12} md={6}>
+              <Paper sx={{ p: 3, height: '100%' }}>
+                <Typography variant="h6" fontWeight={600} gutterBottom>
+                  Rendimiento por Chofer
+                </Typography>
+                <TableContainer sx={{ maxHeight: 250 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Chofer</TableCell>
+                        <TableCell align="right">Total</TableCell>
+                        <TableCell align="right">Entregados</TableCell>
+                        <TableCell align="right">Pendientes</TableCell>
+                        <TableCell align="right">%</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {stats?.byDriver?.length ? (
+                        stats.byDriver.map((driver) => (
+                          <TableRow key={driver.driverId}>
+                            <TableCell>{driver.driverName}</TableCell>
+                            <TableCell align="right">{driver.total}</TableCell>
+                            <TableCell align="right">
+                              <Typography color="success.main" fontWeight={500}>
+                                {driver.delivered}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography color="warning.main" fontWeight={500}>
+                                {driver.pending}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right">
+                              {driver.total > 0 ? Math.round((driver.delivered / driver.total) * 100) : 0}%
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={5} align="center">
+                            <Typography color="text.secondary" variant="body2">
+                              Sin datos para este periodo
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+
+            {/* Status Summary */}
             <Grid item xs={12}>
               <Paper sx={{ p: 3 }}>
                 <Typography variant="h6" fontWeight={600} gutterBottom>
-                  Resumen de Operaciones
+                  Resumen por Estado
                 </Typography>
                 <Grid container spacing={3} sx={{ mt: 1 }}>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={6} md={2.4}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 2 }}>
                       <Typography variant="h4" fontWeight={700} color="warning.main">
-                        {kpis.pending}
+                        {stats?.pending || 0}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Pendientes de Despacho
+                        Listos (Pendientes)
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={6} md={2.4}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 2 }}>
-                      <Typography variant="h4" fontWeight={700} color="primary.main">
-                        {kpis.inTransit}
+                      <Typography variant="h4" fontWeight={700} color="info.main">
+                        {stats?.inTransit || 0}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         En Transito
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={6} md={2.4}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 2 }}>
                       <Typography variant="h4" fontWeight={700} color="success.main">
-                        {kpis.delivered}
+                        {stats?.delivered || 0}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Entregados Hoy
+                        Entregados
                       </Typography>
                     </Box>
                   </Grid>
-                  <Grid item xs={12} md={3}>
+                  <Grid item xs={6} md={2.4}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 2 }}>
-                      <Typography variant="h4" fontWeight={700}>
-                        {kpis.avgDeliveryTime}
+                      <Typography variant="h4" fontWeight={700} color="warning.main">
+                        {stats?.returned || 0}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Tiempo Promedio
+                        Devueltos
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid item xs={6} md={2.4}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.100', borderRadius: 2 }}>
+                      <Typography variant="h4" fontWeight={700}>
+                        {stats?.deliveryRate || 0}%
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Tasa de Entrega
                       </Typography>
                     </Box>
                   </Grid>
