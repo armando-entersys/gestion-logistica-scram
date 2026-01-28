@@ -162,11 +162,38 @@ export class OrdersService {
           // This protects addresses edited in traffic panel
           if (existingOrder.status === OrderStatus.DRAFT && bindOrder.addressRaw) {
             updateData.addressRaw = bindOrder.addressRaw as Order['addressRaw'];
+
+            // Check if address changed and needs re-geocoding
+            const addressChanged =
+              existingOrder.addressRaw?.street !== bindOrder.addressRaw.street ||
+              existingOrder.addressRaw?.number !== bindOrder.addressRaw.number ||
+              existingOrder.addressRaw?.neighborhood !== bindOrder.addressRaw.neighborhood ||
+              existingOrder.addressRaw?.postalCode !== bindOrder.addressRaw.postalCode ||
+              existingOrder.addressRaw?.city !== bindOrder.addressRaw.city;
+
+            // Geocode if address changed OR if order doesn't have coordinates yet
+            if (addressChanged || !existingOrder.latitude) {
+              const geoResult = await this.geocodingService.geocodeAddress(bindOrder.addressRaw);
+              if (geoResult) {
+                updateData.latitude = geoResult.latitude;
+                updateData.longitude = geoResult.longitude;
+                geocoded++;
+                this.logger.log(`Geocoded existing order ${bindOrder.bindId}: ${geoResult.latitude}, ${geoResult.longitude}`);
+              }
+            }
           } else if (existingOrder.status !== OrderStatus.DRAFT) {
             this.logger.log(`Skipping address update for order ${bindOrder.bindId} (status: ${existingOrder.status})`);
           }
 
           await this.orderRepository.update(existingOrder.id, updateData);
+
+          // Update addressGeo column if we have coordinates
+          if (updateData.latitude && updateData.longitude) {
+            await this.orderRepository.update(existingOrder.id, {
+              addressGeo: () => `ST_SetSRID(ST_MakePoint(${updateData.longitude}, ${updateData.latitude}), 4326)`,
+            });
+          }
+
           updated++;
         } else {
           const priorityLevel = this.calculatePriority(bindOrder);
@@ -196,7 +223,15 @@ export class OrdersService {
             longitude,
           });
 
-          await this.orderRepository.save(newOrder);
+          const savedOrder = await this.orderRepository.save(newOrder);
+
+          // Update addressGeo column if we have coordinates
+          if (latitude && longitude) {
+            await this.orderRepository.update(savedOrder.id, {
+              addressGeo: () => `ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)`,
+            });
+          }
+
           created++;
 
           // Update client order stats (only for new orders)
