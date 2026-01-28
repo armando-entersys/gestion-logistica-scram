@@ -679,9 +679,21 @@ export class OrdersService {
 
     // Handle multiple evidence items (new format)
     if (evidenceData?.evidences && evidenceData.evidences.length > 0) {
-      const types = evidenceData.evidences.map(e => e.type || 'undefined').join(', ');
-      this.logger.log(`Processing ${evidenceData.evidences.length} evidence items for order ${orderId}, types: [${types}]`);
-      for (const item of evidenceData.evidences) {
+      // Deduplicate by type - only keep the FIRST item of each type to prevent duplicates
+      const seenTypes = new Set<string>();
+      const uniqueEvidences = evidenceData.evidences.filter(e => {
+        const type = e.type || EvidenceType.PHOTO;
+        if (seenTypes.has(type)) {
+          this.logger.warn(`Duplicate evidence type ${type} for order ${orderId} - skipping`);
+          return false;
+        }
+        seenTypes.add(type);
+        return true;
+      });
+
+      const types = uniqueEvidences.map(e => e.type || 'undefined').join(', ');
+      this.logger.log(`Processing ${uniqueEvidences.length} unique evidence items for order ${orderId}, types: [${types}]`);
+      for (const item of uniqueEvidences) {
         await saveEvidence(item);
       }
     }

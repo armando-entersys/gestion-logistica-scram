@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import PhotoLibraryIcon from '@mui/icons-material/PhotoLibrary';
 import DrawIcon from '@mui/icons-material/Draw';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
@@ -41,7 +42,8 @@ export default function DeliveryPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
 
@@ -393,8 +395,7 @@ export default function DeliveryPage() {
                 </IconButton>
               </Box>
             ) : (
-              <Button
-                onClick={() => fileInputRef.current?.click()}
+              <Box
                 sx={{
                   flex: 1,
                   minHeight: 300,
@@ -406,20 +407,50 @@ export default function DeliveryPage() {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'text.secondary',
+                  gap: 2,
+                  p: 3,
                 }}
               >
-                <CameraAltIcon sx={{ fontSize: 64, mb: 2, color: 'text.disabled' }} />
-                <Typography variant="subtitle1" fontWeight={500}>
-                  Tomar Foto
+                <Typography variant="subtitle1" fontWeight={500} color="text.secondary" mb={1}>
+                  Capturar evidencia fotográfica
                 </Typography>
-                <Typography variant="body2" color="text.disabled">
-                  del paquete en el domicilio
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    variant="contained"
+                    size="large"
+                    onClick={() => cameraInputRef.current?.click()}
+                    startIcon={<CameraAltIcon />}
+                    sx={{ px: 3, py: 1.5 }}
+                  >
+                    Cámara
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    onClick={() => galleryInputRef.current?.click()}
+                    startIcon={<PhotoLibraryIcon />}
+                    sx={{ px: 3, py: 1.5 }}
+                  >
+                    Galería
+                  </Button>
+                </Stack>
+                <Typography variant="body2" color="text.disabled" mt={1}>
+                  Foto del paquete en el domicilio
                 </Typography>
-              </Button>
+              </Box>
             )}
+            {/* Camera input - opens camera directly */}
             <input
-              ref={fileInputRef}
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoCapture}
+              style={{ display: 'none' }}
+            />
+            {/* Gallery input - opens file picker/gallery */}
+            <input
+              ref={galleryInputRef}
               type="file"
               accept="image/*"
               onChange={handlePhotoCapture}

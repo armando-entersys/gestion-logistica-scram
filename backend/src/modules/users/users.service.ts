@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as argon2 from 'argon2';
 
 import { User } from './entities/user.entity';
 import { UserRole } from '@/common/enums';
@@ -58,13 +59,25 @@ export class UsersService {
     await this.userRepository.update(userId, { lastLogin: new Date() });
   }
 
-  async update(id: string, dto: Partial<User>): Promise<User> {
+  async update(id: string, dto: Partial<User> & { password?: string }): Promise<User> {
     const user = await this.findById(id);
     if (!user) {
       throw new NotFoundException(`User ${id} not found`);
     }
 
-    await this.userRepository.update(id, dto);
+    // Extract password and prepare update data
+    const { password, ...updateData } = dto as any;
+
+    // If password is provided, hash it
+    if (password && password.trim()) {
+      updateData.passwordHash = await argon2.hash(password);
+    }
+
+    // Only update if there's something to update
+    if (Object.keys(updateData).length > 0) {
+      await this.userRepository.update(id, updateData);
+    }
+
     return this.findById(id) as Promise<User>;
   }
 

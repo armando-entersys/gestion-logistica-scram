@@ -5,7 +5,10 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Disable default body parser to use custom one with higher limit
+    bodyParser: false,
+  });
 
   // Increase body size limit for base64 image uploads (50MB)
   app.use(json({ limit: '50mb' }));

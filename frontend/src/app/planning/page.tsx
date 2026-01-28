@@ -323,13 +323,23 @@ export default function PlanningPage() {
       );
     }
 
-    // Sort: urgent first, then by status
-    result.sort((a, b) => {
-      if (a.priorityLevel !== b.priorityLevel) return b.priorityLevel - a.priorityLevel;
-      if (a.status === 'READY' && b.status !== 'READY') return -1;
-      if (b.status === 'READY' && a.status !== 'READY') return 1;
-      return 0;
-    });
+    // Sort based on status filter
+    if (statusFilter === 2) {
+      // For delivered orders: sort by deliveredAt descending (most recent first)
+      result.sort((a, b) => {
+        const dateA = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
+        const dateB = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    } else {
+      // For active/in-transit: urgent first, then by status
+      result.sort((a, b) => {
+        if (a.priorityLevel !== b.priorityLevel) return b.priorityLevel - a.priorityLevel;
+        if (a.status === 'READY' && b.status !== 'READY') return -1;
+        if (b.status === 'READY' && a.status !== 'READY') return 1;
+        return 0;
+      });
+    }
 
     return result;
   }, [orders, search, statusFilter]);
