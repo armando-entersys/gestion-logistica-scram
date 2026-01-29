@@ -338,26 +338,41 @@ export default function RoutePage() {
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
       {/* Header */}
-      <AppBar position="static" color="default" elevation={1}>
+      <AppBar position="static" sx={{ bgcolor: '#0e314c' }} elevation={1}>
         <Toolbar>
+          <Box
+            component="img"
+            src="/scram-logo.png"
+            alt="SCRAM"
+            sx={{ height: 32, mr: 1.5 }}
+          />
+          <Box
+            sx={{
+              width: 3,
+              height: 28,
+              background: 'linear-gradient(180deg, #ff9900 0%, #44ce6f 100%)',
+              borderRadius: 2,
+              mr: 1.5,
+            }}
+          />
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" fontWeight={700}>
+            <Typography variant="h6" fontWeight={700} color="white">
               Mi Ruta
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
               Hola, {session?.firstName || 'Chofer'}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
-            <IconButton onClick={() => setAddressDialogOpen(true)}>
+            <IconButton onClick={() => setAddressDialogOpen(true)} sx={{ color: 'rgba(255,255,255,0.8)' }}>
               <Badge badgeContent={addressChangeRequests.length} color="error">
                 <NotificationsIcon />
               </Badge>
             </IconButton>
-            <IconButton onClick={handleRefresh} disabled={isLoading}>
+            <IconButton onClick={handleRefresh} disabled={isLoading} sx={{ color: 'rgba(255,255,255,0.8)' }}>
               <RefreshIcon sx={{ animation: isLoading ? 'spin 1s linear infinite' : 'none' }} />
             </IconButton>
-            <IconButton onClick={handleLogout}>
+            <IconButton onClick={handleLogout} sx={{ color: '#ff6b6b' }}>
               <LogoutIcon />
             </IconButton>
           </Stack>

@@ -10,7 +10,6 @@ import {
   Stack,
   useTheme
 } from '@mui/material';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import LoginIcon from '@mui/icons-material/Login';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 
@@ -37,31 +36,26 @@ export default function Home() {
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mb: 3,
-            }}
-          >
-            <LocalShippingIcon
+          <Box sx={{ mb: 3 }}>
+            <Box
+              component="img"
+              src="/scram-logo.png"
+              alt="SCRAM"
               sx={{
-                fontSize: 56,
-                color: 'primary.main',
-                mr: 2
+                height: 80,
+                filter: 'brightness(0) saturate(100%)',
+                mb: 2,
               }}
             />
-            <Typography
-              variant="h1"
-              component="h1"
+            <Box
               sx={{
-                fontWeight: 700,
-                color: 'primary.main',
+                width: 80,
+                height: 4,
+                background: 'linear-gradient(90deg, #ff9900 0%, #44ce6f 100%)',
+                borderRadius: 2,
+                mx: 'auto',
               }}
-            >
-              SCRAM
-            </Typography>
+            />
           </Box>
 
           <Typography
@@ -77,7 +71,7 @@ export default function Home() {
             color="text.secondary"
             sx={{ mb: 4, opacity: 0.8 }}
           >
-            Despacho y Última Milla
+            Soluciones en Logística y Distribución
           </Typography>
 
           <Stack spacing={2}>
@@ -107,17 +101,24 @@ export default function Home() {
           </Stack>
         </Paper>
 
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            textAlign: 'center',
-            mt: 3,
-            color: 'rgba(255, 255, 255, 0.7)',
-          }}
-        >
-          SCRAM 2026 - Todos los derechos reservados
-        </Typography>
+        <Box sx={{ textAlign: 'center', mt: 3 }}>
+          <Box
+            sx={{
+              width: 60,
+              height: 3,
+              background: 'linear-gradient(90deg, #ff9900 0%, #44ce6f 100%)',
+              borderRadius: 2,
+              mx: 'auto',
+              mb: 1.5,
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
+          >
+            SCRAM 2026 - Todos los derechos reservados
+          </Typography>
+        </Box>
       </Container>
     </Box>
   );

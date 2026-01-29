@@ -829,19 +829,27 @@ export default function PlanningPage() {
         sx={{
           px: 2,
           py: 1.5,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'white',
+          borderBottom: '3px solid',
+          borderImage: 'linear-gradient(90deg, #ff9900 0%, #44ce6f 100%) 1',
+          bgcolor: '#0e314c',
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Stack direction="row" alignItems="center" spacing={2}>
-            <Box component="img" src="/scram-logo.png" alt="SCRAM" sx={{ height: 32 }} />
+            <Box component="img" src="/scram-logo.png" alt="SCRAM" sx={{ height: 36 }} />
+            <Box
+              sx={{
+                width: 3,
+                height: 32,
+                background: 'linear-gradient(180deg, #ff9900 0%, #44ce6f 100%)',
+                borderRadius: 2,
+              }}
+            />
             <Box>
-              <Typography variant="subtitle1" fontWeight={600} color="text.primary" lineHeight={1.2}>
+              <Typography variant="subtitle1" fontWeight={600} color="white" lineHeight={1.2}>
                 Panel de Tráfico
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
                 Planificación y despacho
               </Typography>
             </Box>
@@ -849,9 +857,9 @@ export default function PlanningPage() {
 
           {/* Inline Stats */}
           <Stack direction="row" spacing={3} sx={{ display: { xs: 'none', md: 'flex' } }}>
-            <StatBadge icon={<InventoryIcon />} value={stats.ready} label="Listos" color="#0284c7" />
-            <StatBadge icon={<LocalShippingIcon />} value={stats.inTransit} label="En Ruta" color="#0d9488" />
-            <StatBadge icon={<CheckCircleIcon />} value={stats.delivered} label="Entregados" color="#16a34a" />
+            <StatBadge icon={<InventoryIcon />} value={stats.ready} label="Listos" color="#6084a4" />
+            <StatBadge icon={<LocalShippingIcon />} value={stats.inTransit} label="En Ruta" color="#ff9900" />
+            <StatBadge icon={<CheckCircleIcon />} value={stats.delivered} label="Entregados" color="#44ce6f" />
             {stats.urgent > 0 && (
               <StatBadge icon={<WarningAmberIcon />} value={stats.urgent} label="Urgentes" color="#dc2626" />
             )}
@@ -859,22 +867,22 @@ export default function PlanningPage() {
 
           <Stack direction="row" spacing={1}>
             <Tooltip title="Actualizar">
-              <IconButton onClick={() => refetch()} size="small">
+              <IconButton onClick={() => refetch()} size="small" sx={{ color: 'rgba(255,255,255,0.8)', '&:hover': { color: 'white' } }}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Clientes">
-              <IconButton onClick={() => router.push('/clientes')} size="small">
+              <IconButton onClick={() => router.push('/clientes')} size="small" sx={{ color: 'rgba(255,255,255,0.8)', '&:hover': { color: 'white' } }}>
                 <BusinessIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Usuarios">
-              <IconButton onClick={() => router.push('/usuarios')} size="small">
+              <IconButton onClick={() => router.push('/usuarios')} size="small" sx={{ color: 'rgba(255,255,255,0.8)', '&:hover': { color: 'white' } }}>
                 <PeopleIcon />
               </IconButton>
             </Tooltip>
             <Tooltip title="Cerrar sesión">
-              <IconButton onClick={handleLogout} size="small" color="error">
+              <IconButton onClick={handleLogout} size="small" sx={{ color: '#ff6b6b', '&:hover': { color: '#ff4444' } }}>
                 <LogoutIcon />
               </IconButton>
             </Tooltip>

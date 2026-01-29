@@ -201,14 +201,28 @@ export default function DashboardPage() {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
       {/* Header */}
-      <AppBar position="static" color="default" elevation={1}>
+      <AppBar position="static" sx={{ bgcolor: 'primary.main' }} elevation={1}>
         <Toolbar>
-          <DashboardIcon sx={{ mr: 2, color: 'primary.main' }} />
+          <Box
+            component="img"
+            src="/scram-logo.png"
+            alt="SCRAM"
+            sx={{ height: 36, mr: 2 }}
+          />
+          <Box
+            sx={{
+              width: 3,
+              height: 32,
+              background: 'linear-gradient(180deg, #ff9900 0%, #44ce6f 100%)',
+              borderRadius: 2,
+              mr: 2,
+            }}
+          />
           <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" component="h1" fontWeight={600}>
+            <Typography variant="h6" component="h1" fontWeight={600} color="white">
               Dashboard Ejecutivo
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)' }}>
               KPIs y metricas de operacion
             </Typography>
           </Box>
@@ -217,6 +231,7 @@ export default function DashboardPage() {
               variant="outlined"
               startIcon={<AssignmentIcon />}
               onClick={() => router.push('/planning')}
+              sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)', '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' } }}
             >
               Planeacion
             </Button>
@@ -224,6 +239,7 @@ export default function DashboardPage() {
               variant="outlined"
               startIcon={<LogoutIcon />}
               onClick={handleLogout}
+              sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.5)', '&:hover': { borderColor: 'white', bgcolor: 'rgba(255,255,255,0.1)' } }}
             >
               Salir
             </Button>
