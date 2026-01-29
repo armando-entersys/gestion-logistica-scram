@@ -425,9 +425,9 @@ export default function PlanningPage() {
 
   // Return to Purchasing mutation
   const returnToPurchasingMutation = useMutation({
-    mutationFn: async (reason?: string) => {
+    mutationFn: async () => {
       if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
-      return ordersApi.returnToPurchasing(selectedOrderIds, reason);
+      return ordersApi.returnToPurchasing(selectedOrderIds);
     },
     onSuccess: (response) => {
       setSnackbar({ open: true, message: response.data.message || 'Pedidos regresados a Compras', severity: 'success' });
@@ -441,9 +441,9 @@ export default function PlanningPage() {
 
   // Cancel orders mutation
   const cancelOrdersMutation = useMutation({
-    mutationFn: async (reason?: string) => {
+    mutationFn: async () => {
       if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
-      return ordersApi.cancelOrders(selectedOrderIds, reason);
+      return ordersApi.cancelOrders(selectedOrderIds);
     },
     onSuccess: (response) => {
       setSnackbar({ open: true, message: response.data.message || 'Pedidos cancelados', severity: 'success' });
