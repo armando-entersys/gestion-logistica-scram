@@ -20,7 +20,7 @@ export class EmailService {
   private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx, hpe@scram2k.com, alex@scram2k.com';
 
   // SCRAM Brand Assets
-  private readonly SCRAM_LOGO = 'https://www.scram2k.com/images/scram/logo.png';
+  private readonly SCRAM_LOGO = 'https://storage.googleapis.com/scram-evidence/assets/scram_logotipo_vnegativa.png';
   private readonly SCRAM_WEBSITE = 'https://scram2k.com';
   private readonly SCRAM_SUPPORT = 'https://scram2k.com/soporte/';
   private readonly SCRAM_FACEBOOK = 'https://www.facebook.com/scram2k';
