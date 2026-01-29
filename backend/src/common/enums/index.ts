@@ -4,6 +4,8 @@ export enum OrderStatus {
   IN_TRANSIT = 'IN_TRANSIT',
   DELIVERED = 'DELIVERED',
   FAILED = 'FAILED',
+  RETURNED_TO_PURCHASING = 'RETURNED_TO_PURCHASING',
+  CANCELLED = 'CANCELLED',
 }
 
 export enum PriorityLevel {

@@ -1867,4 +1867,110 @@ export class OrdersService {
 
     return savedOrder;
   }
+
+  // =============================================
+  // RETURN TO PURCHASING / CANCEL ORDERS
+  // =============================================
+
+  /**
+   * Admin returns orders to Purchasing for review/cancellation
+   * Changes status to RETURNED_TO_PURCHASING
+   */
+  async returnToPurchasing(
+    orderIds: string[],
+    reason: string | undefined,
+    userId: string,
+  ): Promise<{ success: boolean; returned: number; message: string }> {
+    if (!orderIds || orderIds.length === 0) {
+      throw new BadRequestException('Debe seleccionar al menos un pedido');
+    }
+
+    // Find orders that can be returned (DRAFT, READY, or IN_TRANSIT)
+    const orders = await this.orderRepository.find({
+      where: {
+        id: In(orderIds),
+        status: In([OrderStatus.DRAFT, OrderStatus.READY, OrderStatus.IN_TRANSIT]),
+      },
+    });
+
+    if (orders.length === 0) {
+      throw new BadRequestException('No se encontraron pedidos válidos para regresar');
+    }
+
+    const now = new Date();
+    const returnNote = `[REGRESADO A COMPRAS ${now.toLocaleDateString('es-MX')}]${reason ? ' ' + reason : ''}`;
+
+    for (const order of orders) {
+      const existingNotes = order.internalNotes || '';
+      const updatedNotes = existingNotes
+        ? `${existingNotes}\n\n${returnNote}`
+        : returnNote;
+
+      await this.orderRepository.update(order.id, {
+        status: OrderStatus.RETURNED_TO_PURCHASING,
+        internalNotes: updatedNotes,
+        assignedDriverId: null,
+        routePosition: null,
+        estimatedArrivalStart: null,
+        estimatedArrivalEnd: null,
+      });
+    }
+
+    this.logger.log(`${orders.length} orders returned to purchasing by user ${userId}`);
+
+    return {
+      success: true,
+      returned: orders.length,
+      message: `${orders.length} pedido(s) regresado(s) a Compras`,
+    };
+  }
+
+  /**
+   * Cancel orders (DRAFT or RETURNED_TO_PURCHASING only)
+   * Admin or Purchasing can cancel these orders
+   */
+  async cancelOrders(
+    orderIds: string[],
+    reason: string | undefined,
+    userId: string,
+  ): Promise<{ success: boolean; cancelled: number; message: string }> {
+    if (!orderIds || orderIds.length === 0) {
+      throw new BadRequestException('Debe seleccionar al menos un pedido');
+    }
+
+    // Find orders that can be cancelled (DRAFT or RETURNED_TO_PURCHASING)
+    const orders = await this.orderRepository.find({
+      where: {
+        id: In(orderIds),
+        status: In([OrderStatus.DRAFT, OrderStatus.RETURNED_TO_PURCHASING]),
+      },
+    });
+
+    if (orders.length === 0) {
+      throw new BadRequestException('No se encontraron pedidos válidos para cancelar. Solo se pueden cancelar pedidos en Borrador o Regresados a Compras.');
+    }
+
+    const now = new Date();
+    const cancelNote = `[CANCELADO ${now.toLocaleDateString('es-MX')}]${reason ? ' ' + reason : ''}`;
+
+    for (const order of orders) {
+      const existingNotes = order.internalNotes || '';
+      const updatedNotes = existingNotes
+        ? `${existingNotes}\n\n${cancelNote}`
+        : cancelNote;
+
+      await this.orderRepository.update(order.id, {
+        status: OrderStatus.CANCELLED,
+        internalNotes: updatedNotes,
+      });
+    }
+
+    this.logger.log(`${orders.length} orders cancelled by user ${userId}`);
+
+    return {
+      success: true,
+      cancelled: orders.length,
+      message: `${orders.length} pedido(s) cancelado(s)`,
+    };
+  }
 }

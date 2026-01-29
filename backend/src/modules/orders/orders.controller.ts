@@ -539,4 +539,42 @@ export class OrdersController {
   ) {
     return this.ordersService.returnOrder(dto, driverId);
   }
+
+  // =============================================
+  // ENDPOINTS: Return to Purchasing / Cancel
+  // =============================================
+
+  /**
+   * Return orders to Purchasing department
+   * Admin returns orders for review/cancellation by purchasing
+   */
+  @Post('return-to-purchasing')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Return orders to Purchasing for review/cancellation' })
+  returnToPurchasing(
+    @Body() body: { orderIds: string[]; reason?: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ordersService.returnToPurchasing(body.orderIds, body.reason, userId);
+  }
+
+  /**
+   * Cancel orders
+   * Admin or Purchasing can cancel orders that are returned or in draft
+   */
+  @Post('cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel orders (DRAFT or RETURNED_TO_PURCHASING only)' })
+  cancelOrders(
+    @Body() body: { orderIds: string[]; reason?: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ordersService.cancelOrders(body.orderIds, body.reason, userId);
+  }
 }

@@ -68,6 +68,8 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import GestureIcon from '@mui/icons-material/Gesture';
 import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
+import CancelIcon from '@mui/icons-material/Cancel';
+import UndoIcon from '@mui/icons-material/Undo';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi, clientAddressesApi, syncApi } from '@/lib/api';
@@ -162,11 +164,13 @@ const priorityConfig: Record<number, { label: string; color: 'default' | 'warnin
   3: { label: 'Urgente', color: 'error' },
 };
 
-const statusConfig: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'success' | 'info' }> = {
+const statusConfig: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' }> = {
   DRAFT: { label: 'Borrador', color: 'default' },
   READY: { label: 'Listo', color: 'info' },
   IN_TRANSIT: { label: 'En Ruta', color: 'primary' },
   DELIVERED: { label: 'Entregado', color: 'success' },
+  RETURNED_TO_PURCHASING: { label: 'En Revisión', color: 'warning' },
+  CANCELLED: { label: 'Cancelado', color: 'error' },
 };
 
 export default function PlanningPage() {
@@ -266,7 +270,7 @@ export default function PlanningPage() {
   const { data: ordersResponse, isLoading, refetch } = useQuery({
     queryKey: ['planning-orders'],
     queryFn: async () => {
-      const response = await ordersApi.getAll({ status: 'READY,IN_TRANSIT,DELIVERED', limit: 100 });
+      const response = await ordersApi.getAll({ status: 'READY,IN_TRANSIT,DELIVERED,RETURNED_TO_PURCHASING,CANCELLED', limit: 200 });
       return response.data.data || response.data;
     },
   });
@@ -293,20 +297,26 @@ export default function PlanningPage() {
     const ready = orders.filter((o) => o.status === 'READY').length;
     const inTransit = orders.filter((o) => o.status === 'IN_TRANSIT').length;
     const delivered = orders.filter((o) => o.status === 'DELIVERED').length;
-    const urgent = orders.filter((o) => o.priorityLevel === 3 && o.status !== 'DELIVERED').length;
-    return { ready, inTransit, delivered, urgent, active: ready + inTransit };
+    const returnedToPurchasing = orders.filter((o) => o.status === 'RETURNED_TO_PURCHASING').length;
+    const cancelled = orders.filter((o) => o.status === 'CANCELLED').length;
+    const urgent = orders.filter((o) => o.priorityLevel === 3 && o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
+    return { ready, inTransit, delivered, returnedToPurchasing, cancelled, urgent, active: ready + inTransit };
   }, [orders]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
 
-    // Filter by tab: 0=Activos(READY), 1=En Ruta(IN_TRANSIT), 2=Entregados(DELIVERED)
+    // Filter by tab: 0=Activos(READY), 1=En Ruta(IN_TRANSIT), 2=Entregados(DELIVERED), 3=En Revisión, 4=Cancelados
     if (statusFilter === 0) {
       result = result.filter((o) => o.status === 'READY');
     } else if (statusFilter === 1) {
       result = result.filter((o) => o.status === 'IN_TRANSIT');
     } else if (statusFilter === 2) {
       result = result.filter((o) => o.status === 'DELIVERED');
+    } else if (statusFilter === 3) {
+      result = result.filter((o) => o.status === 'RETURNED_TO_PURCHASING');
+    } else if (statusFilter === 4) {
+      result = result.filter((o) => o.status === 'CANCELLED');
     }
 
     // Filter by search
@@ -324,15 +334,15 @@ export default function PlanningPage() {
     }
 
     // Sort based on status filter
-    if (statusFilter === 2) {
-      // For delivered orders: sort by deliveredAt descending (most recent first)
+    if (statusFilter === 2 || statusFilter === 4) {
+      // For delivered/cancelled orders: sort by date descending (most recent first)
       result.sort((a, b) => {
         const dateA = a.deliveredAt ? new Date(a.deliveredAt).getTime() : 0;
         const dateB = b.deliveredAt ? new Date(b.deliveredAt).getTime() : 0;
         return dateB - dateA;
       });
     } else {
-      // For active/in-transit: urgent first, then by status
+      // For active/in-transit/returned: urgent first, then by status
       result.sort((a, b) => {
         if (a.priorityLevel !== b.priorityLevel) return b.priorityLevel - a.priorityLevel;
         if (a.status === 'READY' && b.status !== 'READY') return -1;
@@ -410,6 +420,38 @@ export default function PlanningPage() {
     },
     onError: (error: any) => {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error', severity: 'error' });
+    },
+  });
+
+  // Return to Purchasing mutation
+  const returnToPurchasingMutation = useMutation({
+    mutationFn: async (reason?: string) => {
+      if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
+      return ordersApi.returnToPurchasing(selectedOrderIds, reason);
+    },
+    onSuccess: (response) => {
+      setSnackbar({ open: true, message: response.data.message || 'Pedidos regresados a Compras', severity: 'success' });
+      setSelectedOrderIds([]);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al regresar pedidos', severity: 'error' });
+    },
+  });
+
+  // Cancel orders mutation
+  const cancelOrdersMutation = useMutation({
+    mutationFn: async (reason?: string) => {
+      if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
+      return ordersApi.cancelOrders(selectedOrderIds, reason);
+    },
+    onSuccess: (response) => {
+      setSnackbar({ open: true, message: response.data.message || 'Pedidos cancelados', severity: 'success' });
+      setSelectedOrderIds([]);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al cancelar pedidos', severity: 'error' });
     },
   });
 
@@ -806,7 +848,12 @@ export default function PlanningPage() {
   };
 
   const selectAllVisible = () => {
-    const selectableIds = filteredOrders.filter((o) => o.status === 'READY').map((o) => o.id);
+    // Allow selection based on current tab
+    const selectableStatuses = statusFilter === 0 ? ['READY']
+      : statusFilter === 1 ? ['IN_TRANSIT']
+      : statusFilter === 3 ? ['RETURNED_TO_PURCHASING']
+      : [];
+    const selectableIds = filteredOrders.filter((o) => selectableStatuses.includes(o.status)).map((o) => o.id);
     setSelectedOrderIds((prev) => {
       const newIds = selectableIds.filter((id) => !prev.includes(id));
       return [...prev, ...newIds];
@@ -941,17 +988,20 @@ export default function PlanningPage() {
           <Tabs
             value={statusFilter}
             onChange={(_, v) => setStatusFilter(v)}
-            variant="fullWidth"
+            variant="scrollable"
+            scrollButtons="auto"
             sx={{
               minHeight: 40,
               borderBottom: '1px solid',
               borderColor: 'divider',
-              '& .MuiTab-root': { minHeight: 40, py: 0, fontSize: '0.8125rem' },
+              '& .MuiTab-root': { minHeight: 40, py: 0, fontSize: '0.75rem', minWidth: 'auto', px: 1.5 },
             }}
           >
             <Tab label={`Activos (${stats.ready})`} />
             <Tab label={`En Ruta (${stats.inTransit})`} />
             <Tab label={`Entregados (${stats.delivered})`} />
+            {stats.returnedToPurchasing > 0 && <Tab label={`En Revisión (${stats.returnedToPurchasing})`} />}
+            {stats.cancelled > 0 && <Tab label={`Cancelados (${stats.cancelled})`} />}
           </Tabs>
 
           {/* Orders List - Maximum vertical space */}
@@ -991,39 +1041,88 @@ export default function PlanningPage() {
               bgcolor: '#f8fafc',
             }}
           >
-            <Stack direction="row" spacing={1}>
-              <Button
-                variant="outlined"
-                size="small"
-                disabled={selectedOrderIds.length === 0}
-                onClick={() => setAssignDialogOpen(true)}
-                startIcon={<AssignmentIndIcon />}
-                sx={{ flex: 1 }}
-              >
-                Chofer ({selectedOrderIds.length})
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                color="secondary"
-                disabled={selectedOrderIds.length === 0}
-                onClick={() => setCarrierDialogOpen(true)}
-                startIcon={<BusinessIcon />}
-                sx={{ flex: 1 }}
-              >
-                Paquetería
-              </Button>
-              <Button
-                variant="contained"
-                size="small"
-                disabled={selectedOrderIds.length === 0}
-                onClick={() => setDispatchDialogOpen(true)}
-                startIcon={<PlayArrowIcon />}
-                sx={{ flex: 1.5 }}
-              >
-                Despachar ({selectedOrderIds.length})
-              </Button>
-            </Stack>
+            {/* Main actions for READY orders */}
+            {statusFilter === 0 && (
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setAssignDialogOpen(true)}
+                  startIcon={<AssignmentIndIcon />}
+                  sx={{ flex: 1 }}
+                >
+                  Chofer ({selectedOrderIds.length})
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="secondary"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setCarrierDialogOpen(true)}
+                  startIcon={<BusinessIcon />}
+                  sx={{ flex: 1 }}
+                >
+                  Paquetería
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setDispatchDialogOpen(true)}
+                  startIcon={<PlayArrowIcon />}
+                  sx={{ flex: 1.5 }}
+                >
+                  Despachar ({selectedOrderIds.length})
+                </Button>
+              </Stack>
+            )}
+            {/* Actions for IN_TRANSIT orders */}
+            {statusFilter === 1 && (
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="warning"
+                  disabled={selectedOrderIds.length === 0 || returnToPurchasingMutation.isPending}
+                  onClick={() => {
+                    if (confirm('¿Regresar los pedidos seleccionados a Compras para revisión?')) {
+                      returnToPurchasingMutation.mutate();
+                    }
+                  }}
+                  startIcon={<UndoIcon />}
+                  sx={{ flex: 1 }}
+                >
+                  Regresar a Compras ({selectedOrderIds.length})
+                </Button>
+              </Stack>
+            )}
+            {/* Actions for RETURNED_TO_PURCHASING orders */}
+            {statusFilter === 3 && (
+              <Stack direction="row" spacing={1}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="error"
+                  disabled={selectedOrderIds.length === 0 || cancelOrdersMutation.isPending}
+                  onClick={() => {
+                    if (confirm('¿Cancelar los pedidos seleccionados? Esta acción no se puede deshacer.')) {
+                      cancelOrdersMutation.mutate();
+                    }
+                  }}
+                  startIcon={<CancelIcon />}
+                  sx={{ flex: 1 }}
+                >
+                  Cancelar Pedidos ({selectedOrderIds.length})
+                </Button>
+              </Stack>
+            )}
+            {/* No actions for DELIVERED or CANCELLED */}
+            {(statusFilter === 2 || statusFilter === 4) && (
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                {statusFilter === 2 ? 'Historial de entregas' : 'Pedidos cancelados'}
+              </Typography>
+            )}
           </Paper>
         </Box>
 
@@ -1738,6 +1837,8 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
   const priority = priorityConfig[order.priorityLevel] || priorityConfig[1];
   const status = statusConfig[order.status] || statusConfig.DRAFT;
   const isDelivered = order.status === 'DELIVERED';
+  const isCancelled = order.status === 'CANCELLED';
+  const canSelect = !isDelivered && !isCancelled; // Can select READY, IN_TRANSIT, RETURNED_TO_PURCHASING
   const isUrgent = order.priorityLevel === 3;
   const hasCoords = order.latitude && order.longitude;
   const hasEvidence = order.evidences && order.evidences.length > 0;
@@ -1760,10 +1861,10 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
       variant="outlined"
       sx={{
         transition: 'all 0.15s',
-        borderColor: isSelected ? 'primary.main' : isUrgent ? 'error.light' : 'divider',
+        borderColor: isSelected ? 'primary.main' : isUrgent ? 'error.light' : isCancelled ? 'error.light' : 'divider',
         borderWidth: isSelected ? 2 : 1,
-        bgcolor: isSelected ? alpha('#0d9488', 0.04) : isDelivered ? '#f8fafc' : 'white',
-        opacity: isDelivered ? 0.7 : 1,
+        bgcolor: isSelected ? alpha('#0d9488', 0.04) : isDelivered ? '#f8fafc' : isCancelled ? '#fef2f2' : 'white',
+        opacity: isDelivered || isCancelled ? 0.7 : 1,
         '&:hover': { borderColor: isSelected ? 'primary.main' : 'primary.light' },
       }}
     >
@@ -1772,7 +1873,7 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
           <Checkbox
             checked={isSelected}
             size="small"
-            disabled={isDelivered}
+            disabled={!canSelect}
             onClick={(e) => e.stopPropagation()}
             onChange={onToggle}
             sx={{ p: 0, mt: 0.25 }}

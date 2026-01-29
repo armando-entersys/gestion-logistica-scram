@@ -146,6 +146,14 @@ export const ordersApi = {
   // Update promised date (F. Pedido)
   updatePromisedDate: (orderId: string, promisedDate: string) =>
     api.patch('/orders/promised-date', { orderId, promisedDate }),
+
+  // Return orders to purchasing for review/cancellation
+  returnToPurchasing: (orderIds: string[], reason?: string) =>
+    api.post('/orders/return-to-purchasing', { orderIds, reason }),
+
+  // Cancel orders (DRAFT or RETURNED_TO_PURCHASING only)
+  cancelOrders: (orderIds: string[], reason?: string) =>
+    api.post('/orders/cancel', { orderIds, reason }),
 };
 
 // Users API
