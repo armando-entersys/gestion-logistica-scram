@@ -1,41 +1,44 @@
 import { createTheme, alpha } from '@mui/material/styles';
 
-// Material Design 3 Color Tokens - Mobile Optimized
-const md3Colors = {
+// SCRAM Brand Colors - Mobile Optimized
+// Primary: Dark Blue #0e314c - Profesional, confiable
+// Secondary: Orange #ff9900 - Energético, acción
+// Accent: Green #44ce6f - Éxito, confirmación
+const scramColors = {
   primary: {
-    main: '#0061A4',
-    light: '#D1E4FF',
-    dark: '#001D36',
+    main: '#0e314c',      // SCRAM Dark Blue
+    light: '#1a4a6e',
+    dark: '#091f30',
     contrastText: '#FFFFFF',
   },
   secondary: {
-    main: '#006874',
-    light: '#97F0FF',
-    dark: '#001F24',
+    main: '#ff9900',      // SCRAM Orange
+    light: '#ffad33',
+    dark: '#cc7a00',
     contrastText: '#FFFFFF',
   },
   tertiary: {
-    main: '#BA5D07',
-    light: '#FFDCC2',
-    dark: '#2E1500',
+    main: '#6084a4',      // SCRAM Gray Blue
+    light: '#8ba6c0',
+    dark: '#4a6a86',
     contrastText: '#FFFFFF',
   },
   error: {
-    main: '#BA1A1A',
-    light: '#FFDAD6',
-    dark: '#410002',
+    main: '#dc2626',
+    light: '#fecaca',
+    dark: '#991b1b',
     contrastText: '#FFFFFF',
   },
   success: {
-    main: '#006D3B',
-    light: '#9CF6B4',
-    dark: '#00210F',
+    main: '#44ce6f',      // SCRAM Green
+    light: '#bbf7d0',
+    dark: '#2da555',
     contrastText: '#FFFFFF',
   },
   warning: {
-    main: '#7D5800',
-    light: '#FFDEA4',
-    dark: '#271900',
+    main: '#f59e0b',
+    light: '#fef3c7',
+    dark: '#d97706',
     contrastText: '#FFFFFF',
   },
   surface: {
@@ -46,7 +49,7 @@ const md3Colors = {
     containerHighest: '#E9EAEF',
   },
   outline: {
-    main: '#73777F',
+    main: '#6084a4',
     variant: '#C3C7CF',
   },
 };
@@ -55,16 +58,16 @@ const md3Colors = {
 export const mobileTheme = createTheme({
   palette: {
     mode: 'light',
-    primary: md3Colors.primary,
-    secondary: md3Colors.secondary,
-    error: md3Colors.error,
-    success: md3Colors.success,
-    warning: md3Colors.warning,
+    primary: scramColors.primary,
+    secondary: scramColors.secondary,
+    error: scramColors.error,
+    success: scramColors.success,
+    warning: scramColors.warning,
     background: {
-      default: md3Colors.surface.container,
-      paper: md3Colors.surface.main,
+      default: scramColors.surface.container,
+      paper: scramColors.surface.main,
     },
-    divider: md3Colors.outline.variant,
+    divider: scramColors.outline.variant,
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
@@ -135,7 +138,7 @@ export const mobileTheme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundColor: md3Colors.surface.container,
+          backgroundColor: scramColors.surface.container,
           WebkitTapHighlightColor: 'transparent',
         },
         // Safe area support for iOS
@@ -171,9 +174,9 @@ export const mobileTheme = createTheme({
           },
         },
         containedSuccess: {
-          backgroundColor: md3Colors.success.main,
+          backgroundColor: scramColors.success.main,
           '&:hover': {
-            backgroundColor: alpha(md3Colors.success.main, 0.9),
+            backgroundColor: alpha(scramColors.success.main, 0.9),
           },
         },
       },
@@ -187,7 +190,7 @@ export const mobileTheme = createTheme({
           padding: 10,
           borderRadius: 12,
           '&:active': {
-            backgroundColor: alpha(md3Colors.primary.main, 0.12),
+            backgroundColor: alpha(scramColors.primary.main, 0.12),
           },
         },
       },
@@ -219,7 +222,7 @@ export const mobileTheme = createTheme({
           backgroundImage: 'none',
         },
         colorDefault: {
-          backgroundColor: md3Colors.surface.main,
+          backgroundColor: scramColors.surface.main,
         },
       },
     },
@@ -245,16 +248,16 @@ export const mobileTheme = createTheme({
           borderRadius: 12,
         },
         standardError: {
-          backgroundColor: md3Colors.error.light,
-          color: md3Colors.error.dark,
+          backgroundColor: scramColors.error.light,
+          color: scramColors.error.dark,
         },
         standardSuccess: {
-          backgroundColor: md3Colors.success.light,
-          color: md3Colors.success.dark,
+          backgroundColor: scramColors.success.light,
+          color: scramColors.success.dark,
         },
         standardWarning: {
-          backgroundColor: md3Colors.warning.light,
-          color: md3Colors.warning.dark,
+          backgroundColor: scramColors.warning.light,
+          color: scramColors.warning.dark,
         },
       },
     },
@@ -311,7 +314,7 @@ export const mobileTheme = createTheme({
         root: {
           borderRadius: 12,
           '&:active': {
-            backgroundColor: alpha(md3Colors.primary.main, 0.08),
+            backgroundColor: alpha(scramColors.primary.main, 0.08),
           },
         },
       },

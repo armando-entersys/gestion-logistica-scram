@@ -66,8 +66,8 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        // SCRAM gradient: gradient-primary from design tokens
-        background: 'linear-gradient(135deg, #23bdb8 0%, #43e794 100%)',
+        // SCRAM gradient: Dark Blue to lighter blue with orange accent
+        background: 'linear-gradient(135deg, #0e314c 0%, #1a4a6e 100%)',
         px: 2,
       }}
     >
@@ -75,9 +75,9 @@ export default function LoginPage() {
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Box
             component="img"
-            src="/scram-logo-white.png"
+            src="/scram-logo.png"
             alt="SCRAM"
-            sx={{ height: 60, mb: 2, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+            sx={{ height: 80, mb: 2, filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}
           />
           <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem' }}>
             Sistema de Gestión Logística
@@ -163,17 +163,27 @@ export default function LoginPage() {
           </Box>
         </Paper>
 
-        <Typography
-          variant="caption"
-          sx={{
-            display: 'block',
-            textAlign: 'center',
-            mt: 3,
-            color: 'rgba(255, 255, 255, 0.7)',
-          }}
-        >
-          SCRAM - Despacho y Última Milla
-        </Typography>
+        <Box sx={{ textAlign: 'center', mt: 3 }}>
+          <Box
+            sx={{
+              width: 60,
+              height: 3,
+              background: 'linear-gradient(90deg, #ff9900 0%, #44ce6f 100%)',
+              borderRadius: 2,
+              mx: 'auto',
+              mb: 1.5,
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              color: 'rgba(255, 255, 255, 0.7)',
+            }}
+          >
+            SCRAM - Soluciones en Logística y Distribución
+          </Typography>
+        </Box>
       </Container>
     </Box>
   );

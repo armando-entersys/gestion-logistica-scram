@@ -11,10 +11,8 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
-  Avatar,
   useTheme,
 } from '@mui/material';
-import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import EmailIcon from '@mui/icons-material/Email';
 import LockIcon from '@mui/icons-material/Lock';
 import LoginIcon from '@mui/icons-material/Login';
@@ -91,25 +89,27 @@ export default function LoginPage() {
     >
       <Container maxWidth="xs" disableGutters>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Avatar
+          <Box
+            component="img"
+            src="/scram-logo.png"
+            alt="SCRAM"
             sx={{
-              width: 80,
-              height: 80,
-              bgcolor: 'white',
-              mx: 'auto',
+              height: 70,
               mb: 2,
+              filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))',
             }}
-          >
-            <LocalShippingIcon sx={{ fontSize: 44, color: 'primary.main' }} />
-          </Avatar>
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{ fontWeight: 700, color: 'white' }}
-          >
-            SCRAM
-          </Typography>
-          <Typography sx={{ color: 'rgba(255,255,255,0.8)' }}>
+          />
+          <Box
+            sx={{
+              width: 50,
+              height: 3,
+              background: 'linear-gradient(90deg, #ff9900 0%, #44ce6f 100%)',
+              borderRadius: 2,
+              mx: 'auto',
+              mb: 1.5,
+            }}
+          />
+          <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
             App de Chofer
           </Typography>
         </Box>

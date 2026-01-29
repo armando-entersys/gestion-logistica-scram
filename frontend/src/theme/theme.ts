@@ -2,24 +2,24 @@
 
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 
-// SCRAM Brand Colors - 2026 Professional Palette
-// Refined, softer tones for better readability and modern aesthetics
-// Primary: Teal/Cyan - Professional, trustworthy
-// Secondary: Warm amber - Accent, actions
+// SCRAM Brand Colors - Identidad Visual Corporativa
+// Primary: Dark Blue #0e314c - Profesional, confiable
+// Secondary: Orange #ff9900 - Energético, acción
+// Accent: Green #44ce6f - Éxito, confirmación
 // Typography: Cabin (Headers) + Asap (Body)
 
 const scramTokens = {
   light: {
     primary: {
-      main: '#0d9488',      // Refined teal - professional, calming
-      light: '#2dd4bf',
-      dark: '#0f766e',
+      main: '#0e314c',      // SCRAM Dark Blue - profesional
+      light: '#1a4a6e',
+      dark: '#091f30',
       contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#f59e0b',      // Warm amber - softer than pure orange
-      light: '#fbbf24',
-      dark: '#d97706',
+      main: '#ff9900',      // SCRAM Orange - energético
+      light: '#ffad33',
+      dark: '#cc7a00',
       contrastText: '#FFFFFF',
     },
     error: {
@@ -29,9 +29,9 @@ const scramTokens = {
       contrastText: '#FFFFFF',
     },
     success: {
-      main: '#16a34a',      // Natural green
-      light: '#4ade80',
-      dark: '#15803d',
+      main: '#44ce6f',      // SCRAM Green
+      light: '#6dd98d',
+      dark: '#2da555',
       contrastText: '#FFFFFF',
     },
     warning: {
@@ -41,9 +41,9 @@ const scramTokens = {
       contrastText: '#FFFFFF',
     },
     info: {
-      main: '#0284c7',      // Professional blue
-      light: '#38bdf8',
-      dark: '#0369a1',
+      main: '#6084a4',      // SCRAM Gray Blue
+      light: '#8ba6c0',
+      dark: '#4a6a86',
       contrastText: '#FFFFFF',
     },
     background: {
@@ -58,16 +58,16 @@ const scramTokens = {
   },
   dark: {
     primary: {
-      main: '#2dd4bf',
-      light: '#5eead4',
-      dark: '#0d9488',
-      contrastText: '#0f172a',
+      main: '#1a4a6e',      // SCRAM Dark Blue lighter for dark mode
+      light: '#2d6a94',
+      dark: '#0e314c',
+      contrastText: '#FFFFFF',
     },
     secondary: {
-      main: '#fbbf24',
-      light: '#fcd34d',
-      dark: '#f59e0b',
-      contrastText: '#0f172a',
+      main: '#ffad33',      // SCRAM Orange lighter for dark mode
+      light: '#ffc266',
+      dark: '#ff9900',
+      contrastText: '#0e314c',
     },
     error: {
       main: '#f87171',
@@ -76,9 +76,9 @@ const scramTokens = {
       contrastText: '#0f172a',
     },
     success: {
-      main: '#4ade80',
-      light: '#86efac',
-      dark: '#16a34a',
+      main: '#6dd98d',      // SCRAM Green lighter
+      light: '#96e5ab',
+      dark: '#44ce6f',
       contrastText: '#0f172a',
     },
     warning: {
@@ -88,20 +88,20 @@ const scramTokens = {
       contrastText: '#0f172a',
     },
     info: {
-      main: '#38bdf8',
-      light: '#7dd3fc',
-      dark: '#0284c7',
+      main: '#8ba6c0',      // SCRAM Gray Blue lighter
+      light: '#a8bfd3',
+      dark: '#6084a4',
       contrastText: '#0f172a',
     },
     background: {
-      default: '#0f172a',
-      paper: '#1e293b',
+      default: '#091f30',   // Very dark SCRAM blue
+      paper: '#0e314c',     // SCRAM Dark Blue
     },
     text: {
       primary: '#f8fafc',
       secondary: '#94a3b8',
     },
-    divider: '#334155',
+    divider: '#1a4a6e',
   },
 };
 
@@ -248,7 +248,7 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
           contained: {
             boxShadow: 'none',
             '&:hover': {
-              boxShadow: '0 8px 20px rgba(13, 148, 136, 0.3)',
+              boxShadow: '0 8px 20px rgba(14, 49, 76, 0.3)',
               transform: 'translateY(-1px)',
             },
           },
@@ -298,7 +298,7 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
         styleOverrides: {
           root: {
             backgroundImage: 'none',
-            backgroundColor: mode === 'light' ? '#FFFFFF' : '#152636',
+            backgroundColor: mode === 'light' ? '#FFFFFF' : '#0e314c',
           },
         },
         defaultProps: {
@@ -350,8 +350,13 @@ const getDesignTokens = (mode: 'light' | 'dark'): ThemeOptions => {
             margin: '2px 12px',
             '&.Mui-selected': {
               backgroundColor: mode === 'light'
-                ? 'rgba(255, 153, 0, 0.12)'
-                : 'rgba(255, 184, 77, 0.2)',
+                ? 'rgba(255, 153, 0, 0.15)'
+                : 'rgba(255, 153, 0, 0.25)',
+              '&:hover': {
+                backgroundColor: mode === 'light'
+                  ? 'rgba(255, 153, 0, 0.2)'
+                  : 'rgba(255, 153, 0, 0.35)',
+              },
             },
           },
         },
