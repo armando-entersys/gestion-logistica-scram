@@ -43,6 +43,12 @@ interface EnRouteEmailPayload {
   trackingHash: string;
 }
 
+interface PasswordResetPayload {
+  email: string;
+  userName: string;
+  resetUrl: string;
+}
+
 @Processor('notifications')
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
@@ -75,6 +81,10 @@ export class EmailProcessor extends WorkerHost {
 
       case 'send-en-route-email':
         await this.handleEnRouteEmail(job.data as EnRouteEmailPayload);
+        break;
+
+      case 'send-password-reset':
+        await this.handlePasswordReset(job.data as PasswordResetPayload);
         break;
 
       default:
@@ -214,6 +224,25 @@ export class EmailProcessor extends WorkerHost {
     });
 
     this.logger.log(`En-route email sent to ${clientEmail} for order ${orderId}`);
+  }
+
+  /**
+   * Password Reset Email
+   */
+  private async handlePasswordReset(payload: PasswordResetPayload): Promise<void> {
+    const { email, userName, resetUrl } = payload;
+
+    await this.emailService.sendEmail({
+      to: email,
+      subject: '🔐 Restablecer tu contraseña - SCRAM Logistica',
+      template: 'password-reset',
+      context: {
+        userName,
+        resetUrl,
+      },
+    });
+
+    this.logger.log(`Password reset email sent to ${email}`);
   }
 
   @OnWorkerEvent('completed')

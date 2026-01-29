@@ -82,6 +82,7 @@ export class EmailService {
       'delivery-confirmation': this.deliveryConfirmationTemplate.bind(this),
       'detractor-alert': this.detractorAlertTemplate.bind(this),
       'en-route-notification': this.enRouteNotificationTemplate.bind(this),
+      'password-reset': this.passwordResetTemplate.bind(this),
     };
 
     const templateFn = templates[template];
@@ -517,6 +518,49 @@ export class EmailService {
 
       <p style="text-align: center;">
         <a href="${ctx.trackingUrl}" class="btn">Rastrear Mi Pedido</a>
+      </p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  private passwordResetTemplate(ctx: any): string {
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restablecer Contrasena</title>
+  ${this.getEmailStyles()}
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('Restablecer Contrasena')}
+    <div class="content">
+      <p>Hola <strong>${ctx.userName}</strong>,</p>
+      <p>Recibimos una solicitud para restablecer la contrasena de tu cuenta en el Sistema de Gestion Logistica SCRAM.</p>
+
+      <div class="info-box">
+        <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};">Si tu solicitaste este cambio, haz clic en el boton de abajo:</p>
+      </div>
+
+      <p style="text-align: center;">
+        <a href="${ctx.resetUrl}" class="btn">Restablecer Mi Contrasena</a>
+      </p>
+
+      <div class="highlight-box" style="margin-top: 30px;">
+        <p style="margin: 0; font-size: 14px; color: #996600;">
+          <strong>Este enlace expira en 1 hora.</strong><br><br>
+          Si no solicitaste restablecer tu contrasena, puedes ignorar este correo. Tu cuenta permanecera segura.
+        </p>
+      </div>
+
+      <p style="margin-top: 25px; font-size: 13px; color: ${this.COLOR_GRAY_BLUE};">
+        Si el boton no funciona, copia y pega este enlace en tu navegador:<br>
+        <a href="${ctx.resetUrl}" style="color: ${this.COLOR_ORANGE}; word-break: break-all;">${ctx.resetUrl}</a>
       </p>
     </div>
     ${this.getEmailFooter()}

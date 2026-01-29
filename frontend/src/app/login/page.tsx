@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useMutation } from '@tanstack/react-query';
 import {
   Box,
@@ -160,6 +161,19 @@ export default function LoginPage() {
             >
               {loginMutation.isPending ? 'Ingresando...' : 'Ingresar'}
             </Button>
+
+            <Box sx={{ textAlign: 'center', mt: 2 }}>
+              <Link
+                href="/forgot-password"
+                style={{
+                  color: '#0e314c',
+                  textDecoration: 'none',
+                  fontSize: '0.875rem',
+                }}
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </Box>
           </Box>
         </Paper>
 

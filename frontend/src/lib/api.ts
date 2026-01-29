@@ -42,6 +42,15 @@ export const authApi = {
   getProfile: () => api.get('/auth/me'),
 
   refresh: () => api.post('/auth/refresh'),
+
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword }),
+
+  validateResetToken: (token: string) =>
+    api.get('/auth/validate-reset-token', { params: { token } }),
 };
 
 // Orders API
