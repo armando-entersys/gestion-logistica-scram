@@ -7,11 +7,9 @@ import {
   Typography,
   Button,
   Paper,
-  Stack,
   useTheme
 } from '@mui/material';
 import LoginIcon from '@mui/icons-material/Login';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 
 export default function Home() {
   const theme = useTheme();
@@ -39,11 +37,10 @@ export default function Home() {
           <Box sx={{ mb: 3 }}>
             <Box
               component="img"
-              src="/scram-logo.png"
+              src="https://www.scram2k.com/images/scram/logo.png"
               alt="SCRAM"
               sx={{
-                height: 80,
-                filter: 'brightness(0) saturate(100%)',
+                height: 90,
                 mb: 2,
               }}
             />
@@ -74,31 +71,17 @@ export default function Home() {
             Soluciones en Logística y Distribución
           </Typography>
 
-          <Stack spacing={2}>
-            <Button
-              component={Link}
-              href="/login"
-              variant="contained"
-              size="large"
-              startIcon={<LoginIcon />}
-              fullWidth
-              sx={{ py: 1.5 }}
-            >
-              Iniciar Sesión
-            </Button>
-
-            <Button
-              component={Link}
-              href="/planning"
-              variant="outlined"
-              size="large"
-              startIcon={<DashboardIcon />}
-              fullWidth
-              sx={{ py: 1.5 }}
-            >
-              Panel de Tráfico
-            </Button>
-          </Stack>
+          <Button
+            component={Link}
+            href="/login"
+            variant="contained"
+            size="large"
+            startIcon={<LoginIcon />}
+            fullWidth
+            sx={{ py: 1.5 }}
+          >
+            Iniciar Sesión
+          </Button>
         </Paper>
 
         <Box sx={{ textAlign: 'center', mt: 3 }}>
