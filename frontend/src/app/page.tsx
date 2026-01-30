@@ -37,10 +37,10 @@ export default function Home() {
           <Box sx={{ mb: 3 }}>
             <Box
               component="img"
-              src="https://www.scram2k.com/images/scram/logo.png"
+              src="/scram-logo-dark.png"
               alt="SCRAM"
               sx={{
-                height: 90,
+                height: 60,
                 mb: 2,
               }}
             />
