@@ -383,6 +383,15 @@ export class EmailService {
     const apiUrl = process.env.API_URL || 'https://api-gestion-logistica.scram2k.com';
     const rateUrl = `${apiUrl}/api/v1/orders/rate/${ctx.trackingHash}`;
 
+    // URLs de imágenes de caritas (usando emojis de Twemoji - Twitter's emoji library)
+    const emojiImages = {
+      angry: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f621.png',      // 😡
+      sad: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f61e.png',        // 😞
+      neutral: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f610.png',    // 😐
+      happy: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png',      // 😊
+      love: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60d.png',       // 😍
+    };
+
     return `
 <!DOCTYPE html>
 <html lang="es">
@@ -398,30 +407,33 @@ export class EmailService {
     }
     .emoji-btn {
       display: inline-block;
-      width: 56px;
-      height: 56px;
-      line-height: 56px;
-      font-size: 32px;
+      width: 60px;
+      height: 60px;
       text-decoration: none;
-      margin: 0 8px;
+      margin: 0 6px;
       background: #f5f7fa;
       border-radius: 50%;
-      transition: all 0.3s ease;
+      padding: 8px;
+      box-sizing: border-box;
     }
     .emoji-btn:hover {
-      transform: scale(1.15);
-      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      background: #e8ecf0;
+    }
+    .emoji-btn img {
+      width: 44px;
+      height: 44px;
     }
     .emoji-label {
       display: block;
       font-size: 11px;
       color: ${this.COLOR_GRAY_BLUE};
-      margin-top: 5px;
+      margin-top: 8px;
     }
     .emoji-container {
       display: inline-block;
       text-align: center;
-      margin: 0 5px;
+      margin: 0 4px;
+      vertical-align: top;
     }
   </style>
 </head>
@@ -443,23 +455,33 @@ export class EmailService {
 
       <div class="emoji-rating">
         <div class="emoji-container">
-          <a href="${rateUrl}?score=1" class="emoji-btn" title="Muy malo">😡</a>
+          <a href="${rateUrl}?score=1" class="emoji-btn" title="Muy malo">
+            <img src="${emojiImages.angry}" alt="Muy malo" width="44" height="44" />
+          </a>
           <span class="emoji-label">Muy malo</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=2" class="emoji-btn" title="Malo">😞</a>
+          <a href="${rateUrl}?score=2" class="emoji-btn" title="Malo">
+            <img src="${emojiImages.sad}" alt="Malo" width="44" height="44" />
+          </a>
           <span class="emoji-label">Malo</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=3" class="emoji-btn" title="Regular">😐</a>
+          <a href="${rateUrl}?score=3" class="emoji-btn" title="Regular">
+            <img src="${emojiImages.neutral}" alt="Regular" width="44" height="44" />
+          </a>
           <span class="emoji-label">Regular</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=4" class="emoji-btn" title="Bueno">😊</a>
+          <a href="${rateUrl}?score=4" class="emoji-btn" title="Bueno">
+            <img src="${emojiImages.happy}" alt="Bueno" width="44" height="44" />
+          </a>
           <span class="emoji-label">Bueno</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=5" class="emoji-btn" title="Excelente">😍</a>
+          <a href="${rateUrl}?score=5" class="emoji-btn" title="Excelente">
+            <img src="${emojiImages.love}" alt="Excelente" width="44" height="44" />
+          </a>
           <span class="emoji-label">Excelente</span>
         </div>
       </div>
