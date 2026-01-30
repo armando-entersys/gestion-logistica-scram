@@ -455,32 +455,32 @@ export class EmailService {
 
       <div class="emoji-rating">
         <div class="emoji-container">
-          <a href="${rateUrl}?score=1" class="emoji-btn" title="Muy malo">
-            <img src="${emojiImages.angry}" alt="Muy malo" width="44" height="44" />
+          <a href="${rateUrl}?score=1" class="emoji-btn" title="1 - Muy malo" style="font-size:28px;font-weight:bold;color:#e53e3e;text-decoration:none;">
+            <img src="${emojiImages.angry}" alt="1" width="44" height="44" style="vertical-align:middle;" />
           </a>
           <span class="emoji-label">Muy malo</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=2" class="emoji-btn" title="Malo">
-            <img src="${emojiImages.sad}" alt="Malo" width="44" height="44" />
+          <a href="${rateUrl}?score=2" class="emoji-btn" title="2 - Malo" style="font-size:28px;font-weight:bold;color:#ed8936;text-decoration:none;">
+            <img src="${emojiImages.sad}" alt="2" width="44" height="44" style="vertical-align:middle;" />
           </a>
           <span class="emoji-label">Malo</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=3" class="emoji-btn" title="Regular">
-            <img src="${emojiImages.neutral}" alt="Regular" width="44" height="44" />
+          <a href="${rateUrl}?score=3" class="emoji-btn" title="3 - Regular" style="font-size:28px;font-weight:bold;color:#718096;text-decoration:none;">
+            <img src="${emojiImages.neutral}" alt="3" width="44" height="44" style="vertical-align:middle;" />
           </a>
           <span class="emoji-label">Regular</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=4" class="emoji-btn" title="Bueno">
-            <img src="${emojiImages.happy}" alt="Bueno" width="44" height="44" />
+          <a href="${rateUrl}?score=4" class="emoji-btn" title="4 - Bueno" style="font-size:28px;font-weight:bold;color:#48bb78;text-decoration:none;">
+            <img src="${emojiImages.happy}" alt="4" width="44" height="44" style="vertical-align:middle;" />
           </a>
           <span class="emoji-label">Bueno</span>
         </div>
         <div class="emoji-container">
-          <a href="${rateUrl}?score=5" class="emoji-btn" title="Excelente">
-            <img src="${emojiImages.love}" alt="Excelente" width="44" height="44" />
+          <a href="${rateUrl}?score=5" class="emoji-btn" title="5 - Excelente" style="font-size:28px;font-weight:bold;color:#38a169;text-decoration:none;">
+            <img src="${emojiImages.love}" alt="5" width="44" height="44" style="vertical-align:middle;" />
           </a>
           <span class="emoji-label">Excelente</span>
         </div>
