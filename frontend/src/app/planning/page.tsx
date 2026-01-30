@@ -270,7 +270,7 @@ export default function PlanningPage() {
   const { data: ordersResponse, isLoading, refetch } = useQuery({
     queryKey: ['planning-orders'],
     queryFn: async () => {
-      const response = await ordersApi.getAll({ status: 'READY,IN_TRANSIT,DELIVERED,RETURNED_TO_PURCHASING,CANCELLED', limit: 200 });
+      const response = await ordersApi.getAll({ status: 'READY,IN_TRANSIT,DELIVERED,RETURNED_TO_PURCHASING,CANCELLED', limit: 100 });
       return response.data.data || response.data;
     },
   });
