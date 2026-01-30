@@ -379,6 +379,10 @@ export class EmailService {
   }
 
   private deliveryConfirmationTemplate(ctx: any): string {
+    // URL base para calificar desde email (guarda en BD y redirige)
+    const apiUrl = process.env.API_URL || 'https://api-gestion-logistica.scram2k.com';
+    const rateUrl = `${apiUrl}/api/v1/orders/rate/${ctx.trackingHash}`;
+
     return `
 <!DOCTYPE html>
 <html lang="es">
@@ -387,13 +391,46 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pedido Entregado</title>
   ${this.getEmailStyles()}
+  <style>
+    .emoji-rating {
+      text-align: center;
+      margin: 25px 0;
+    }
+    .emoji-btn {
+      display: inline-block;
+      width: 56px;
+      height: 56px;
+      line-height: 56px;
+      font-size: 32px;
+      text-decoration: none;
+      margin: 0 8px;
+      background: #f5f7fa;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+    }
+    .emoji-btn:hover {
+      transform: scale(1.15);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    }
+    .emoji-label {
+      display: block;
+      font-size: 11px;
+      color: ${this.COLOR_GRAY_BLUE};
+      margin-top: 5px;
+    }
+    .emoji-container {
+      display: inline-block;
+      text-align: center;
+      margin: 0 5px;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
     ${this.getEmailHeader('Pedido Entregado!')}
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
-      <p>Confirmamos que tu pedido ha sido entregado exitosamente.</p>
+      <p>Confirmamos que tu pedido <strong>${ctx.invoiceNumber || ''}</strong> ha sido entregado exitosamente.</p>
 
       <div class="success-box">
         <p style="margin: 0; text-align: center; font-size: 16px;">
@@ -401,21 +438,34 @@ export class EmailService {
         </p>
       </div>
 
-      <p style="text-align: center; margin: 30px 0 15px 0;"><strong>Como fue tu experiencia de entrega?</strong></p>
-      <p style="text-align: center; color: ${this.COLOR_GRAY_BLUE}; font-size: 14px; margin-bottom: 20px;">Tu opinion nos ayuda a mejorar</p>
+      <p style="text-align: center; margin: 30px 0 10px 0; font-size: 18px;"><strong>Como fue tu experiencia?</strong></p>
+      <p style="text-align: center; color: ${this.COLOR_GRAY_BLUE}; font-size: 14px; margin-bottom: 25px;">Haz clic en una carita para calificar tu entrega</p>
 
-      <div class="stars">
-        <a href="${ctx.csatUrl}&score=1" class="star">1</a>
-        <a href="${ctx.csatUrl}&score=2" class="star">2</a>
-        <a href="${ctx.csatUrl}&score=3" class="star">3</a>
-        <a href="${ctx.csatUrl}&score=4" class="star">4</a>
-        <a href="${ctx.csatUrl}&score=5" class="star">5</a>
+      <div class="emoji-rating">
+        <div class="emoji-container">
+          <a href="${rateUrl}?score=1" class="emoji-btn" title="Muy malo">😡</a>
+          <span class="emoji-label">Muy malo</span>
+        </div>
+        <div class="emoji-container">
+          <a href="${rateUrl}?score=2" class="emoji-btn" title="Malo">😞</a>
+          <span class="emoji-label">Malo</span>
+        </div>
+        <div class="emoji-container">
+          <a href="${rateUrl}?score=3" class="emoji-btn" title="Regular">😐</a>
+          <span class="emoji-label">Regular</span>
+        </div>
+        <div class="emoji-container">
+          <a href="${rateUrl}?score=4" class="emoji-btn" title="Bueno">😊</a>
+          <span class="emoji-label">Bueno</span>
+        </div>
+        <div class="emoji-container">
+          <a href="${rateUrl}?score=5" class="emoji-btn" title="Excelente">😍</a>
+          <span class="emoji-label">Excelente</span>
+        </div>
       </div>
 
-      <p style="text-align: center; color: ${this.COLOR_GRAY_BLUE}; font-size: 13px;">Haz clic en un numero para calificar (5 = Excelente)</p>
-
       <p style="text-align: center; margin-top: 30px;">
-        <a href="${ctx.csatUrl}" class="btn btn-secondary">Ver Detalles de Entrega</a>
+        <a href="${ctx.csatUrl}" class="btn btn-secondary">Ver Detalles de Mi Entrega</a>
       </p>
     </div>
     ${this.getEmailFooter()}

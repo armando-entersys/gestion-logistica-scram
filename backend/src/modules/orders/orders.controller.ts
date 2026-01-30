@@ -10,7 +10,9 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -80,6 +82,38 @@ export class OrdersController {
   @ApiOperation({ summary: 'Submit customer satisfaction score' })
   submitCsat(@Param('hash') hash: string, @Body() dto: SubmitCsatDto) {
     return this.ordersService.submitCsatScore(hash, dto);
+  }
+
+  /**
+   * Rate from email link (Cliente Final)
+   * Registra la calificación inmediatamente y redirige a /survey para comentario opcional
+   */
+  @Get('rate/:hash')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Rate order from email link and redirect to survey' })
+  @ApiParam({ name: 'hash', description: 'Tracking hash' })
+  async rateFromEmail(
+    @Param('hash') hash: string,
+    @Query('score') score: string,
+    @Res() res: Response,
+  ) {
+    const scoreNum = parseInt(score, 10);
+    const frontendUrl = process.env.APP_URL || 'https://gestion-logistica.scram2k.com';
+
+    // Validar score
+    if (isNaN(scoreNum) || scoreNum < 1 || scoreNum > 5) {
+      return res.redirect(`${frontendUrl}/survey/${hash}`);
+    }
+
+    // Guardar la calificación en la BD
+    try {
+      await this.ordersService.submitCsatScore(hash, { score: scoreNum });
+    } catch (error) {
+      // Si falla, igual redirigir al survey para que pueda calificar manualmente
+    }
+
+    // Redirigir al survey con el score pre-seleccionado
+    return res.redirect(`${frontendUrl}/survey/${hash}?score=${scoreNum}&fromEmail=true`);
   }
 
   // =============================================
