@@ -373,6 +373,11 @@ export class RoutesService {
     const [hours, minutes] = startTime.split(':').map(Number);
     const date = new Date();
     date.setHours(hours || 9, minutes || 0, 0, 0);
+
+    // Si la hora ya pasó hoy, usar mañana
+    if (date.getTime() < Date.now()) {
+      date.setDate(date.getDate() + 1);
+    }
     return date;
   }
 
