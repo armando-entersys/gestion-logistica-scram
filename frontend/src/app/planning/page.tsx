@@ -1921,16 +1921,13 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
                     {order.orderNumber || order.bindId?.substring(0, 8)}
                   </Typography>
                   {promisedDateStr && (
-                    <Tooltip title={`Fecha de entrega: ${promisedDateStr}`}>
-                      <Chip
-                        size="small"
-                        icon={<CalendarTodayIcon sx={{ fontSize: '10px !important' }} />}
-                        label={promisedDateStr}
-                        sx={{ height: 16, '& .MuiChip-label': { px: 0.5, fontSize: '0.6rem' }, '& .MuiChip-icon': { ml: 0.25 } }}
-                        color="info"
-                        variant="outlined"
-                      />
-                    </Tooltip>
+                    <Chip
+                      size="small"
+                      icon={<CalendarTodayIcon sx={{ fontSize: '14px !important' }} />}
+                      label={promisedDateStr}
+                      sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem', fontWeight: 600 }, '& .MuiChip-icon': { ml: 0.5 } }}
+                      color="warning"
+                    />
                   )}
                   <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1 }}>{order.clientName}</Typography>
                 </Stack>

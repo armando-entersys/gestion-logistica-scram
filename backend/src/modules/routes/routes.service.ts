@@ -188,10 +188,17 @@ export class RoutesService {
           orderId: o.id,
         }));
 
-        const result = await this.googleRoutesService.optimizeWaypoints(
-          waypoints,
-          currentTime.toISOString(),
-        );
+        let result = null;
+        let optimizeError = '';
+        try {
+          result = await this.googleRoutesService.optimizeWaypoints(
+            waypoints,
+            currentTime.toISOString(),
+          );
+        } catch (error) {
+          optimizeError = error.message || 'Unknown error';
+          this.logger.error(`Error optimizing bucket ${bucket.name}: ${optimizeError}`);
+        }
 
         if (result) {
           totalDistanceMeters += result.totalDistanceMeters;
@@ -223,7 +230,12 @@ export class RoutesService {
             currentPosition++;
             currentTime = new Date(currentTime.getTime() + 30 * 60000);
           }
-          warnings.push(`No se pudo optimizar bucket ${bucket.name}, usando orden original`);
+          const errorDetail = optimizeError === 'API_KEY_MISSING'
+            ? 'GOOGLE_MAPS_API_KEY no configurada'
+            : optimizeError
+              ? `Error: ${optimizeError}`
+              : 'Google Routes API no disponible (verificar que Routes API esté habilitada en Google Cloud Console)';
+          warnings.push(`No se pudo optimizar bucket ${bucket.name}: ${errorDetail}`);
         }
       }
     } else {
@@ -234,10 +246,17 @@ export class RoutesService {
         orderId: o.id,
       }));
 
-      const result = await this.googleRoutesService.optimizeWaypoints(
-        waypoints,
-        this.parseStartTime(startTime).toISOString(),
-      );
+      let result = null;
+      let optimizeError = '';
+      try {
+        result = await this.googleRoutesService.optimizeWaypoints(
+          waypoints,
+          this.parseStartTime(startTime).toISOString(),
+        );
+      } catch (error) {
+        optimizeError = error.message || 'Unknown error';
+        this.logger.error(`Error optimizing route: ${optimizeError}`);
+      }
 
       if (result) {
         totalDistanceMeters = result.totalDistanceMeters;
@@ -280,7 +299,12 @@ export class RoutesService {
           allLegs.push(this.createOptimizationLeg(order, idx + 1, currentTime, 0, 30));
           currentTime = new Date(currentTime.getTime() + 30 * 60000);
         });
-        warnings.push('No se pudo conectar a Google Routes API, usando orden original');
+        const errorDetail = optimizeError === 'API_KEY_MISSING'
+          ? 'GOOGLE_MAPS_API_KEY no configurada'
+          : optimizeError
+            ? `Error: ${optimizeError}`
+            : 'Google Routes API no disponible (verificar que Routes API esté habilitada en Google Cloud Console)';
+        warnings.push(`No se pudo optimizar: ${errorDetail}`);
       }
     }
 

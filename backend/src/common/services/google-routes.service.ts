@@ -45,6 +45,11 @@ export class GoogleRoutesService {
     private readonly configService: ConfigService,
   ) {
     this.apiKey = this.configService.get('googleMaps.apiKey') || '';
+    if (!this.apiKey) {
+      this.logger.warn('GOOGLE_MAPS_API_KEY not configured - route optimization will be disabled');
+    } else {
+      this.logger.log('Google Routes API configured');
+    }
   }
 
   /**
@@ -67,8 +72,8 @@ export class GoogleRoutesService {
     }>;
   } | null> {
     if (!this.apiKey) {
-      this.logger.warn('Google Maps API key not configured, skipping route optimization');
-      return null;
+      this.logger.error('GOOGLE_MAPS_API_KEY not configured - cannot optimize route');
+      throw new Error('API_KEY_MISSING');
     }
 
     if (waypoints.length < 2) {
@@ -164,6 +169,14 @@ export class GoogleRoutesService {
       this.logger.error('Error calling Google Routes API:', error.message);
       if (error.response?.data) {
         this.logger.error('API response:', JSON.stringify(error.response.data));
+        // Propagar información del error
+        const apiError = error.response.data?.error;
+        if (apiError?.message) {
+          this.logger.error(`Google API Error: ${apiError.status} - ${apiError.message}`);
+        }
+      }
+      if (error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
+        this.logger.error('Network error connecting to Google Routes API');
       }
       return null;
     }
