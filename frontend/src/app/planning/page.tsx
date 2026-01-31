@@ -1832,7 +1832,7 @@ export default function PlanningPage() {
             message: 'Ruta optimizada aplicada correctamente',
             severity: 'success',
           });
-          setSelectedOrderIds([]);
+          // Mantener pedidos seleccionados para asignar y despachar
           queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
         }}
       />
