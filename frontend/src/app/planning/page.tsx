@@ -211,6 +211,11 @@ export default function PlanningPage() {
   // Route optimization dialog state
   const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false);
 
+  // Confirm delivery dialog state (for carrier orders)
+  const [confirmDeliveryDialogOpen, setConfirmDeliveryDialogOpen] = useState(false);
+  const [confirmingOrder, setConfirmingOrder] = useState<Order | null>(null);
+  const [deliveryEvidenceFile, setDeliveryEvidenceFile] = useState<File | null>(null);
+
   // Format date helper
   const formatDateShort = (dateStr?: string) => {
     if (!dateStr) return '-';
@@ -460,6 +465,48 @@ export default function PlanningPage() {
     },
     onError: (error: any) => {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error al cancelar pedidos', severity: 'error' });
+    },
+  });
+
+  // Confirm delivery mutation (for carrier orders)
+  const confirmDeliveryMutation = useMutation({
+    mutationFn: async () => {
+      if (!confirmingOrder) throw new Error('No hay pedido seleccionado');
+
+      let storageKey = '';
+
+      // If we have evidence file, upload it first
+      if (deliveryEvidenceFile) {
+        // Convert file to base64
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64String = reader.result as string;
+            // Remove data:image/...;base64, prefix
+            resolve(base64String.split(',')[1] || base64String);
+          };
+          reader.readAsDataURL(deliveryEvidenceFile);
+        });
+
+        // Send to markDelivered with base64Data
+        return ordersApi.markDelivered(confirmingOrder.id, {
+          type: 'PHOTO',
+          base64Data: base64,
+        } as any);
+      }
+
+      // No evidence, just mark as delivered
+      return ordersApi.markDelivered(confirmingOrder.id, {} as any);
+    },
+    onSuccess: () => {
+      setSnackbar({ open: true, message: 'Entrega confirmada correctamente', severity: 'success' });
+      setConfirmDeliveryDialogOpen(false);
+      setConfirmingOrder(null);
+      setDeliveryEvidenceFile(null);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al confirmar entrega', severity: 'error' });
     },
   });
 
@@ -1098,7 +1145,27 @@ export default function PlanningPage() {
             )}
             {/* Actions for IN_TRANSIT orders */}
             {statusFilter === 1 && (
-              <Stack direction="row" spacing={1}>
+              <Stack spacing={1}>
+                {/* Confirm delivery for carrier orders */}
+                {selectedOrders.some(o => o.carrierType && o.carrierType !== 'INTERNAL') && (
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="success"
+                    disabled={selectedOrderIds.length !== 1 || confirmDeliveryMutation.isPending}
+                    onClick={() => {
+                      const carrierOrder = selectedOrders.find(o => o.carrierType && o.carrierType !== 'INTERNAL');
+                      if (carrierOrder) {
+                        setConfirmingOrder(carrierOrder);
+                        setConfirmDeliveryDialogOpen(true);
+                      }
+                    }}
+                    startIcon={<CheckCircleIcon />}
+                    fullWidth
+                  >
+                    Confirmar Entrega (Paquetería)
+                  </Button>
+                )}
                 <Button
                   variant="outlined"
                   size="small"
@@ -1110,7 +1177,7 @@ export default function PlanningPage() {
                     }
                   }}
                   startIcon={<UndoIcon />}
-                  sx={{ flex: 1 }}
+                  fullWidth
                 >
                   Regresar a Compras ({selectedOrderIds.length})
                 </Button>
@@ -1836,6 +1903,79 @@ export default function PlanningPage() {
           queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
         }}
       />
+
+      {/* Confirm Delivery Dialog (for carrier orders) */}
+      <Dialog open={confirmDeliveryDialogOpen} onClose={() => { setConfirmDeliveryDialogOpen(false); setDeliveryEvidenceFile(null); }} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <CheckCircleIcon color="success" />
+            <Typography variant="h6">Confirmar Entrega</Typography>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {confirmingOrder && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Typography variant="subtitle2" color="primary.main" fontWeight={700}>
+                  {confirmingOrder.orderNumber || confirmingOrder.bindId?.substring(0, 8)}
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>{confirmingOrder.clientName}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Paquetería: {confirmingOrder.carrierName || confirmingOrder.carrierType}
+                  {confirmingOrder.carrierTrackingNumber && ` - Guía: ${confirmingOrder.carrierTrackingNumber}`}
+                </Typography>
+              </Paper>
+
+              <Alert severity="info">
+                Adjunta evidencia de que la paquetería entregó correctamente al cliente (foto de guía firmada, acuse, etc.)
+              </Alert>
+
+              <Button
+                variant="outlined"
+                component="label"
+                fullWidth
+                startIcon={<PhotoCameraIcon />}
+              >
+                {deliveryEvidenceFile ? deliveryEvidenceFile.name : 'Seleccionar Evidencia (Foto)'}
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setDeliveryEvidenceFile(e.target.files[0]);
+                    }
+                  }}
+                />
+              </Button>
+
+              {deliveryEvidenceFile && (
+                <Box sx={{ textAlign: 'center' }}>
+                  <img
+                    src={URL.createObjectURL(deliveryEvidenceFile)}
+                    alt="Evidencia"
+                    style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 8 }}
+                  />
+                </Box>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => { setConfirmDeliveryDialogOpen(false); setDeliveryEvidenceFile(null); }}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => confirmDeliveryMutation.mutate()}
+            disabled={confirmDeliveryMutation.isPending}
+            startIcon={confirmDeliveryMutation.isPending ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+          >
+            {confirmDeliveryMutation.isPending ? 'Confirmando...' : 'Confirmar Entrega'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>

@@ -83,6 +83,7 @@ export class EmailService {
       'detractor-alert': this.detractorAlertTemplate.bind(this),
       'en-route-notification': this.enRouteNotificationTemplate.bind(this),
       'password-reset': this.passwordResetTemplate.bind(this),
+      'carrier-shipment': this.carrierShipmentTemplate.bind(this),
     };
 
     const templateFn = templates[template];
@@ -633,6 +634,46 @@ export class EmailService {
       <p style="margin-top: 25px; font-size: 13px; color: ${this.COLOR_GRAY_BLUE};">
         Si el boton no funciona, copia y pega este enlace en tu navegador:<br>
         <a href="${ctx.resetUrl}" style="color: ${this.COLOR_ORANGE}; word-break: break-all;">${ctx.resetUrl}</a>
+      </p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  private carrierShipmentTemplate(ctx: any): string {
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tu pedido fue enviado</title>
+  ${this.getEmailStyles()}
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('Tu pedido fue enviado!')}
+    <div class="content">
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Te informamos que tu pedido ha sido enviado a traves de <strong>${ctx.carrierName}</strong> y esta en camino hacia ti.</p>
+
+      <div class="info-box">
+        <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Servicio de paqueteria:</strong></p>
+        <p style="margin: 0; font-size: 20px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">${ctx.carrierName}</p>
+        ${ctx.trackingNumber && ctx.trackingNumber !== 'Pendiente' ? `<p style="margin: 10px 0 0 0; font-size: 14px;">No. de guia: <strong>${ctx.trackingNumber}</strong></p>` : ''}
+      </div>
+
+      <div class="highlight-box">
+        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Fecha estimada de entrega:</strong></p>
+        <div class="eta-time" style="font-size: 22px;">${ctx.deliveryInfo}</div>
+      </div>
+
+      <p>Tu pedido sera entregado por <strong>SCRAM</strong> a traves de ${ctx.carrierName}. Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
+
+      <p style="text-align: center;">
+        <a href="${ctx.trackingUrl}" class="btn">Ver Estado de Mi Pedido</a>
       </p>
     </div>
     ${this.getEmailFooter()}

@@ -420,9 +420,9 @@ export class OrdersController {
    */
   @Patch(':id/deliver')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.DRIVER)
+  @Roles(UserRole.DRIVER, UserRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Mark order as delivered with evidence (POD)' })
+  @ApiOperation({ summary: 'Mark order as delivered with evidence (POD) - Driver or Admin for carrier orders' })
   markAsDelivered(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: {
@@ -441,9 +441,9 @@ export class OrdersController {
         capturedLongitude?: number;
       }>;
     },
-    @CurrentUser('id') driverId: string,
+    @CurrentUser('id') userId: string,
   ) {
-    return this.ordersService.markAsDelivered(id, body, driverId);
+    return this.ordersService.markAsDelivered(id, body, userId);
   }
 
   /**

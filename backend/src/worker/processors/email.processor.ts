@@ -49,6 +49,17 @@ interface PasswordResetPayload {
   resetUrl: string;
 }
 
+interface CarrierShipmentPayload {
+  orderId: string;
+  clientEmail: string;
+  clientName: string;
+  carrierName: string;
+  trackingNumber?: string;
+  estimatedDeliveryDate?: string;
+  estimatedDeliveryTime?: string;
+  trackingHash: string;
+}
+
 @Processor('notifications')
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
@@ -85,6 +96,10 @@ export class EmailProcessor extends WorkerHost {
 
       case 'send-password-reset':
         await this.handlePasswordReset(job.data as PasswordResetPayload);
+        break;
+
+      case 'send-carrier-shipment':
+        await this.handleCarrierShipment(job.data as CarrierShipmentPayload);
         break;
 
       default:
@@ -243,6 +258,42 @@ export class EmailProcessor extends WorkerHost {
     });
 
     this.logger.log(`Password reset email sent to ${email}`);
+  }
+
+  /**
+   * Carrier Shipment notification: Order shipped via external carrier
+   */
+  private async handleCarrierShipment(payload: CarrierShipmentPayload): Promise<void> {
+    const { orderId, clientEmail, clientName, carrierName, trackingNumber, estimatedDeliveryDate, estimatedDeliveryTime, trackingHash } = payload;
+
+    // Format delivery date
+    let deliveryInfo = 'Pronto';
+    if (estimatedDeliveryDate) {
+      const date = new Date(estimatedDeliveryDate);
+      deliveryInfo = date.toLocaleDateString('es-MX', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      });
+      if (estimatedDeliveryTime) {
+        deliveryInfo += ` aproximadamente a las ${estimatedDeliveryTime}`;
+      }
+    }
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject: `📦 ¡Tu pedido SCRAM fue enviado por ${carrierName}!`,
+      template: 'carrier-shipment',
+      context: {
+        clientName: clientName.split(' ')[0],
+        carrierName,
+        trackingNumber: trackingNumber || 'Pendiente',
+        deliveryInfo,
+        trackingUrl: `${process.env.APP_URL}/track/${trackingHash}`,
+      },
+    });
+
+    this.logger.log(`Carrier shipment email sent to ${clientEmail} for order ${orderId}`);
   }
 
   @OnWorkerEvent('completed')

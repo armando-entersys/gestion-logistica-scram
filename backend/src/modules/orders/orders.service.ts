@@ -457,7 +457,7 @@ export class OrdersService {
    * Asignar paquetería externa a pedidos
    * RF-03: Gestión de Flota - Paqueterías externas
    */
-  async assignCarrier(dto: AssignCarrierDto): Promise<{ assigned: number }> {
+  async assignCarrier(dto: AssignCarrierDto): Promise<{ assigned: number; emailsQueued: number }> {
     // Para tipo OTHER, validar que se proporcione nombre
     if (dto.carrierType === CarrierType.OTHER && !dto.carrierName) {
       throw new BadRequestException('Se requiere nombre del carrier para tipo OTHER');
@@ -471,21 +471,59 @@ export class OrdersService {
     const deliveryDate = dto.deliveryDate ? new Date(dto.deliveryDate + 'T12:00:00') : null;
     const deliveryTime = dto.deliveryTime || null;
 
-    await this.orderRepository.update(
-      { id: In(dto.orderIds) },
-      {
+    // Obtener órdenes con datos de cliente para enviar emails
+    const orders = await this.orderRepository.find({
+      where: { id: In(dto.orderIds) },
+      relations: ['client'],
+    });
+
+    let emailsQueued = 0;
+
+    for (const order of orders) {
+      // Generar trackingHash si no existe
+      const trackingHash = order.trackingHash || this.generateTrackingHash();
+
+      await this.orderRepository.update(order.id, {
         carrierType: dto.carrierType,
         carrierName: carrierName,
         carrierTrackingNumber: dto.trackingNumber || null,
         carrierDeliveryDate: deliveryDate,
         carrierDeliveryTime: deliveryTime,
-        status: OrderStatus.IN_TRANSIT, // Cambiar a En Ruta cuando se asigna paquetería
-        assignedDriverId: null, // No hay chofer interno
-      },
-    );
+        status: OrderStatus.IN_TRANSIT,
+        assignedDriverId: null,
+        trackingHash: trackingHash,
+      });
 
-    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders (deliveryDate: ${dto.deliveryDate}, deliveryTime: ${dto.deliveryTime})`);
-    return { assigned: dto.orderIds.length };
+      // Enviar email de notificación de paquetería
+      const recipientEmail = order.clientEmail || order.client?.email;
+      if (recipientEmail && !order.dispatchEmailSent) {
+        const jobId = `carrier-${order.id}-${new Date().toISOString().split('T')[0]}`;
+        await this.notificationQueue.add(
+          'send-carrier-shipment',
+          {
+            orderId: order.id,
+            clientEmail: recipientEmail,
+            clientName: order.clientName,
+            carrierName: carrierName,
+            trackingNumber: dto.trackingNumber || null,
+            estimatedDeliveryDate: dto.deliveryDate || null,
+            estimatedDeliveryTime: dto.deliveryTime || null,
+            trackingHash: trackingHash,
+          },
+          {
+            jobId,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 5000 },
+          },
+        );
+
+        await this.orderRepository.update(order.id, { dispatchEmailSent: true });
+        emailsQueued++;
+      }
+    }
+
+    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders, ${emailsQueued} emails queued (deliveryDate: ${dto.deliveryDate}, deliveryTime: ${dto.deliveryTime})`);
+    return { assigned: dto.orderIds.length, emailsQueued };
   }
 
   /**
