@@ -70,6 +70,7 @@ import ImageIcon from '@mui/icons-material/Image';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CancelIcon from '@mui/icons-material/Cancel';
 import UndoIcon from '@mui/icons-material/Undo';
+import RouteIcon from '@mui/icons-material/Route';
 
 import { useRouter } from 'next/navigation';
 import { ordersApi, usersApi, clientAddressesApi, syncApi } from '@/lib/api';
@@ -81,6 +82,10 @@ const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
       <CircularProgress size={32} />
     </Box>
   ),
+});
+
+const RouteOptimizationDialog = dynamic(() => import('@/components/RouteOptimizationDialog'), {
+  ssr: false,
 });
 
 interface ShipmentEvidence {
@@ -202,6 +207,9 @@ export default function PlanningPage() {
   // POD viewer dialog state
   const [podDialogOpen, setPodDialogOpen] = useState(false);
   const [podOrder, setPodOrder] = useState<Order | null>(null);
+
+  // Route optimization dialog state
+  const [optimizeDialogOpen, setOptimizeDialogOpen] = useState(false);
 
   // Format date helper
   const formatDateShort = (dateStr?: string) => {
@@ -1066,6 +1074,17 @@ export default function PlanningPage() {
                   Paquetería
                 </Button>
                 <Button
+                  variant="outlined"
+                  size="small"
+                  color="info"
+                  disabled={selectedOrderIds.length < 2}
+                  onClick={() => setOptimizeDialogOpen(true)}
+                  startIcon={<RouteIcon />}
+                  sx={{ flex: 1 }}
+                >
+                  Optimizar
+                </Button>
+                <Button
                   variant="contained"
                   size="small"
                   disabled={selectedOrderIds.length === 0}
@@ -1801,6 +1820,22 @@ export default function PlanningPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Route Optimization Dialog */}
+      <RouteOptimizationDialog
+        open={optimizeDialogOpen}
+        onClose={() => setOptimizeDialogOpen(false)}
+        selectedOrders={selectedOrders}
+        onOptimizationApplied={() => {
+          setSnackbar({
+            open: true,
+            message: 'Ruta optimizada aplicada correctamente',
+            severity: 'success',
+          });
+          setSelectedOrderIds([]);
+          queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+        }}
+      />
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
         <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} variant="filled">{snackbar.message}</Alert>

@@ -245,6 +245,43 @@ export const routesApi = {
 
   getNearby: (lat: number, lng: number, radius?: number) =>
     api.get('/routes/nearby', { params: { lat, lng, radius } }),
+
+  // Route optimization with Google Routes API
+  optimize: (orderIds: string[], options?: { startTime?: string; respectPriority?: boolean }) =>
+    api.post<{
+      success: boolean;
+      optimization: {
+        originalSequence: string[];
+        optimizedSequence: string[];
+        totalDistanceKm: number;
+        originalDistanceKm: number;
+        totalDurationMinutes: number;
+        savingsPercent: number;
+        savingsKm: number;
+        legs: Array<{
+          orderId: string;
+          position: number;
+          distanceKm: number;
+          durationMinutes: number;
+          etaStart: string;
+          etaEnd: string;
+          clientName: string;
+          address: string;
+          priority: number;
+        }>;
+      };
+      warnings: string[];
+    }>('/routes/optimize', {
+      orderIds,
+      startTime: options?.startTime || '09:00',
+      respectPriority: options?.respectPriority ?? true,
+    }),
+
+  applyOptimization: (optimizedOrderIds: string[], startTime?: string) =>
+    api.post<{ success: boolean; applied: number }>('/routes/optimize/apply', {
+      optimizedOrderIds,
+      startTime: startTime || '09:00',
+    }),
 };
 
 // Clients API
