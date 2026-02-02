@@ -685,7 +685,9 @@ export class OrdersService {
     }
 
     // Validar que el chofer solo puede entregar sus pedidos asignados
-    if (driverId && order.assignedDriverId !== driverId) {
+    // Excepción: pedidos de paquetería (sin chofer asignado) pueden ser marcados por ADMIN
+    const isCarrierOrder = order.carrierType && order.carrierType !== 'INTERNAL';
+    if (driverId && order.assignedDriverId && order.assignedDriverId !== driverId && !isCarrierOrder) {
       throw new ForbiddenException('No tienes permiso para marcar este pedido como entregado');
     }
 
