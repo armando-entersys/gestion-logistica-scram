@@ -161,6 +161,7 @@ export class EmailProcessor extends WorkerHost {
         clientName: clientName.split(' ')[0],
         csatUrl: `${process.env.APP_URL}/track/${trackingHash}#csat`,
         orderId,
+        trackingHash,
       },
     });
 
