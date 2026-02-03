@@ -505,6 +505,7 @@ export class OrdersService {
             clientEmail: recipientEmail,
             clientName: order.clientName,
             carrierName: carrierName,
+            carrierType: dto.carrierType,
             trackingNumber: dto.trackingNumber || null,
             estimatedDeliveryDate: dto.deliveryDate || null,
             estimatedDeliveryTime: dto.deliveryTime || null,

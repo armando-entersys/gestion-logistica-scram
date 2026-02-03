@@ -54,6 +54,7 @@ interface CarrierShipmentPayload {
   clientEmail: string;
   clientName: string;
   carrierName: string;
+  carrierType?: string;
   trackingNumber?: string;
   estimatedDeliveryDate?: string;
   estimatedDeliveryTime?: string;
@@ -265,7 +266,9 @@ export class EmailProcessor extends WorkerHost {
    * Carrier Shipment notification: Order shipped via external carrier
    */
   private async handleCarrierShipment(payload: CarrierShipmentPayload): Promise<void> {
-    const { orderId, clientEmail, clientName, carrierName, trackingNumber, estimatedDeliveryDate, estimatedDeliveryTime, trackingHash } = payload;
+    const { orderId, clientEmail, clientName, carrierName, carrierType, trackingNumber, estimatedDeliveryDate, estimatedDeliveryTime, trackingHash } = payload;
+
+    const isProvider = carrierType === 'PROVIDER';
 
     // Format delivery date
     let deliveryInfo = 'Pronto';
@@ -281,16 +284,22 @@ export class EmailProcessor extends WorkerHost {
       }
     }
 
+    // For "Proveedor Directo": hide carrier details, SCRAM handles delivery
+    const subject = isProvider
+      ? '📦 ¡Tu pedido SCRAM fue enviado!'
+      : `📦 ¡Tu pedido SCRAM fue enviado por ${carrierName}!`;
+
     await this.emailService.sendEmail({
       to: clientEmail,
-      subject: `📦 ¡Tu pedido SCRAM fue enviado por ${carrierName}!`,
+      subject,
       template: 'carrier-shipment',
       context: {
         clientName: clientName.split(' ')[0],
-        carrierName,
-        trackingNumber: trackingNumber || 'Pendiente',
+        carrierName: isProvider ? 'SCRAM' : carrierName,
+        trackingNumber: isProvider ? null : (trackingNumber || 'Pendiente'),
         deliveryInfo,
         trackingUrl: `${process.env.APP_URL}/track/${trackingHash}`,
+        isProvider,
       },
     });
 

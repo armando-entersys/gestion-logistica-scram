@@ -643,6 +643,28 @@ export class EmailService {
   }
 
   private carrierShipmentTemplate(ctx: any): string {
+    const isProvider = ctx.isProvider;
+
+    const carrierInfoBox = isProvider
+      ? `<div class="info-box">
+          <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Enviado por:</strong></p>
+          <p style="margin: 0; font-size: 20px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">SCRAM</p>
+          <p style="margin: 10px 0 0 0; font-size: 14px;">Nosotros nos encargamos de la entrega y el seguimiento de tu pedido.</p>
+        </div>`
+      : `<div class="info-box">
+          <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Servicio de paqueteria:</strong></p>
+          <p style="margin: 0; font-size: 20px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">${ctx.carrierName}</p>
+          ${ctx.trackingNumber && ctx.trackingNumber !== 'Pendiente' ? `<p style="margin: 10px 0 0 0; font-size: 14px;">No. de guia: <strong>${ctx.trackingNumber}</strong></p>` : ''}
+        </div>`;
+
+    const bodyText = isProvider
+      ? `Te informamos que tu pedido esta en camino. <strong>SCRAM</strong> se encarga de la entrega y seguimiento.`
+      : `Te informamos que tu pedido ha sido enviado a traves de <strong>${ctx.carrierName}</strong> y esta en camino hacia ti.`;
+
+    const footerText = isProvider
+      ? `Tu pedido sera entregado por <strong>SCRAM</strong>. Por favor, asegurate de que haya alguien disponible para recibir el paquete.`
+      : `Tu pedido sera entregado por <strong>SCRAM</strong> a traves de ${ctx.carrierName}. Por favor, asegurate de que haya alguien disponible para recibir el paquete.`;
+
     return `
 <!DOCTYPE html>
 <html lang="es">
@@ -657,20 +679,16 @@ export class EmailService {
     ${this.getEmailHeader('Tu pedido fue enviado!')}
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
-      <p>Te informamos que tu pedido ha sido enviado a traves de <strong>${ctx.carrierName}</strong> y esta en camino hacia ti.</p>
+      <p>${bodyText}</p>
 
-      <div class="info-box">
-        <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Servicio de paqueteria:</strong></p>
-        <p style="margin: 0; font-size: 20px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">${ctx.carrierName}</p>
-        ${ctx.trackingNumber && ctx.trackingNumber !== 'Pendiente' ? `<p style="margin: 10px 0 0 0; font-size: 14px;">No. de guia: <strong>${ctx.trackingNumber}</strong></p>` : ''}
-      </div>
+      ${carrierInfoBox}
 
       <div class="highlight-box">
         <p style="margin: 0 0 10px 0; color: #996600;"><strong>Fecha estimada de entrega:</strong></p>
         <div class="eta-time" style="font-size: 22px;">${ctx.deliveryInfo}</div>
       </div>
 
-      <p>Tu pedido sera entregado por <strong>SCRAM</strong> a traves de ${ctx.carrierName}. Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
+      <p>${footerText}</p>
 
       <p style="text-align: center;">
         <a href="${ctx.trackingUrl}" class="btn">Ver Estado de Mi Pedido</a>
