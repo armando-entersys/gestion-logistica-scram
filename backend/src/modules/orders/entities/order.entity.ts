@@ -131,7 +131,7 @@ export class Order {
 
   @Column({
     type: 'varchar',
-    length: 20,
+    length: 30,
     default: OrderStatus.DRAFT,
   })
   status: OrderStatus;

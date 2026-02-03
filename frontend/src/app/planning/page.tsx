@@ -1098,48 +1098,65 @@ export default function PlanningPage() {
           >
             {/* Main actions for READY orders */}
             {statusFilter === 0 && (
-              <Stack direction="row" spacing={1}>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => setAssignDialogOpen(true)}
+                    startIcon={<AssignmentIndIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    Chofer ({selectedOrderIds.length})
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="secondary"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => setCarrierDialogOpen(true)}
+                    startIcon={<BusinessIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    Paquetería
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="info"
+                    disabled={selectedOrderIds.length < 2}
+                    onClick={() => setOptimizeDialogOpen(true)}
+                    startIcon={<RouteIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    Optimizar
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => setDispatchDialogOpen(true)}
+                    startIcon={<PlayArrowIcon />}
+                    sx={{ flex: 1.5 }}
+                  >
+                    Despachar ({selectedOrderIds.length})
+                  </Button>
+                </Stack>
                 <Button
                   variant="outlined"
                   size="small"
-                  disabled={selectedOrderIds.length === 0}
-                  onClick={() => setAssignDialogOpen(true)}
-                  startIcon={<AssignmentIndIcon />}
-                  sx={{ flex: 1 }}
+                  color="warning"
+                  disabled={selectedOrderIds.length === 0 || returnToPurchasingMutation.isPending}
+                  onClick={() => {
+                    if (confirm('¿Regresar los pedidos seleccionados a Compras para revisión?')) {
+                      returnToPurchasingMutation.mutate();
+                    }
+                  }}
+                  startIcon={<UndoIcon />}
+                  fullWidth
                 >
-                  Chofer ({selectedOrderIds.length})
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="secondary"
-                  disabled={selectedOrderIds.length === 0}
-                  onClick={() => setCarrierDialogOpen(true)}
-                  startIcon={<BusinessIcon />}
-                  sx={{ flex: 1 }}
-                >
-                  Paquetería
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="info"
-                  disabled={selectedOrderIds.length < 2}
-                  onClick={() => setOptimizeDialogOpen(true)}
-                  startIcon={<RouteIcon />}
-                  sx={{ flex: 1 }}
-                >
-                  Optimizar
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  disabled={selectedOrderIds.length === 0}
-                  onClick={() => setDispatchDialogOpen(true)}
-                  startIcon={<PlayArrowIcon />}
-                  sx={{ flex: 1.5 }}
-                >
-                  Despachar ({selectedOrderIds.length})
+                  Regresar a Compras ({selectedOrderIds.length})
                 </Button>
               </Stack>
             )}
