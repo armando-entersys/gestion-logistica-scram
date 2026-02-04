@@ -189,9 +189,15 @@ export default function DeliveryPage() {
   const handleSubmit = async () => {
     if (!orderId) return;
 
-    // Require at least one evidence (photo or signature)
-    if (!photoDataUrl && !signatureDataUrl) {
-      setError('Por favor captura al menos una evidencia (foto o firma)');
+    // Require both photo AND signature
+    if (!photoDataUrl) {
+      setError('Por favor captura una foto del paquete entregado');
+      setEvidenceType('PHOTO');
+      return;
+    }
+    if (!signatureDataUrl) {
+      setError('Por favor obtén la firma del cliente');
+      setEvidenceType('SIGNATURE');
       return;
     }
 
@@ -535,6 +541,15 @@ export default function DeliveryPage() {
         }}
         elevation={2}
       >
+        {(!photoDataUrl || !signatureDataUrl) && (
+          <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ mb: 1, display: 'block' }}>
+            {!photoDataUrl && !signatureDataUrl
+              ? 'Falta: foto y firma'
+              : !photoDataUrl
+              ? 'Falta: foto del paquete'
+              : 'Falta: firma del cliente'}
+          </Typography>
+        )}
         <Button
           variant="contained"
           color="success"
