@@ -1042,7 +1042,7 @@ export default function PlanningPage() {
           {/* Tabs */}
           <Tabs
             value={statusFilter}
-            onChange={(_, v) => setStatusFilter(v)}
+            onChange={(_, v) => { setStatusFilter(v); setSelectedOrderIds([]); }}
             variant="scrollable"
             scrollButtons="auto"
             sx={{
@@ -2051,8 +2051,10 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
   return (
     <Card
       variant="outlined"
+      onClick={() => { if (canSelect) onToggle(); }}
       sx={{
         transition: 'all 0.15s',
+        cursor: canSelect ? 'pointer' : 'default',
         borderColor: isSelected ? 'primary.main' : isUrgent ? 'error.light' : isCancelled ? 'error.light' : 'divider',
         borderWidth: isSelected ? 2 : 1,
         bgcolor: isSelected ? alpha('#0d9488', 0.04) : isDelivered ? '#f8fafc' : isCancelled ? '#fef2f2' : 'white',
