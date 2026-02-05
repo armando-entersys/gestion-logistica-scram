@@ -38,6 +38,11 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Skip waiting and claim clients immediately on activation
+        skipWaiting: true,
+        clientsClaim: true,
+        // Clean old caches from previous SW versions
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/api-gestion-logistica\.scram2k\.com\/.*/i,
@@ -54,6 +59,8 @@ export default defineConfig({
         ],
         // Include push notification handler
         importScripts: ['sw-push.js'],
+        // Force navigation to use network-first for index.html
+        navigateFallback: '/index.html',
       },
     }),
   ],
