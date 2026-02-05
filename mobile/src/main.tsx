@@ -24,7 +24,7 @@ registerSW({
   onOfflineReady() {
     console.log('[PWA] App ready for offline use');
   },
-  onRegisteredSW(swUrl, r) {
+  onRegisteredSW(_swUrl, r) {
     // Check for updates every 5 minutes
     if (r) {
       setInterval(() => {
