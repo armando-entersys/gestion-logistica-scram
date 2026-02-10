@@ -53,7 +53,7 @@ export default function DeliveryPage() {
     [orderId]
   );
 
-  // Setup signature canvas
+  // Setup signature canvas with native touch event listeners
   useEffect(() => {
     if (evidenceType === 'SIGNATURE' && canvasRef.current) {
       const canvas = canvasRef.current;
@@ -78,10 +78,51 @@ export default function DeliveryPage() {
         }
       };
 
+      // Native touch handlers with { passive: false } to prevent page scrolling
+      const handleTouchStart = (e: TouchEvent) => {
+        e.preventDefault();
+        isDrawingRef.current = true;
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const ctx = canvas.getContext('2d');
+        if (ctx && touch) {
+          ctx.beginPath();
+          ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        }
+      };
+
+      const handleTouchMove = (e: TouchEvent) => {
+        e.preventDefault();
+        if (!isDrawingRef.current) return;
+        const rect = canvas.getBoundingClientRect();
+        const touch = e.touches[0];
+        const ctx = canvas.getContext('2d');
+        if (ctx && touch) {
+          ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+          ctx.stroke();
+        }
+      };
+
+      const handleTouchEnd = (e: TouchEvent) => {
+        e.preventDefault();
+        isDrawingRef.current = false;
+        setSignatureDataUrl(canvas.toDataURL('image/png'));
+      };
+
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
       // Delay setup to ensure element is rendered
       requestAnimationFrame(() => {
         requestAnimationFrame(setupCanvas);
       });
+
+      return () => {
+        canvas.removeEventListener('touchstart', handleTouchStart);
+        canvas.removeEventListener('touchmove', handleTouchMove);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+      };
     }
   }, [evidenceType]);
 
@@ -485,9 +526,6 @@ export default function DeliveryPage() {
                   touchAction: 'none',
                   display: 'block',
                 }}
-                onTouchStart={startDrawing}
-                onTouchMove={draw}
-                onTouchEnd={stopDrawing}
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
