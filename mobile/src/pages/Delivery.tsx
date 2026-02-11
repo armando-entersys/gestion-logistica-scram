@@ -45,7 +45,9 @@ export default function DeliveryPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const isDrawingRef = useRef(false);
+  const canvasReadyRef = useRef(false);
 
   // Get order from local DB
   const order = useLiveQuery(
@@ -53,77 +55,100 @@ export default function DeliveryPage() {
     [orderId]
   );
 
+  // Helper: configure canvas context for drawing
+  const configureCtx = (ctx: CanvasRenderingContext2D) => {
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
+
   // Setup signature canvas with native touch event listeners
   useEffect(() => {
-    if (evidenceType === 'SIGNATURE' && canvasRef.current) {
-      const canvas = canvasRef.current;
+    if (evidenceType !== 'SIGNATURE') return;
 
-      // Use requestAnimationFrame to ensure the canvas is rendered
-      const setupCanvas = () => {
-        const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
+    const canvas = canvasRef.current;
+    const container = canvasContainerRef.current;
+    if (!canvas || !container) return;
 
-        // Set canvas size accounting for device pixel ratio
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
+    let setupTimer: ReturnType<typeof setTimeout>;
 
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          // Scale context to account for device pixel ratio
-          ctx.scale(dpr, dpr);
-          ctx.strokeStyle = '#000';
-          ctx.lineWidth = 3;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-        }
-      };
+    const setupCanvas = () => {
+      // Use container dimensions instead of canvas rect (more reliable)
+      const w = container.clientWidth;
+      const h = container.clientHeight;
 
-      // Native touch handlers with { passive: false } to prevent page scrolling
-      const handleTouchStart = (e: TouchEvent) => {
-        e.preventDefault();
-        isDrawingRef.current = true;
-        const rect = canvas.getBoundingClientRect();
-        const touch = e.touches[0];
-        const ctx = canvas.getContext('2d');
-        if (ctx && touch) {
-          ctx.beginPath();
-          ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
-        }
-      };
+      if (w === 0 || h === 0) {
+        // Container not laid out yet, retry
+        setupTimer = setTimeout(setupCanvas, 100);
+        return;
+      }
 
-      const handleTouchMove = (e: TouchEvent) => {
-        e.preventDefault();
-        if (!isDrawingRef.current) return;
-        const rect = canvas.getBoundingClientRect();
-        const touch = e.touches[0];
-        const ctx = canvas.getContext('2d');
-        if (ctx && touch) {
-          ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
-          ctx.stroke();
-        }
-      };
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
 
-      const handleTouchEnd = (e: TouchEvent) => {
-        e.preventDefault();
-        isDrawingRef.current = false;
-        setSignatureDataUrl(canvas.toDataURL('image/png'));
-      };
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+        configureCtx(ctx);
+      }
+      canvasReadyRef.current = true;
+    };
 
-      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-      canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    // Native touch handlers with { passive: false } to prevent page scrolling
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canvasReadyRef.current) return;
+      isDrawingRef.current = true;
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      if (!touch) return;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        configureCtx(ctx);
+        ctx.beginPath();
+        ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+      }
+    };
 
-      // Delay setup to ensure element is rendered
-      requestAnimationFrame(() => {
-        requestAnimationFrame(setupCanvas);
-      });
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDrawingRef.current) return;
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      if (!touch) return;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+        ctx.stroke();
+      }
+    };
 
-      return () => {
-        canvas.removeEventListener('touchstart', handleTouchStart);
-        canvas.removeEventListener('touchmove', handleTouchMove);
-        canvas.removeEventListener('touchend', handleTouchEnd);
-      };
-    }
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      setSignatureDataUrl(canvas.toDataURL('image/png'));
+    };
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    // Setup with a small delay to ensure DOM is ready
+    setupTimer = setTimeout(setupCanvas, 150);
+
+    return () => {
+      clearTimeout(setupTimer);
+      canvasReadyRef.current = false;
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+    };
   }, [evidenceType]);
 
   // Compress image to reduce payload size
@@ -313,7 +338,7 @@ export default function DeliveryPage() {
   }
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default', height: '100vh', overflow: 'hidden' }}>
       {/* Header */}
       <AppBar position="static" color="default" elevation={1}>
         <Toolbar>
@@ -505,22 +530,27 @@ export default function DeliveryPage() {
             />
           </Box>
         ) : (
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
             <Box
+              ref={canvasContainerRef}
               sx={{
                 position: 'relative',
-                flex: 1,
-                minHeight: 300,
+                height: 'calc(100vh - 350px)',
+                minHeight: 250,
+                maxHeight: 450,
                 bgcolor: 'background.paper',
                 borderRadius: 3,
                 border: 2,
-                borderColor: 'divider',
+                borderColor: signatureDataUrl ? 'success.main' : 'divider',
                 overflow: 'hidden',
               }}
             >
               <canvas
                 ref={canvasRef}
                 style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
                   width: '100%',
                   height: '100%',
                   touchAction: 'none',
@@ -542,17 +572,21 @@ export default function DeliveryPage() {
                     pointerEvents: 'none',
                   }}
                 >
-                  <Typography color="text.disabled">Firme aqui</Typography>
+                  <Typography color="text.disabled" variant="h6">Firme aquí</Typography>
                 </Box>
               )}
               {signatureDataUrl && (
                 <Button
                   size="small"
+                  variant="outlined"
+                  color="error"
                   onClick={clearSignature}
                   sx={{
                     position: 'absolute',
                     top: 8,
                     right: 8,
+                    zIndex: 10,
+                    bgcolor: 'background.paper',
                   }}
                 >
                   Limpiar
