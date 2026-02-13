@@ -324,7 +324,7 @@ export class EmailService {
 
       <div class="divider"></div>
 
-      <p>SCRAM - Soluciones en Logistica y Distribucion</p>
+      <p>SCRAM - Software empresarial que funciona</p>
       <p><a href="${this.SCRAM_WEBSITE}">www.scram2k.com</a></p>
 
       <div class="divider"></div>
