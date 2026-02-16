@@ -28,7 +28,7 @@ export default () => ({
 
   sendgrid: {
     apiKey: process.env.SENDGRID_API_KEY,
-    from: process.env.EMAIL_FROM || 'noreply@entersys.mx',
+    from: process.env.EMAIL_FROM || 'no-reply@scram2k.com',
   },
 
   app: {

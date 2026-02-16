@@ -33,7 +33,7 @@ export class EmailService {
   private readonly COLOR_GREEN = '#44ce6f';
 
   constructor(private readonly configService: ConfigService) {
-    this.from = this.configService.get('email.from') || 'notificaciones@scram2k.com';
+    this.from = this.configService.get('sendgrid.from') || 'no-reply@scram2k.com';
 
     // Configure Gmail SMTP transporter
     this.transporter = nodemailer.createTransport({
