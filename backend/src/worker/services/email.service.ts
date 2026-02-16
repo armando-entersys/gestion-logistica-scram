@@ -15,10 +15,6 @@ export class EmailService {
   private readonly from: string;
   private readonly transporter: nodemailer.Transporter;
 
-  // STAGING MODE: Redirect all customer emails to these addresses for testing
-  // TODO: Remove this override when going to production
-  private readonly STAGING_EMAIL_OVERRIDE = 'armando.cortes@entersys.mx, hpe@scram2k.com, alex@scram2k.com';
-
   // SCRAM Brand Assets
   private readonly SCRAM_LOGO = 'https://storage.googleapis.com/scram-evidence/assets/scram_logotipo_vnegativa.png';
   private readonly SCRAM_WEBSITE = 'https://scram2k.com';
@@ -50,28 +46,19 @@ export class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
-    // STAGING: Override recipient email for all customer notifications
-    const originalRecipient = options.to;
-    const recipientEmail = this.STAGING_EMAIL_OVERRIDE;
-
-    this.logger.log(`[STAGING] Email redirected: ${originalRecipient} -> ${recipientEmail}`);
-
-    const html = this.renderTemplate(options.template, {
-      ...options.context,
-      _originalRecipient: originalRecipient,
-    });
+    const html = this.renderTemplate(options.template, options.context);
 
     try {
       const info = await this.transporter.sendMail({
         from: `"SCRAM Logistica" <${this.from}>`,
-        to: recipientEmail,
-        subject: `[STAGING] ${options.subject}`,
+        to: options.to,
+        subject: options.subject,
         html: html,
       });
 
-      this.logger.log(`Email sent successfully to ${recipientEmail} (original: ${originalRecipient}) - MessageId: ${info.messageId}`);
+      this.logger.log(`Email sent to ${options.to} - MessageId: ${info.messageId}`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${recipientEmail}:`, error);
+      this.logger.error(`Failed to send email to ${options.to}:`, error);
       throw error;
     }
   }
