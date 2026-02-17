@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import * as sgMail from '@sendgrid/mail';
 
 interface EmailOptions {
   to: string;
@@ -13,7 +13,6 @@ interface EmailOptions {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly from: string;
-  private readonly transporter: nodemailer.Transporter;
 
   // SCRAM Brand Assets
   private readonly SCRAM_LOGO = 'https://storage.googleapis.com/scram-evidence/assets/scram_logotipo_vnegativa.png';
@@ -35,28 +34,24 @@ export class EmailService {
   constructor(private readonly configService: ConfigService) {
     this.from = this.configService.get('sendgrid.from') || 'no-reply@scram2k.com';
 
-    // Configure Gmail SMTP transporter
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'armando.cortes@entersys.mx',
-        pass: 'izgs zmmp sapa nupz',
-      },
-    });
+    const apiKey = this.configService.get('sendgrid.apiKey');
+    if (apiKey) {
+      sgMail.setApiKey(apiKey);
+    }
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
     const html = this.renderTemplate(options.template, options.context);
 
     try {
-      const info = await this.transporter.sendMail({
-        from: `"SCRAM Logistica" <${this.from}>`,
+      const [response] = await sgMail.send({
+        from: { email: this.from, name: 'SCRAM Logistica' },
         to: options.to,
         subject: options.subject,
         html: html,
       });
 
-      this.logger.log(`Email sent to ${options.to} - MessageId: ${info.messageId}`);
+      this.logger.log(`Email sent to ${options.to} - StatusCode: ${response.statusCode}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${options.to}:`, error);
       throw error;
