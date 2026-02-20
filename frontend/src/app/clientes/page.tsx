@@ -1094,11 +1094,14 @@ export default function ClientesPage() {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            {order.deliveredAt
-                              ? new Date(order.deliveredAt).toLocaleDateString('es-MX')
-                              : order.promisedDate
-                              ? new Date(order.promisedDate).toLocaleDateString('es-MX')
-                              : new Date(order.createdAt).toLocaleDateString('es-MX')}
+                            {(() => {
+                              const pd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10), 12) : new Date(s);
+                              return order.deliveredAt
+                                ? pd(order.deliveredAt).toLocaleDateString('es-MX')
+                                : order.promisedDate
+                                ? pd(order.promisedDate).toLocaleDateString('es-MX')
+                                : pd(order.createdAt).toLocaleDateString('es-MX');
+                            })()}
                           </TableCell>
                         </TableRow>
                       ))}

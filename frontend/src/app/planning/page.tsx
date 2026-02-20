@@ -216,16 +216,25 @@ export default function PlanningPage() {
   const [confirmingOrder, setConfirmingOrder] = useState<Order | null>(null);
   const [deliveryEvidenceFile, setDeliveryEvidenceFile] = useState<File | null>(null);
 
+  // Parse dates without timezone shift for date-only strings (YYYY-MM-DD)
+  const parseDate = (dateStr: string): Date => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      const [year, month, day] = dateStr.split('-').map(Number);
+      return new Date(year, month - 1, day, 12, 0, 0);
+    }
+    return new Date(dateStr);
+  };
+
   // Format date helper
   const formatDateShort = (dateStr?: string) => {
     if (!dateStr) return '-';
-    const date = new Date(dateStr);
+    const date = parseDate(dateStr);
     return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
   };
 
   const formatDateTime = (dateStr?: string) => {
     if (!dateStr) return '-';
-    const date = new Date(dateStr);
+    const date = parseDate(dateStr);
     return date.toLocaleDateString('es-MX', {
       day: '2-digit',
       month: 'short',
@@ -2038,7 +2047,14 @@ function OrderCard({ order, isSelected, onToggle, onEdit, onViewPod }: { order: 
   // Format promised date
   const formatPromisedDate = (dateStr?: string) => {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
+    const parseD = (s: string): Date => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d, 12, 0, 0);
+      }
+      return new Date(s);
+    };
+    const date = parseD(dateStr);
     return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
   };
 

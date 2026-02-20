@@ -733,23 +733,26 @@ export class OrdersService {
       }
 
       if (storageKey) {
-        // Delete any existing evidence of the same type for this order
-        // This ensures only ONE photo and ONE signature per order
-        await this.evidenceRepository.delete({
-          orderId,
-          type: evidenceType,
-        });
-
-        const evidence = this.evidenceRepository.create({
-          orderId,
-          type: evidenceType,
-          storageKey: storageKey,
-          isOfflineUpload: item.isOffline || false,
-          capturedAt: now,
-          capturedLatitude: item.capturedLatitude || null,
-          capturedLongitude: item.capturedLongitude || null,
-        });
-        await this.evidenceRepository.save(evidence);
+        // Upsert: insert or update on conflict (order_id, type)
+        // This is atomic and prevents race condition duplicates
+        await this.evidenceRepository
+          .createQueryBuilder()
+          .insert()
+          .into('shipment_evidence')
+          .values({
+            orderId,
+            type: evidenceType,
+            storageKey: storageKey,
+            isOfflineUpload: item.isOffline || false,
+            capturedAt: now,
+            capturedLatitude: item.capturedLatitude || null,
+            capturedLongitude: item.capturedLongitude || null,
+          })
+          .orUpdate(
+            ['storage_key', 'is_offline_upload', 'captured_at', 'captured_latitude', 'captured_longitude'],
+            ['order_id', 'type'],
+          )
+          .execute();
       }
     };
 

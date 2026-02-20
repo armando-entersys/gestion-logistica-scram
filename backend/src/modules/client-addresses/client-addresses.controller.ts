@@ -15,7 +15,7 @@ import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
 import { UserRole } from '@/common/enums';
 import { ClientAddressesService } from './client-addresses.service';
-import { CreateClientAddressDto, SetDefaultAddressDto } from './dto';
+import { CreateClientAddressDto, SetDefaultAddressDto, UpdateClientAddressDto } from './dto';
 
 @ApiTags('client-addresses')
 @Controller('client-addresses')
@@ -36,6 +36,16 @@ export class ClientAddressesController {
   @ApiOperation({ summary: 'Create a new client address' })
   create(@Body() dto: CreateClientAddressDto) {
     return this.service.upsertAddress(dto, 'MANUAL');
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiOperation({ summary: 'Update a client address' })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateClientAddressDto,
+  ) {
+    return this.service.update(id, dto);
   }
 
   @Patch(':id/default')

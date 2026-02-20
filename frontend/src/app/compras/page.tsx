@@ -65,10 +65,6 @@ import { ordersApi, syncApi, clientAddressesApi } from '@/lib/api';
 import EditIcon from '@mui/icons-material/Edit';
 import HomeIcon from '@mui/icons-material/Home';
 import PeopleIcon from '@mui/icons-material/People';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
 
 const statusConfig: Record<string, { label: string; color: 'default' | 'primary' | 'secondary' | 'success' | 'info' | 'warning' }> = {
   DRAFT: { label: 'Borrador', color: 'default' },
@@ -163,6 +159,21 @@ export default function ComprasPage() {
     state: '',
     reference: '',
   });
+  // Edit/Delete address state
+  const [editAddressDialogOpen, setEditAddressDialogOpen] = useState(false);
+  const [editingAddressData, setEditingAddressData] = useState<ClientAddress | null>(null);
+  const [editAddressForm, setEditAddressForm] = useState({
+    label: '',
+    street: '',
+    number: '',
+    neighborhood: '',
+    postalCode: '',
+    city: '',
+    state: '',
+    reference: '',
+  });
+  const [deleteAddressConfirmOpen, setDeleteAddressConfirmOpen] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<ClientAddress | null>(null);
 
   // Sorting state
   type SortField = 'orderNumber' | 'promisedDate' | 'createdAt' | 'clientName' | 'totalAmount';
@@ -488,6 +499,62 @@ export default function ComprasPage() {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || 'Error al crear dirección',
+        severity: 'error',
+      });
+    },
+  });
+
+  const updateAddressDetailMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof editAddressForm }) => {
+      return clientAddressesApi.update(id, data);
+    },
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: 'Direccion actualizada correctamente',
+        severity: 'success',
+      });
+      setEditAddressDialogOpen(false);
+      setEditingAddressData(null);
+      // Refresh addresses
+      if (detailOrder?.clientNumber) {
+        clientAddressesApi.getByClient(detailOrder.clientNumber).then(res => {
+          setClientAddresses(res.data || []);
+        });
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al actualizar direccion',
+        severity: 'error',
+      });
+    },
+  });
+
+  const deleteAddressFromListMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return clientAddressesApi.delete(id);
+    },
+    onSuccess: () => {
+      setSnackbar({
+        open: true,
+        message: 'Direccion eliminada correctamente',
+        severity: 'success',
+      });
+      setDeleteAddressConfirmOpen(false);
+      setAddressToDelete(null);
+      // Refresh addresses
+      if (detailOrder?.clientNumber) {
+        clientAddressesApi.getByClient(detailOrder.clientNumber).then(res => {
+          setClientAddresses(res.data || []);
+        });
+      }
+    },
+    onError: (error: any) => {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || 'Error al eliminar direccion',
         severity: 'error',
       });
     },
@@ -1297,28 +1364,73 @@ export default function ComprasPage() {
                     {/* Address selector for DRAFT and READY orders */}
                     {editingAddress && (detailOrder.status === 'READY' || detailOrder.status === 'DRAFT') ? (
                       <Box>
-                        <FormControl fullWidth size="small" sx={{ mb: 1 }}>
-                          <InputLabel>Seleccionar dirección guardada</InputLabel>
-                          <Select
-                            value={selectedAddressId}
-                            label="Seleccionar dirección guardada"
-                            onChange={(e) => setSelectedAddressId(e.target.value)}
-                          >
-                            {clientAddresses.map((addr) => (
-                              <MenuItem key={addr.id} value={addr.id}>
-                                <Stack>
-                                  <Typography variant="body2" fontWeight={500}>
-                                    {addr.label || `${addr.street} ${addr.number}`}
-                                    {addr.isDefault && ' (Principal)'}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    {addr.street} {addr.number}, {addr.neighborhood}, {addr.city}
-                                  </Typography>
-                                </Stack>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <Paper variant="outlined" sx={{ maxHeight: 200, overflow: 'auto', mb: 1 }}>
+                          {clientAddresses.map((addr) => (
+                            <Box
+                              key={addr.id}
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                px: 1.5,
+                                py: 1,
+                                cursor: 'pointer',
+                                bgcolor: selectedAddressId === addr.id ? 'primary.50' : 'transparent',
+                                borderBottom: '1px solid',
+                                borderColor: 'divider',
+                                '&:hover': { bgcolor: selectedAddressId === addr.id ? 'primary.50' : 'grey.50' },
+                                '&:last-child': { borderBottom: 'none' },
+                              }}
+                              onClick={() => setSelectedAddressId(addr.id)}
+                            >
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography variant="body2" fontWeight={500} noWrap>
+                                  {addr.label || `${addr.street} ${addr.number}`}
+                                  {addr.isDefault && ' (Principal)'}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary" noWrap display="block">
+                                  {addr.street} {addr.number}, {addr.neighborhood}, {addr.city}
+                                </Typography>
+                              </Box>
+                              <Stack direction="row" spacing={0} sx={{ ml: 1, flexShrink: 0 }}>
+                                <Tooltip title="Editar direccion">
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingAddressData(addr);
+                                      setEditAddressForm({
+                                        label: addr.label || '',
+                                        street: addr.street || '',
+                                        number: addr.number || '',
+                                        neighborhood: addr.neighborhood || '',
+                                        postalCode: addr.postalCode || '',
+                                        city: addr.city || '',
+                                        state: addr.state || '',
+                                        reference: addr.reference || '',
+                                      });
+                                      setEditAddressDialogOpen(true);
+                                    }}
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Eliminar direccion">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddressToDelete(addr);
+                                      setDeleteAddressConfirmOpen(true);
+                                    }}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </Box>
+                          ))}
+                        </Paper>
                         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                           <Button
                             size="small"
@@ -1343,7 +1455,7 @@ export default function ComprasPage() {
                             color="primary"
                             onClick={() => setNewAddressDialogOpen(true)}
                           >
-                            + Nueva Dirección
+                            + Nueva Direccion
                           </Button>
                         </Stack>
                       </Box>
@@ -1756,6 +1868,170 @@ export default function ComprasPage() {
             startIcon={createAddressMutation.isPending ? <CircularProgress size={16} /> : null}
           >
             Guardar y Aplicar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Address Dialog */}
+      <Dialog
+        open={editAddressDialogOpen}
+        onClose={() => setEditAddressDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <EditIcon color="primary" />
+            <Typography variant="h6">Editar Direccion</Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Cliente: {detailOrder?.clientName}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Etiqueta (opcional)"
+                placeholder="Ej: Sucursal Norte, Bodega Principal"
+                value={editAddressForm.label}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, label: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={8}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Calle"
+                required
+                value={editAddressForm.street}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, street: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={4}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Numero"
+                value={editAddressForm.number}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, number: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Colonia"
+                value={editAddressForm.neighborhood}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, neighborhood: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Codigo Postal"
+                value={editAddressForm.postalCode}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, postalCode: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Ciudad"
+                value={editAddressForm.city}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, city: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Estado"
+                value={editAddressForm.state}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, state: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Referencia / Instrucciones"
+                multiline
+                rows={2}
+                value={editAddressForm.reference}
+                onChange={(e) => setEditAddressForm({ ...editAddressForm, reference: e.target.value })}
+              />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setEditAddressDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!editAddressForm.street || updateAddressDetailMutation.isPending}
+            onClick={() => {
+              if (editingAddressData) {
+                updateAddressDetailMutation.mutate({
+                  id: editingAddressData.id,
+                  data: editAddressForm,
+                });
+              }
+            }}
+            startIcon={updateAddressDetailMutation.isPending ? <CircularProgress size={16} /> : null}
+          >
+            Guardar Cambios
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Address Confirmation Dialog */}
+      <Dialog
+        open={deleteAddressConfirmOpen}
+        onClose={() => setDeleteAddressConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+          <ErrorOutlineIcon />
+          Eliminar Direccion
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Estas seguro de eliminar esta direccion?
+          </Typography>
+          {addressToDelete && (
+            <Paper variant="outlined" sx={{ p: 1.5, mt: 1, bgcolor: 'grey.50' }}>
+              <Typography variant="body2" fontWeight={500}>
+                {addressToDelete.label || `${addressToDelete.street} ${addressToDelete.number}`}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {addressToDelete.street} {addressToDelete.number}, {addressToDelete.neighborhood}, {addressToDelete.city}
+              </Typography>
+            </Paper>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteAddressConfirmOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              if (addressToDelete) {
+                deleteAddressFromListMutation.mutate(addressToDelete.id);
+              }
+            }}
+            disabled={deleteAddressFromListMutation.isPending}
+            startIcon={deleteAddressFromListMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <DeleteOutlineIcon />}
+          >
+            Eliminar
           </Button>
         </DialogActions>
       </Dialog>

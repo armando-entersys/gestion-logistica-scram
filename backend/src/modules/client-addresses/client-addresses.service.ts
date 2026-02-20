@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { ClientAddress } from './entities/client-address.entity';
 import { Client } from '@/modules/clients/entities/client.entity';
-import { CreateClientAddressDto } from './dto';
+import { CreateClientAddressDto, UpdateClientAddressDto } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 
 @Injectable()
@@ -165,6 +165,57 @@ export class ClientAddressesService {
   async remove(id: string): Promise<void> {
     await this.addressRepo.delete(id);
     this.logger.log(`Deleted address ${id}`);
+  }
+
+  /**
+   * Update address fields and re-geocode if address changed
+   */
+  async update(id: string, dto: UpdateClientAddressDto): Promise<ClientAddress | null> {
+    const existing = await this.addressRepo.findOne({ where: { id } });
+    if (!existing) {
+      return null;
+    }
+
+    const addressChanged =
+      (dto.street !== undefined && dto.street !== existing.street) ||
+      (dto.number !== undefined && dto.number !== existing.number) ||
+      (dto.neighborhood !== undefined && dto.neighborhood !== existing.neighborhood) ||
+      (dto.postalCode !== undefined && dto.postalCode !== existing.postalCode) ||
+      (dto.city !== undefined && dto.city !== existing.city) ||
+      (dto.state !== undefined && dto.state !== existing.state);
+
+    const updateData: Partial<ClientAddress> = {};
+    if (dto.label !== undefined) updateData.label = dto.label;
+    if (dto.street !== undefined) updateData.street = dto.street;
+    if (dto.number !== undefined) updateData.number = dto.number;
+    if (dto.neighborhood !== undefined) updateData.neighborhood = dto.neighborhood;
+    if (dto.postalCode !== undefined) updateData.postalCode = dto.postalCode;
+    if (dto.city !== undefined) updateData.city = dto.city;
+    if (dto.state !== undefined) updateData.state = dto.state;
+    if (dto.reference !== undefined) updateData.reference = dto.reference;
+
+    if (addressChanged) {
+      try {
+        const geoResult = await this.geocodingService.geocodeAddress({
+          street: dto.street ?? existing.street ?? undefined,
+          number: dto.number ?? existing.number ?? undefined,
+          neighborhood: dto.neighborhood ?? existing.neighborhood ?? undefined,
+          postalCode: dto.postalCode ?? existing.postalCode ?? undefined,
+          city: dto.city ?? existing.city ?? undefined,
+          state: dto.state ?? existing.state ?? undefined,
+        });
+        if (geoResult) {
+          updateData.latitude = geoResult.latitude;
+          updateData.longitude = geoResult.longitude;
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to re-geocode address ${id}: ${error.message}`);
+      }
+    }
+
+    await this.addressRepo.update(id, updateData);
+    this.logger.log(`Updated address ${id}`);
+    return this.addressRepo.findOne({ where: { id } });
   }
 
   /**
