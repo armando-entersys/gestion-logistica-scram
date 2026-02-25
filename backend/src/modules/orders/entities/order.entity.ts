@@ -302,6 +302,15 @@ export class Order {
   })
   carrierDeliveryTime: string | null;
 
+  @Column({ name: 'items', type: 'jsonb', nullable: true, comment: 'Lista de artículos/conceptos del pedido' })
+  items: Array<{
+    productId: string;
+    name: string;
+    code: string;
+    quantity: number;
+    price: number;
+  }> | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

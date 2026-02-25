@@ -70,7 +70,7 @@ export default function VentasPage() {
   const { data: orders, isLoading } = useQuery({
     queryKey: ['ventas-orders', search],
     queryFn: async () => {
-      const response = await ordersApi.getAll({ search });
+      const response = await ordersApi.getAll({ search, status: 'READY,IN_TRANSIT,DELIVERED', limit: 100 });
       return response.data.data || response.data;
     },
   });
@@ -208,7 +208,7 @@ export default function VentasPage() {
                         secondary={
                           <Stack spacing={0.5} sx={{ mt: 0.5 }}>
                             <Typography variant="caption" color="text.secondary">
-                              {order.bindId}
+                              {order.orderNumber || order.bindId}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               ${order.totalAmount?.toLocaleString() || 0}
@@ -232,7 +232,7 @@ export default function VentasPage() {
                 {selectedOrder.clientName}
               </Typography>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Pedido: {selectedOrder.bindId}
+                Pedido: {selectedOrder.orderNumber || selectedOrder.bindId}
               </Typography>
 
               {/* Status Stepper */}
@@ -338,6 +338,32 @@ export default function VentasPage() {
                   </Stack>
                 )}
               </Stack>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Order Items */}
+              {selectedOrder.items && selectedOrder.items.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    Conceptos del Pedido
+                  </Typography>
+                  <List disablePadding sx={{ mb: 2 }}>
+                    {selectedOrder.items.map((item: any, idx: number) => (
+                      <ListItem key={idx} sx={{ px: 0, py: 0.5 }}>
+                        <ListItemText
+                          primary={item.name}
+                          secondary={`Código: ${item.code} | Cantidad: ${item.quantity}`}
+                          primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                        <Typography variant="body2" fontWeight={600}>
+                          ${(item.price * (item.quantity || 1)).toLocaleString()}
+                        </Typography>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
 
               <Divider sx={{ my: 3 }} />
 

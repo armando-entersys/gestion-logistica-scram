@@ -141,6 +141,17 @@ export class CreateOrderDto {
   @ApiPropertyOptional()
   @IsOptional()
   promisedDate?: Date;
+
+  @ApiPropertyOptional({ description: 'Lista de artículos/conceptos del pedido' })
+  @IsOptional()
+  @IsArray()
+  items?: Array<{
+    productId: string;
+    name: string;
+    code: string;
+    quantity: number;
+    price: number;
+  }>;
 }
 
 export class UpdateOrderDto extends PartialType(CreateOrderDto) {

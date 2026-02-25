@@ -10,7 +10,7 @@ import Dexie, { Table } from 'dexie';
  * Incrementar este número fuerza limpieza de IndexedDB en todos los dispositivos
  * Útil cuando hay cambios de esquema o para forzar resincronización
  */
-const APP_DATA_VERSION = 3; // Incrementar para forzar limpieza de datos locales
+const APP_DATA_VERSION = 4; // Incrementar para forzar limpieza de datos locales
 const VERSION_KEY = 'scram_app_data_version';
 
 /**
@@ -50,6 +50,7 @@ export async function checkAndClearStaleData(): Promise<boolean> {
 export interface LocalOrder {
   id: string;
   bindId: string;
+  orderNumber?: string;
   clientName: string;
   clientEmail?: string;
   clientPhone?: string;
@@ -77,6 +78,13 @@ export interface LocalOrder {
   // Local tracking
   lastSyncedAt?: string;
   isLocalOnly?: boolean;
+  items?: Array<{
+    productId: string;
+    name: string;
+    code: string;
+    quantity: number;
+    price: number;
+  }>;
 }
 
 export interface PendingSync {
@@ -346,7 +354,7 @@ export async function confirmPickupLocally(
  * Mark order as en-route (Optimistic UI)
  * Driver is heading to deliver this order
  */
-export async function markEnRouteLocally(orderId: string): Promise<void> {
+export async function markEnRouteLocally(orderId: string, etaDurationMinutes?: number): Promise<void> {
   const now = new Date().toISOString();
 
   await db.orders.update(orderId, {
@@ -357,7 +365,10 @@ export async function markEnRouteLocally(orderId: string): Promise<void> {
   // Queue for sync
   await db.pendingSync.add({
     type: 'en-route',
-    payload: { orderId },
+    payload: {
+      orderId,
+      etaDurationMinutes,
+    },
     createdAt: now,
     attempts: 0,
     status: 'pending',

@@ -1,4 +1,5 @@
 export default () => ({
+  environment: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
 
   database: {
@@ -19,6 +20,7 @@ export default () => ({
   bind: {
     apiUrl: process.env.BIND_API_URL,
     apiKey: process.env.BIND_API_KEY,
+    syncEnabled: process.env.BIND_SYNC_ENABLED === 'true',
     timeout: 30000,
   },
 
@@ -29,6 +31,10 @@ export default () => ({
   sendgrid: {
     apiKey: process.env.SENDGRID_API_KEY,
     from: process.env.EMAIL_FROM || 'no-reply@scram2k.com',
+  },
+
+  email: {
+    override: process.env.EMAIL_OVERRIDE,
   },
 
   app: {

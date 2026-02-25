@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { BindAdapter } from './adapters/bind.adapter';
@@ -32,6 +32,27 @@ export class SyncService {
     message: string;
     clients?: { synced: number; addresses: number };
   }> {
+    const environment = this.configService.get<string>('environment', 'development');
+    const syncEnabled = this.configService.get<boolean>('bind.syncEnabled', false);
+    const apiKey = this.configService.get<string>('bind.apiKey', '');
+
+    this.logger.log(`Starting sync in ${environment} environment`);
+
+    // Safety check: sync must be explicitly enabled
+    if (!syncEnabled) {
+      throw new BadRequestException(
+        `Bind sync is disabled in this environment (${environment}). Set BIND_SYNC_ENABLED=true to enable.`,
+      );
+    }
+
+    // Safety check: API key must not be a placeholder
+    const placeholders = ['local_placeholder', 'your_bind_api_key', 'CHANGE_ME', ''];
+    if (placeholders.includes(apiKey)) {
+      throw new BadRequestException(
+        `Bind API key is not configured (current value is a placeholder). Set a real BIND_API_KEY in your environment.`,
+      );
+    }
+
     this.logger.log('Starting DIFFERENTIAL sync from Bind ERP...');
 
     try {

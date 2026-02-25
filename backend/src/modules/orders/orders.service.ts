@@ -48,7 +48,7 @@ export class OrdersService {
     private readonly clientsService: ClientsService,
     private readonly pushService: PushSubscriptionsService,
     private readonly storageService: StorageService,
-  ) {}
+  ) { }
 
   /**
    * Busca un pedido por número de pedido (ej: 4880 para PE4880)
@@ -156,6 +156,7 @@ export class OrdersService {
             totalAmount: bindOrder.totalAmount,
             isVip: bindOrder.isVip,
             promisedDate: bindOrder.promisedDate,
+            items: bindOrder.items as any,
           };
 
           // Only update addressRaw if order is still in DRAFT status
@@ -479,6 +480,17 @@ export class OrdersService {
 
     let emailsQueued = 0;
 
+    // Map to group orders by clientEmail for batch email sending
+    const emailGroups = new Map<string, { clientName: string; orders: Array<{ orderId: string; trackingHash: string; carrierName: string; carrierType: string; trackingNumber: string | null; deliveryInfo: string; orderNumber: string }> }>();
+
+    // Format delivery info once for all orders in this batch
+    let deliveryInfo = 'Pronto';
+    if (dto.deliveryDate) {
+      const date = new Date(dto.deliveryDate);
+      deliveryInfo = date.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+      deliveryInfo += ' entre 9:00 AM y 6:00 PM';
+    }
+
     for (const order of orders) {
       // Generar trackingHash si no existe
       const trackingHash = order.trackingHash || this.generateTrackingHash();
@@ -494,36 +506,47 @@ export class OrdersService {
         trackingHash: trackingHash,
       });
 
-      // Enviar email de notificación de paquetería
+      // Acumular en grupo por clientEmail para enviar 1 email batch por cliente
       const recipientEmail = order.clientEmail || order.client?.email;
       if (recipientEmail && !order.dispatchEmailSent) {
-        const jobId = `carrier-${order.id}-${new Date().toISOString().split('T')[0]}`;
-        await this.notificationQueue.add(
-          'send-carrier-shipment',
-          {
-            orderId: order.id,
-            clientEmail: recipientEmail,
-            clientName: order.clientName,
-            carrierName: carrierName,
-            carrierType: dto.carrierType,
-            trackingNumber: dto.trackingNumber || null,
-            estimatedDeliveryDate: dto.deliveryDate || null,
-            estimatedDeliveryTime: dto.deliveryTime || null,
-            trackingHash: trackingHash,
-          },
-          {
-            jobId,
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 5000 },
-          },
-        );
+        const emailKey = recipientEmail.toLowerCase();
+        if (!emailGroups.has(emailKey)) {
+          emailGroups.set(emailKey, { clientName: order.clientName, orders: [] });
+        }
+        emailGroups.get(emailKey)!.orders.push({
+          orderId: order.id,
+          trackingHash,
+          carrierName: carrierName!,
+          carrierType: dto.carrierType,
+          trackingNumber: dto.trackingNumber || null,
+          deliveryInfo,
+          orderNumber: order.orderNumber || order.bindId || order.id,
+        });
 
         await this.orderRepository.update(order.id, { dispatchEmailSent: true });
-        emailsQueued++;
       }
     }
 
-    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders, ${emailsQueued} emails queued (deliveryDate: ${dto.deliveryDate}, deliveryTime: ${dto.deliveryTime})`);
+    // Encolar 1 email batch por grupo de cliente
+    for (const [email, group] of emailGroups) {
+      const jobId = `carrier-batch-${email}-${Date.now()}`;
+      await this.notificationQueue.add(
+        'send-carrier-shipment-batch',
+        {
+          clientEmail: email,
+          clientName: group.clientName,
+          orders: group.orders,
+        },
+        {
+          jobId,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
+      emailsQueued++;
+    }
+
+    this.logger.log(`Assigned carrier ${dto.carrierType} to ${dto.orderIds.length} orders, ${emailsQueued} batch emails queued (deliveryDate: ${dto.deliveryDate}, deliveryTime: ${dto.deliveryTime})`);
     return { assigned: dto.orderIds.length, emailsQueued };
   }
 
@@ -574,6 +597,9 @@ export class OrdersService {
 
     let emailsQueued = 0;
 
+    // Map to group orders by clientEmail for batch email sending
+    const emailGroups = new Map<string, { clientName: string; orders: Array<{ orderId: string; trackingHash: string; routePosition: number; orderNumber: string }> }>();
+
     for (let i = 0; i < dto.orderIds.length; i++) {
       const orderId = dto.orderIds[i];
       const order = orders.find((o) => o.id === orderId);
@@ -581,30 +607,38 @@ export class OrdersService {
 
       const position = i + 1;
 
-      // Calcular ventana ETA en zona horaria de México (America/Mexico_City = UTC-6)
-      const [hours, minutes] = startTime.split(':').map(Number);
+      // Usar ETA de Google Maps si la orden ya lo tiene (de optimización previa),
+      // sino calcular con fórmula simple como fallback
+      let etaStart: Date;
+      let etaEnd: Date;
 
-      // Crear fecha en UTC pero ajustada para México
-      // México está en UTC-6, así que sumamos 6 horas al tiempo local deseado
-      const now = new Date();
-      const mexicoOffset = 6; // UTC-6 for Mexico City (standard time)
+      if (order.estimatedArrivalStart && order.estimatedArrivalEnd) {
+        // Respetar ETAs calculados por Google Routes API (optimización de ruta)
+        etaStart = new Date(order.estimatedArrivalStart);
+        etaEnd = new Date(order.estimatedArrivalEnd);
+        this.logger.log(`Order ${orderId}: using pre-calculated ETA from route optimization`);
+      } else {
+        // Fallback: fórmula simple (30 min por parada)
+        const [hours, minutes] = startTime.split(':').map(Number);
+        const now = new Date();
+        const mexicoOffset = 6; // UTC-6 for Mexico City (standard time)
+        const baseTime = new Date(Date.UTC(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          hours + mexicoOffset,
+          minutes,
+          0,
+          0
+        ));
 
-      // Construir la fecha/hora base en UTC que corresponde a la hora local de México
-      const baseTime = new Date(Date.UTC(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        hours + mexicoOffset, // Ajustar a UTC
-        minutes,
-        0,
-        0
-      ));
+        const minutesToAdd = i * avgStopTime;
+        const bufferMinutes = Math.ceil(minutesToAdd * (bufferPercent / 100));
 
-      const minutesToAdd = i * avgStopTime;
-      const bufferMinutes = Math.ceil(minutesToAdd * (bufferPercent / 100));
-
-      const etaStart = new Date(baseTime.getTime() + minutesToAdd * 60000);
-      const etaEnd = new Date(etaStart.getTime() + (avgStopTime + bufferMinutes) * 60000);
+        etaStart = new Date(baseTime.getTime() + minutesToAdd * 60000);
+        etaEnd = new Date(etaStart.getTime() + (avgStopTime + bufferMinutes) * 60000);
+        this.logger.log(`Order ${orderId}: using fallback ETA (no optimization data)`);
+      }
 
       // Generar trackingHash si no existe
       const trackingHash = order.trackingHash || this.generateTrackingHash();
@@ -619,36 +653,47 @@ export class OrdersService {
       });
       this.logger.log(`Updated order ${orderId} to IN_TRANSIT (affected: ${updateResult.affected})`);
 
-      // Encolar email de notificación - usar email del cliente como fallback
+      // Acumular en grupo por clientEmail para enviar 1 email batch por cliente
       const recipientEmail = order.clientEmail || order.client?.email;
       if (recipientEmail && !order.dispatchEmailSent) {
-        // Usar jobId único para evitar correos duplicados
-        const jobId = `eta-${orderId}-${new Date().toISOString().split('T')[0]}`;
-        await this.notificationQueue.add(
-          'send-eta-email',
-          {
-            orderId,
-            clientEmail: recipientEmail,
-            clientName: order.clientName,
-            driverId: dto.driverId,
-            etaStart: etaStart.toISOString(),
-            etaEnd: etaEnd.toISOString(),
-            trackingHash: trackingHash,
-            routePosition: position,
-          },
-          {
-            jobId, // Previene duplicados con el mismo jobId
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 5000 },
-          },
-        );
+        const emailKey = recipientEmail.toLowerCase();
+        if (!emailGroups.has(emailKey)) {
+          emailGroups.set(emailKey, { clientName: order.clientName, orders: [] });
+        }
+        emailGroups.get(emailKey)!.orders.push({
+          orderId,
+          trackingHash,
+          routePosition: position,
+          orderNumber: order.orderNumber || order.bindId || orderId,
+        });
 
         await this.orderRepository.update(orderId, { dispatchEmailSent: true });
-        emailsQueued++;
       }
     }
 
-    this.logger.log(`Route dispatched: ${dto.orderIds.length} orders, ${emailsQueued} emails queued`);
+    // Encolar 1 email batch por grupo de cliente
+    for (const [email, group] of emailGroups) {
+      const jobId = `eta-batch-${email}-${Date.now()}`;
+      await this.notificationQueue.add(
+        'send-eta-email-batch',
+        {
+          clientEmail: email,
+          clientName: group.clientName,
+          driverId: dto.driverId,
+          etaStart: orders[0]?.estimatedArrivalStart?.toISOString() || new Date().toISOString(),
+          etaEnd: orders[orders.length - 1]?.estimatedArrivalEnd?.toISOString() || new Date().toISOString(),
+          orders: group.orders,
+        },
+        {
+          jobId,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
+      emailsQueued++;
+    }
+
+    this.logger.log(`Route dispatched: ${dto.orderIds.length} orders, ${emailsQueued} batch emails queued`);
     return { dispatched: dto.orderIds.length, emailsQueued };
   }
 
@@ -781,27 +826,27 @@ export class OrdersService {
       await saveEvidence(evidenceData);
     }
 
-    // Encolar email de confirmación + encuesta CSAT - usar email del cliente como fallback
+    // Queue batch email with 30s delay for consolidation
+    // If driver delivers multiple orders for the same client within 30s, they consolidate into 1 email
     const recipientEmail = order.clientEmail || order.client?.email;
     if (recipientEmail && !order.deliveryEmailSent) {
-      // Usar jobId único para evitar correos duplicados
-      const jobId = `delivery-${orderId}-${new Date().toISOString().split('T')[0]}`;
+      const emailKey = recipientEmail.toLowerCase();
+      const dateKey = new Date().toISOString().split('T')[0];
+      // Dedup intencional: si ya hay un job pendiente para este cliente+día, BullMQ lo ignora
+      const jobId = `delivery-batch-${emailKey}-${dateKey}`;
       await this.notificationQueue.add(
-        'send-delivery-confirmation',
+        'send-delivery-confirmation-batch',
         {
-          orderId,
-          clientEmail: recipientEmail,
-          clientName: order.clientName,
-          trackingHash: trackingHash,
+          clientEmail: emailKey,
         },
         {
-          jobId, // Previene duplicados con el mismo jobId
-          delay: 5000,
+          jobId,
+          delay: 30000, // 30s ventana de consolidación
           attempts: 3,
         },
       );
 
-      await this.orderRepository.update(orderId, { deliveryEmailSent: true });
+      // NO marcar deliveryEmailSent aquí - lo hará el processor después de juntar todos
     }
 
     return this.orderRepository.findOne({ where: { id: orderId } }) as Promise<Order>;
@@ -1119,6 +1164,7 @@ export class OrdersService {
       select: [
         'id',
         'bindId',
+        'orderNumber',
         'clientName',
         'clientPhone',
         'addressRaw',
@@ -1132,6 +1178,7 @@ export class OrdersService {
         'pickupConfirmedAt',
         'pickupHasIssue',
         'enRouteAt',
+        'items',
         // NO incluye totalAmount (restricción MD050)
       ],
     });
@@ -1221,6 +1268,8 @@ export class OrdersService {
     }>;
     // Time series for chart (last 7 days)
     dailyDeliveries: Array<{ date: string; count: number }>;
+    // New: Satisfaccion distribution
+    csatDistribution: Record<number, number>;
   }> {
     // Calculate date range (default to today in Mexico timezone)
     const now = new Date();
@@ -1299,6 +1348,24 @@ export class OrdersService {
       .andWhere('order.deliveredAt <= :end', { end })
       .getRawOne();
 
+    // CSAT Distribution counts (1 to 5)
+    const csatDistributionRaw = await this.orderRepository
+      .createQueryBuilder('order')
+      .select('order.csatScore', 'score')
+      .addSelect('COUNT(*)', 'count')
+      .where('order.csatScore IS NOT NULL')
+      .andWhere('order.deliveredAt >= :start', { start })
+      .andWhere('order.deliveredAt <= :end', { end })
+      .groupBy('order.csatScore')
+      .getRawMany();
+
+    const csatDistribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const item of csatDistributionRaw) {
+      if (item.score >= 1 && item.score <= 5) {
+        csatDistribution[item.score] = parseInt(item.count, 10);
+      }
+    }
+
     // Active drivers (drivers with orders in the range)
     const activeDriversResult = await this.orderRepository
       .createQueryBuilder('order')
@@ -1374,7 +1441,123 @@ export class OrdersService {
         delivered: parseInt(d.delivered, 10),
         pending: parseInt(d.pending, 10),
       })),
+      csatDistribution,
       dailyDeliveries,
+    };
+  }
+
+  /**
+   * CSAT Evaluations detail report (ADMIN, DIRECTOR)
+   * Returns individual evaluations, summary metrics, and daily trend
+   */
+  async getCsatEvaluations(startDate?: string, endDate?: string): Promise<{
+    evaluations: Array<{
+      orderId: string;
+      invoiceNumber: string | null;
+      clientName: string;
+      clientNumber: string | null;
+      csatScore: number;
+      csatFeedback: string | null;
+      deliveredAt: string;
+      driverName: string;
+    }>;
+    summary: {
+      avgScore: number;
+      totalResponses: number;
+      satisfactionRate: number;
+      distribution: Record<number, number>;
+    };
+    trend: Array<{ date: string; avgScore: number; count: number }>;
+  }> {
+    const now = new Date();
+    const mexicoOffset = -6 * 60;
+    const localNow = new Date(now.getTime() + (mexicoOffset + now.getTimezoneOffset()) * 60000);
+
+    let start: Date;
+    let end: Date;
+
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+    } else {
+      start = new Date(localNow);
+      start.setDate(start.getDate() - 30);
+      start.setHours(0, 0, 0, 0);
+      end = new Date(localNow);
+      end.setHours(23, 59, 59, 999);
+    }
+
+    // Individual evaluations
+    const evaluationsRaw = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.assignedDriver', 'driver')
+      .select([
+        'order.id',
+        'order.invoiceNumber',
+        'order.orderNumber',
+        'order.clientName',
+        'order.clientNumber',
+        'order.csatScore',
+        'order.csatFeedback',
+        'order.deliveredAt',
+      ])
+      .addSelect("COALESCE(CONCAT(driver.firstName, ' ', driver.lastName), 'Sin asignar')", 'driverName')
+      .where('order.csatScore IS NOT NULL')
+      .andWhere('order.deliveredAt >= :start', { start })
+      .andWhere('order.deliveredAt <= :end', { end })
+      .orderBy('order.deliveredAt', 'DESC')
+      .getRawMany();
+
+    const evaluations = evaluationsRaw.map(r => ({
+      orderId: r.order_id,
+      invoiceNumber: r.order_invoice_number || r.order_order_number || null,
+      clientName: r.order_client_name,
+      clientNumber: r.order_client_number || null,
+      csatScore: parseInt(r.order_csat_score, 10),
+      csatFeedback: r.order_csat_feedback || null,
+      deliveredAt: r.order_delivered_at,
+      driverName: r.driverName,
+    }));
+
+    // Summary
+    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    let totalScore = 0;
+    for (const e of evaluations) {
+      if (e.csatScore >= 1 && e.csatScore <= 5) {
+        distribution[e.csatScore]++;
+        totalScore += e.csatScore;
+      }
+    }
+    const totalResponses = evaluations.length;
+    const avgScore = totalResponses > 0 ? totalScore / totalResponses : 0;
+    const satisfiedCount = (distribution[4] || 0) + (distribution[5] || 0);
+    const satisfactionRate = totalResponses > 0 ? Math.round((satisfiedCount / totalResponses) * 100) : 0;
+
+    // Daily trend
+    const trendRaw = await this.orderRepository
+      .createQueryBuilder('order')
+      .select("DATE(order.deliveredAt)", 'date')
+      .addSelect('AVG(order.csatScore)', 'avgScore')
+      .addSelect('COUNT(*)', 'count')
+      .where('order.csatScore IS NOT NULL')
+      .andWhere('order.deliveredAt >= :start', { start })
+      .andWhere('order.deliveredAt <= :end', { end })
+      .groupBy("DATE(order.deliveredAt)")
+      .orderBy('date', 'ASC')
+      .getRawMany();
+
+    const trend = trendRaw.map(r => ({
+      date: r.date?.toString().split('T')[0] || r.date,
+      avgScore: parseFloat(parseFloat(r.avgScore).toFixed(2)),
+      count: parseInt(r.count, 10),
+    }));
+
+    return {
+      evaluations,
+      summary: { avgScore: parseFloat(avgScore.toFixed(2)), totalResponses, satisfactionRate, distribution },
+      trend,
     };
   }
 
@@ -1718,6 +1901,7 @@ export class OrdersService {
   async markEnRoute(
     orderId: string,
     driverId: string,
+    etaDurationMinutes?: number,
   ): Promise<{ success: boolean; enRouteAt: Date }> {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
@@ -1749,40 +1933,58 @@ export class OrdersService {
     // Generar trackingHash si no existe
     const trackingHash = order.trackingHash || this.generateTrackingHash();
 
+    // Calculate arrival times based on real-time ETA if provided
+    let estimatedArrivalStart: Date;
+    let estimatedArrivalEnd: Date;
+
+    if (etaDurationMinutes && etaDurationMinutes > 0) {
+      // Use real-time ETA from Google Maps
+      estimatedArrivalStart = new Date(now.getTime() + etaDurationMinutes * 60 * 1000);
+      // Add 15-minute buffer for the end time
+      estimatedArrivalEnd = new Date(estimatedArrivalStart.getTime() + 15 * 60 * 1000);
+
+      this.logger.log(`Using real-time ETA: ${etaDurationMinutes} minutes for order ${orderId}`);
+    } else {
+      // Fallback to database estimates if no real-time ETA
+      estimatedArrivalStart = order.estimatedArrivalStart || new Date(now.getTime() + 30 * 60 * 1000);
+      estimatedArrivalEnd = order.estimatedArrivalEnd || new Date(estimatedArrivalStart.getTime() + 15 * 60 * 1000);
+
+      this.logger.log(`Using database ETA for order ${orderId}`);
+    }
+
     await this.orderRepository.update(orderId, {
       enRouteAt: now,
       trackingHash: trackingHash,
+      estimatedArrivalStart: estimatedArrivalStart,
+      estimatedArrivalEnd: estimatedArrivalEnd,
     });
 
     this.logger.log(`Order ${orderId} marked en-route by driver ${driverId}`);
 
-    // Queue email notification to customer - usar email del cliente como fallback
+    // Queue batch email notification with 30s delay for consolidation
+    // If driver marks multiple orders for the same client within 30s, they consolidate into 1 email
     const recipientEmail = order.clientEmail || order.client?.email;
     if (recipientEmail && !order.enRouteEmailSent) {
-      // Usar jobId único para evitar correos duplicados
-      const jobId = `enroute-${orderId}-${new Date().toISOString().split('T')[0]}`;
+      const emailKey = recipientEmail.toLowerCase();
+      const dateKey = new Date().toISOString().split('T')[0];
+      // Dedup intencional: si ya hay un job pendiente para este cliente+chofer+día, BullMQ lo ignora
+      const jobId = `enroute-batch-${emailKey}-${driverId}-${dateKey}`;
       await this.notificationQueue.add(
-        'send-en-route-email',
+        'send-en-route-email-batch',
         {
-          orderId,
-          clientEmail: recipientEmail,
-          clientName: order.clientName,
-          driverName: order.assignedDriver
-            ? `${order.assignedDriver.firstName} ${order.assignedDriver.lastName}`
-            : 'Nuestro chofer',
-          estimatedArrivalStart: order.estimatedArrivalStart?.toISOString(),
-          estimatedArrivalEnd: order.estimatedArrivalEnd?.toISOString(),
-          trackingHash: trackingHash,
+          clientEmail: emailKey,
+          driverId,
         },
         {
-          jobId, // Previene duplicados con el mismo jobId
+          jobId,
+          delay: 30000, // 30s ventana de consolidación
           attempts: 3,
           backoff: { type: 'exponential', delay: 5000 },
         },
       );
 
-      await this.orderRepository.update(orderId, { enRouteEmailSent: true });
-      this.logger.log(`En-route email queued for order ${orderId}`);
+      // NO marcar enRouteEmailSent aquí - lo hará el processor después de juntar todos
+      this.logger.log(`En-route batch email queued for order ${orderId} (30s delay)`);
     }
 
     return { success: true, enRouteAt: now };
@@ -1848,6 +2050,13 @@ export class OrdersService {
       original?: string;
     };
     internalNotes?: string;
+    items?: Array<{
+      productId: string;
+      name: string;
+      code: string;
+      quantity: number;
+      price: number;
+    }>;
   }): Promise<Order> {
     this.logger.log(`Creando orden desde factura ${invoiceData.invoiceNumber}...`);
 
@@ -1880,6 +2089,7 @@ export class OrdersService {
       status: initialStatus,
       priorityLevel: PriorityLevel.NORMAL,
       internalNotes: invoiceData.internalNotes || null,
+      items: invoiceData.items || null,
     });
 
     const savedOrder = await this.orderRepository.save(order);

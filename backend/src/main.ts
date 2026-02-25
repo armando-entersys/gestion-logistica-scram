@@ -21,6 +21,7 @@ async function bootstrap() {
       'https://app-gestion-logistica.scram2k.com',
       'https://scram.entersys.mx',
       'https://app-scram.entersys.mx',
+      'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:5173',
     ],
@@ -62,7 +63,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port);
 
-  console.log(`SCRAM API running on port ${port}`);
+  const environment = process.env.NODE_ENV || 'development';
+  console.log(`SCRAM API running on port ${port} [${environment}]`);
   console.log(`Swagger docs available at /api/docs`);
 }
 

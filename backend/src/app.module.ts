@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
 
 // Modules
 import { AuthModule } from './modules/auth/auth.module';
@@ -34,25 +36,19 @@ import { typeOrmConfig } from './config/typeorm.config';
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: typeOrmConfig,
+      useFactory: (configService: ConfigService) => ({
+        ...typeOrmConfig(configService),
+        autoLoadEntities: true,
+        synchronize: false, // Prevent automatic schema changes
+        logging: configService.get('database.logging'),
+      }),
     }),
 
     // Rate Limiting (50 requests per minute per IP)
     ThrottlerModule.forRoot([
       {
-        name: 'short',
-        ttl: 1000,
-        limit: 3,
-      },
-      {
-        name: 'medium',
-        ttl: 10000,
-        limit: 20,
-      },
-      {
-        name: 'long',
         ttl: 60000,
-        limit: 50,
+        limit: 100,
       },
     ]),
 
@@ -64,6 +60,18 @@ import { typeOrmConfig } from './config/typeorm.config';
         connection: {
           host: configService.get('redis.host'),
           port: configService.get('redis.port'),
+        },
+      }),
+    }),
+
+    PassportModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get('jwt.secret'),
+        signOptions: {
+          expiresIn: configService.get('jwt.expiration'),
         },
       }),
     }),
@@ -83,4 +91,4 @@ import { typeOrmConfig } from './config/typeorm.config';
     StorageModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

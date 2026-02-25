@@ -306,7 +306,55 @@ export default function RoutePage() {
   const handleMarkEnRoute = async (order: LocalOrder) => {
     setIsMarkingEnRoute(order.id);
     try {
-      await markEnRouteLocally(order.id);
+      let etaDurationMinutes: number | undefined;
+
+      // Try to get real-time ETA from Google Maps
+      try {
+        // Get driver's current location
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            timeout: 5000,
+            maximumAge: 60000,
+          });
+        });
+
+        const origin = `${position.coords.latitude},${position.coords.longitude}`;
+        const destination = order.latitude && order.longitude
+          ? `${order.latitude},${order.longitude}`
+          : `${order.addressRaw.street} ${order.addressRaw.number}, ${order.addressRaw.neighborhood}, ${order.addressRaw.city}`;
+
+        // Call Google Maps Distance Matrix API
+        const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (GOOGLE_MAPS_API_KEY) {
+          const response = await axios.get(
+            `https://maps.googleapis.com/maps/api/distancematrix/json`,
+            {
+              params: {
+                origins: origin,
+                destinations: destination,
+                key: GOOGLE_MAPS_API_KEY,
+                departure_time: 'now',
+                traffic_model: 'best_guess',
+              },
+            }
+          );
+
+          if (response.data.status === 'OK' && response.data.rows[0]?.elements[0]?.status === 'OK') {
+            const durationInSeconds = response.data.rows[0].elements[0].duration_in_traffic?.value
+              || response.data.rows[0].elements[0].duration?.value;
+
+            if (durationInSeconds) {
+              etaDurationMinutes = Math.ceil(durationInSeconds / 60);
+              console.log(`[En-Route] Real-time ETA: ${etaDurationMinutes} minutes`);
+            }
+          }
+        }
+      } catch (geoError) {
+        console.warn('[En-Route] Could not get real-time ETA:', geoError);
+        // Continue without ETA - backend will use database estimates
+      }
+
+      await markEnRouteLocally(order.id, etaDurationMinutes);
       triggerSync();
     } catch (error) {
       console.error('Error marking en-route:', error);
@@ -444,7 +492,7 @@ export default function RoutePage() {
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
                   <Box>
                     <Typography variant="subtitle2" fontWeight={600}>
-                      {order.bindId}
+                      {order.orderNumber || order.bindId}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       {order.clientName}
@@ -819,9 +867,9 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn, o
 
   const etaStart = order.estimatedArrivalStart
     ? new Date(order.estimatedArrivalStart).toLocaleTimeString('es-MX', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
+      hour: '2-digit',
+      minute: '2-digit',
+    })
     : null;
 
   return (
@@ -845,7 +893,7 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn, o
                 {order.clientName}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {order.bindId}
+                {order.orderNumber || order.bindId}
               </Typography>
             </Box>
           </Stack>
@@ -877,6 +925,23 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn, o
             )}
           </Box>
         </Stack>
+
+        {/* Order Items */}
+        {order.items && order.items.length > 0 && (
+          <Box sx={{ mb: 2, bgcolor: 'grey.50', p: 1, borderRadius: 1, border: '1px dashed', borderColor: 'grey.300' }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" display="block" gutterBottom>
+              Conceptos ({order.items.length})
+            </Typography>
+            <Stack spacing={0.5}>
+              {order.items.map((item, idx) => (
+                <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <span style={{ flex: 1 }}>• {item.name}</span>
+                  <span style={{ fontWeight: 700, marginLeft: 8, whiteSpace: 'nowrap' }}>x{item.quantity}</span>
+                </Typography>
+              ))}
+            </Stack>
+          </Box>
+        )}
 
         {/* Status Indicators */}
         {!isDelivered && (isConfirmed || isEnRoute) && (

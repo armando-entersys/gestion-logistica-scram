@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CarrierType, OrderSource, OrderStatus } from '@/common/enums';
 import { BindAdapter } from '../sync/adapters/bind.adapter';
 import { OrdersService } from '../orders/orders.service';
@@ -46,6 +47,7 @@ export class BindWebhookService {
   private readonly logger = new Logger(BindWebhookService.name);
 
   constructor(
+    private readonly configService: ConfigService,
     @Inject(forwardRef(() => BindAdapter))
     private readonly bindAdapter: BindAdapter,
     @Inject(forwardRef(() => OrdersService))
@@ -100,7 +102,7 @@ export class BindWebhookService {
         clientId: client?.id,
         bindClientId: invoice.ClientID,
         clientName: invoice.ClientName,
-        clientEmail: client?.email || '',
+        clientEmail: this.getEmailOverride() || client?.email || '',
         clientPhone: client?.phone || '',
         clientRfc: invoice.RFC || '',
         totalAmount: invoice.Total || 0,
@@ -109,6 +111,13 @@ export class BindWebhookService {
         purchaseOrder: invoice.PurchaseOrder,
         addressRaw: this.parseAddress(primaryAddress),
         internalNotes: deliveryClassification.notes,
+        items: invoice.Products?.map((p: any) => ({
+          productId: p.ProductID || p.ID || '',
+          name: p.Name || p.ProductName || '',
+          code: p.Code || '',
+          quantity: p.Qty ?? p.Quantity ?? 0,
+          price: p.Price ?? 0,
+        })),
       });
 
       this.logger.log(
@@ -208,7 +217,7 @@ export class BindWebhookService {
         return await this.clientsService.createFromBind({
           bindId: invoice.ClientID,
           name: invoice.ClientName,
-          email: clientDetails.Email || '',
+          email: this.getEmailOverride() || clientDetails.Email || '',
           phone: clientDetails.Telephones || '',
           rfc: invoice.RFC || '',
           city: clientDetails.City || '',
@@ -370,5 +379,15 @@ export class BindWebhookService {
       reference: '',
       original: address,
     };
+  }
+
+  /**
+   * Returns email override for non-production environments to prevent
+   * contacting real customers during dev/test syncs.
+   */
+  private getEmailOverride(): string | undefined {
+    const env = this.configService.get<string>('environment', 'development');
+    if (env === 'production') return undefined;
+    return this.configService.get<string>('email.override') || undefined;
   }
 }

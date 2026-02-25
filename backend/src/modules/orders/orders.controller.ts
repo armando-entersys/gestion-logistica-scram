@@ -50,7 +50,7 @@ import {
 @ApiTags('orders')
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) { }
 
   // =============================================
   // ENDPOINTS PÚBLICOS (Sin autenticación)
@@ -154,6 +154,23 @@ export class OrdersController {
     @Query('endDate') endDate?: string,
   ) {
     return this.ordersService.getDashboardStats(startDate, endDate);
+  }
+
+  /**
+   * Get CSAT evaluations detail report
+   * ADMIN and DIRECTOR can view individual CSAT evaluations with trend
+   * IMPORTANTE: Debe estar ANTES de :id para evitar conflicto de rutas
+   */
+  @Get('stats/csat')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.DIRECTOR)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get detailed CSAT evaluations with trend' })
+  getCsatEvaluations(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.ordersService.getCsatEvaluations(startDate, endDate);
   }
 
   /**
@@ -492,8 +509,9 @@ export class OrdersController {
   markEnRoute(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') driverId: string,
+    @Body() body: { etaDurationMinutes?: number },
   ) {
-    return this.ordersService.markEnRoute(id, driverId);
+    return this.ordersService.markEnRoute(id, driverId, body.etaDurationMinutes);
   }
 
   // =============================================

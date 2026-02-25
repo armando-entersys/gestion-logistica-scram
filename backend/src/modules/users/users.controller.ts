@@ -24,7 +24,7 @@ export class UsersController {
 
   @Get('drivers')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get all active drivers' })
   findDrivers() {
     return this.usersService.findDrivers();

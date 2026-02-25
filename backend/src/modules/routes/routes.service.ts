@@ -345,22 +345,83 @@ export class RoutesService {
 
   /**
    * Aplica una optimizacion guardando routePosition en las ordenes
+   * Re-calcula los ETAs con Google Routes API para tiempos reales de manejo
    */
   async applyOptimization(
     optimizedOrderIds: string[],
     startTime: string = '09:00',
   ): Promise<{ applied: number }> {
-    const etas = this.calculateETAs(optimizedOrderIds, startTime);
+    // Intentar obtener ETAs reales de Google Maps
+    const orders = await this.orderRepository.find({
+      where: { id: In(optimizedOrderIds) },
+    });
+
+    const ordersWithCoords = orders.filter(o => o.latitude && o.longitude);
+    let googleLegs: OptimizationLeg[] | null = null;
+
+    if (ordersWithCoords.length >= 2) {
+      try {
+        const waypoints = optimizedOrderIds
+          .map(id => orders.find(o => o.id === id))
+          .filter((o): o is Order => !!o && !!o.latitude && !!o.longitude)
+          .map(o => ({
+            latitude: Number(o.latitude),
+            longitude: Number(o.longitude),
+            orderId: o.id,
+          }));
+
+        // Calcular ruta con Google (sin re-optimizar el orden, solo tiempos)
+        const result = await this.googleRoutesService.optimizeWaypoints(
+          waypoints,
+          this.parseStartTime(startTime).toISOString(),
+        );
+
+        if (result) {
+          let currentTime = this.parseStartTime(startTime);
+          googleLegs = [];
+
+          for (const idx of result.optimizedOrder) {
+            const order = ordersWithCoords[idx];
+            const leg = result.legs.find(l => l.waypointIndex === idx);
+            const durationMinutes = (leg?.durationSeconds || 1800) / 60;
+
+            googleLegs.push(
+              this.createOptimizationLeg(
+                order,
+                googleLegs.length + 1,
+                currentTime,
+                (leg?.distanceMeters || 0) / 1000,
+                durationMinutes,
+              ),
+            );
+
+            currentTime = new Date(currentTime.getTime() + (leg?.durationSeconds || 1800) * 1000 + 15 * 60000);
+          }
+          this.logger.log('Applied optimization with real Google Maps ETAs');
+        }
+      } catch (error) {
+        this.logger.warn(`Could not get Google Maps ETAs, using fallback: ${error.message}`);
+      }
+    }
+
+    // Fallback a fórmula simple si Google no funcionó
+    const fallbackEtas = this.calculateETAs(optimizedOrderIds, startTime);
 
     let applied = 0;
     for (let i = 0; i < optimizedOrderIds.length; i++) {
       const orderId = optimizedOrderIds[i];
-      const eta = etas.find((e) => e.orderId === orderId);
+
+      // Usar ETA de Google si disponible, sino fallback
+      const googleLeg = googleLegs?.find(l => l.orderId === orderId);
+      const fallbackEta = fallbackEtas.find(e => e.orderId === orderId);
+
+      const etaStart = googleLeg ? new Date(googleLeg.etaStart) : fallbackEta?.etaStart;
+      const etaEnd = googleLeg ? new Date(googleLeg.etaEnd) : fallbackEta?.etaEnd;
 
       await this.orderRepository.update(orderId, {
         routePosition: i + 1,
-        estimatedArrivalStart: eta?.etaStart,
-        estimatedArrivalEnd: eta?.etaEnd,
+        estimatedArrivalStart: etaStart,
+        estimatedArrivalEnd: etaEnd,
       });
       applied++;
     }

@@ -13,6 +13,7 @@ interface EmailOptions {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly from: string;
+  private readonly emailOverride?: string;
 
   // SCRAM Brand Assets
   private readonly SCRAM_LOGO = 'https://storage.googleapis.com/scram-evidence/assets/scram_logotipo_vnegativa.png';
@@ -33,27 +34,40 @@ export class EmailService {
 
   constructor(private readonly configService: ConfigService) {
     this.from = this.configService.get('sendgrid.from') || 'no-reply@scram2k.com';
+    this.emailOverride = this.configService.get('EMAIL_OVERRIDE');
 
     const apiKey = this.configService.get('sendgrid.apiKey');
     if (apiKey) {
       sgMail.setApiKey(apiKey);
+    }
+
+    if (this.emailOverride) {
+      this.logger.warn(`EMAIL OVERRIDE ENABLED: All emails will be sent to ${this.emailOverride}`);
     }
   }
 
   async sendEmail(options: EmailOptions): Promise<void> {
     const html = this.renderTemplate(options.template, options.context);
 
+    // Override recipient if EMAIL_OVERRIDE is set
+    const originalRecipient = options.to;
+    const actualRecipient = this.emailOverride || options.to;
+
+    if (this.emailOverride && this.emailOverride !== options.to) {
+      this.logger.log(`Email override: Original recipient ${originalRecipient} -> Sending to ${actualRecipient}`);
+    }
+
     try {
       const [response] = await sgMail.send({
         from: { email: this.from, name: 'SCRAM Logistica' },
-        to: options.to,
+        to: actualRecipient,
         subject: options.subject,
         html: html,
       });
 
-      this.logger.log(`Email sent to ${options.to} - StatusCode: ${response.statusCode}`);
+      this.logger.log(`Email sent to ${actualRecipient} - StatusCode: ${response.statusCode}`);
     } catch (error) {
-      this.logger.error(`Failed to send email to ${options.to}:`, error);
+      this.logger.error(`Failed to send email to ${actualRecipient}:`, error);
       throw error;
     }
   }
@@ -66,6 +80,11 @@ export class EmailService {
       'en-route-notification': this.enRouteNotificationTemplate.bind(this),
       'password-reset': this.passwordResetTemplate.bind(this),
       'carrier-shipment': this.carrierShipmentTemplate.bind(this),
+      // Batch templates (consolidated emails per client)
+      'eta-notification-batch': this.etaNotificationBatchTemplate.bind(this),
+      'carrier-shipment-batch': this.carrierShipmentBatchTemplate.bind(this),
+      'en-route-notification-batch': this.enRouteNotificationBatchTemplate.bind(this),
+      'delivery-confirmation-batch': this.deliveryConfirmationBatchTemplate.bind(this),
     };
 
     const templateFn = templates[template];
@@ -328,15 +347,15 @@ export class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tu pedido va en camino</title>
+  <title>Ruta de entrega programada</title>
   ${this.getEmailStyles()}
 </head>
 <body>
   <div class="container">
-    ${this.getEmailHeader('Tu pedido va en camino!')}
+    ${this.getEmailHeader('Ruta de entrega programada!')}
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
-      <p>Buenas noticias: tu pedido ha salido de nuestro almacen y esta en camino hacia ti.</p>
+      <p>Te informamos que tu pedido ha sido programado para entrega el día de hoy.</p>
 
       <div class="info-box">
         <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Tu chofer asignado:</strong></p>
@@ -344,15 +363,15 @@ export class EmailService {
       </div>
 
       <div class="highlight-box">
-        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Hora Estimada de Llegada:</strong></p>
+        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Ventana de Entrega Estimada:</strong></p>
         <div class="eta-time">${ctx.etaRange}</div>
         <p style="margin: 10px 0 0 0; font-size: 14px; color: ${this.COLOR_GRAY_BLUE};">Parada #${ctx.routePosition} de la ruta</p>
       </div>
 
-      <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
+      <p>Te enviaremos otra notificación en cuanto nuestro chofer inicie el trayecto hacia tu ubicación.</p>
 
       <p style="text-align: center;">
-        <a href="${ctx.trackingUrl}" class="btn">Ver Estatus en Tiempo Real</a>
+        <a href="${ctx.trackingUrl}" class="btn">Seguir mi pedido</a>
       </p>
     </div>
     ${this.getEmailFooter()}
@@ -549,15 +568,15 @@ export class EmailService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tu pedido esta en camino</title>
+  <title>🚀 ¡Tu pedido SCRAM va en camino!</title>
   ${this.getEmailStyles()}
 </head>
 <body>
   <div class="container">
-    ${this.getEmailHeader('Tu pedido esta en camino!')}
+    ${this.getEmailHeader('¡Tu pedido va en camino!')}
     <div class="content">
       <p>Hola <strong>${ctx.clientName}</strong>,</p>
-      <p>Te informamos que nuestro chofer ya salio a entregar tu pedido.</p>
+      <p>Buenas noticias: nuestro chofer ha iniciado el trayecto hacia tu ubicación.</p>
 
       <div class="info-box">
         <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Chofer asignado:</strong></p>
@@ -565,14 +584,14 @@ export class EmailService {
       </div>
 
       <div class="highlight-box">
-        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Hora estimada de llegada:</strong></p>
+        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Horario de entrega:</strong></p>
         <div class="eta-time">${ctx.etaRange}</div>
       </div>
 
-      <p>Por favor, asegurate de que haya alguien disponible para recibir el paquete.</p>
+      <p>Por favor, asegúrate de que haya alguien disponible para recibir el pedido.</p>
 
       <p style="text-align: center;">
-        <a href="${ctx.trackingUrl}" class="btn">Rastrear Mi Pedido</a>
+        <a href="${ctx.trackingUrl}" class="btn">Rastrear en tiempo real</a>
       </p>
     </div>
     ${this.getEmailFooter()}
@@ -675,6 +694,317 @@ export class EmailService {
       <p style="text-align: center;">
         <a href="${ctx.trackingUrl}" class="btn">Ver Estado de Mi Pedido</a>
       </p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  // =============================================
+  // BATCH TEMPLATES (consolidated emails per client)
+  // =============================================
+
+  private getOrderListStyles(): string {
+    return `
+    <style>
+      .order-list {
+        margin: 20px 0;
+      }
+      .order-item {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-left: 3px solid ${this.COLOR_ORANGE};
+      }
+      .order-item-header {
+        font-weight: bold;
+        color: ${this.COLOR_DARK_BLUE};
+        font-size: 16px;
+        margin-bottom: 8px;
+      }
+      .order-item-detail {
+        font-size: 14px;
+        color: ${this.COLOR_GRAY_BLUE};
+        margin: 3px 0;
+      }
+      .order-item-link {
+        display: inline-block;
+        margin-top: 8px;
+        color: ${this.COLOR_ORANGE};
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .order-item-link:hover {
+        text-decoration: underline;
+      }
+    </style>`;
+  }
+
+  private etaNotificationBatchTemplate(ctx: any): string {
+    const orderItems = ctx.orders.map((o: any) => `
+      <div class="order-item">
+        <div class="order-item-header">Pedido ${o.orderNumber}</div>
+        <p class="order-item-detail">Parada #${o.routePosition} de la ruta</p>
+        <a href="${o.trackingUrl}" class="order-item-link">Seguir este pedido &rarr;</a>
+      </div>
+    `).join('');
+
+    const pedidoText = ctx.orderCount === 1 ? 'tu pedido ha sido programado' : `tus ${ctx.orderCount} pedidos han sido programados`;
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ruta de entrega programada</title>
+  ${this.getEmailStyles()}
+  ${this.getOrderListStyles()}
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('Ruta de entrega programada!')}
+    <div class="content">
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Te informamos que ${pedidoText} para entrega el dia de hoy.</p>
+
+      <div class="info-box">
+        <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Tu chofer asignado:</strong></p>
+        <p style="margin: 0; font-size: 18px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">${ctx.driverName}</p>
+      </div>
+
+      <div class="highlight-box">
+        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Ventana de Entrega Estimada:</strong></p>
+        <div class="eta-time">${ctx.etaRange}</div>
+      </div>
+
+      <h3 style="color: ${this.COLOR_DARK_BLUE}; margin-bottom: 10px;">${ctx.orderCount === 1 ? 'Tu pedido:' : `Tus ${ctx.orderCount} pedidos:`}</h3>
+      <div class="order-list">
+        ${orderItems}
+      </div>
+
+      <p>Te enviaremos otra notificacion en cuanto nuestro chofer inicie el trayecto hacia tu ubicacion.</p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  private carrierShipmentBatchTemplate(ctx: any): string {
+    const orderItems = ctx.orders.map((o: any) => {
+      const isProvider = o.isProvider;
+      const carrierDisplay = isProvider ? 'SCRAM' : o.carrierName;
+      const trackingLine = !isProvider && o.trackingNumber
+        ? `<p class="order-item-detail">No. de guia: <strong>${o.trackingNumber}</strong></p>`
+        : '';
+
+      return `
+      <div class="order-item">
+        <div class="order-item-header">Pedido ${o.orderNumber}</div>
+        <p class="order-item-detail">Enviado por: <strong>${carrierDisplay}</strong></p>
+        ${trackingLine}
+        <p class="order-item-detail">Entrega estimada: ${o.deliveryInfo}</p>
+        <a href="${o.trackingUrl}" class="order-item-link">Ver estado &rarr;</a>
+      </div>
+      `;
+    }).join('');
+
+    const pedidoText = ctx.orderCount === 1 ? 'tu pedido ha sido enviado' : `tus ${ctx.orderCount} pedidos han sido enviados`;
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos enviados</title>
+  ${this.getEmailStyles()}
+  ${this.getOrderListStyles()}
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('Tu pedido fue enviado!')}
+    <div class="content">
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Te informamos que ${pedidoText} y ${ctx.orderCount === 1 ? 'esta' : 'estan'} en camino hacia ti.</p>
+
+      <h3 style="color: ${this.COLOR_DARK_BLUE}; margin-bottom: 10px;">${ctx.orderCount === 1 ? 'Tu pedido:' : `Tus ${ctx.orderCount} pedidos:`}</h3>
+      <div class="order-list">
+        ${orderItems}
+      </div>
+
+      <p>Por favor, asegurate de que haya alguien disponible para recibir ${ctx.orderCount === 1 ? 'el paquete' : 'los paquetes'}.</p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  private enRouteNotificationBatchTemplate(ctx: any): string {
+    const orderItems = ctx.orders.map((o: any) => `
+      <div class="order-item">
+        <div class="order-item-header">Pedido ${o.orderNumber}</div>
+        <a href="${o.trackingUrl}" class="order-item-link">Rastrear en tiempo real &rarr;</a>
+      </div>
+    `).join('');
+
+    const pedidoText = ctx.orderCount === 1
+      ? 'nuestro chofer ha iniciado el trayecto para entregar tu pedido'
+      : `nuestro chofer ha iniciado el trayecto para entregar tus ${ctx.orderCount} pedidos`;
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tu pedido va en camino</title>
+  ${this.getEmailStyles()}
+  ${this.getOrderListStyles()}
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('¡Tu pedido va en camino!')}
+    <div class="content">
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Buenas noticias: ${pedidoText}.</p>
+
+      <div class="info-box">
+        <p style="margin: 0 0 10px 0; color: ${this.COLOR_GRAY_BLUE};"><strong>Chofer asignado:</strong></p>
+        <p style="margin: 0; font-size: 18px; font-weight: bold; color: ${this.COLOR_DARK_BLUE};">${ctx.driverName}</p>
+      </div>
+
+      <div class="highlight-box">
+        <p style="margin: 0 0 10px 0; color: #996600;"><strong>Horario de entrega:</strong></p>
+        <div class="eta-time">${ctx.etaRange}</div>
+      </div>
+
+      <h3 style="color: ${this.COLOR_DARK_BLUE}; margin-bottom: 10px;">${ctx.orderCount === 1 ? 'Tu pedido:' : `Tus ${ctx.orderCount} pedidos:`}</h3>
+      <div class="order-list">
+        ${orderItems}
+      </div>
+
+      <p>Por favor, asegurate de que haya alguien disponible para recibir ${ctx.orderCount === 1 ? 'el pedido' : 'los pedidos'}.</p>
+    </div>
+    ${this.getEmailFooter()}
+  </div>
+</body>
+</html>`;
+  }
+
+  private deliveryConfirmationBatchTemplate(ctx: any): string {
+    // Emoji images for rating
+    const emojiImages = {
+      angry: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f621.png',
+      sad: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f61e.png',
+      neutral: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f610.png',
+      happy: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png',
+      love: 'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60d.png',
+    };
+
+    const orderBlocks = ctx.orders.map((o: any) => `
+      <div class="order-item" style="border-left-color: ${this.COLOR_GREEN};">
+        <div class="order-item-header">Pedido ${o.invoiceNumber || o.orderNumber}</div>
+
+        <p style="text-align: center; margin: 15px 0 5px 0; font-size: 15px;"><strong>Como fue tu experiencia con este pedido?</strong></p>
+
+        <div class="emoji-rating">
+          <div class="emoji-container">
+            <a href="${o.rateUrl}?score=1" class="emoji-btn" title="1 - Muy malo">
+              <img src="${emojiImages.angry}" alt="1" width="36" height="36" style="vertical-align:middle;" />
+            </a>
+          </div>
+          <div class="emoji-container">
+            <a href="${o.rateUrl}?score=2" class="emoji-btn" title="2 - Malo">
+              <img src="${emojiImages.sad}" alt="2" width="36" height="36" style="vertical-align:middle;" />
+            </a>
+          </div>
+          <div class="emoji-container">
+            <a href="${o.rateUrl}?score=3" class="emoji-btn" title="3 - Regular">
+              <img src="${emojiImages.neutral}" alt="3" width="36" height="36" style="vertical-align:middle;" />
+            </a>
+          </div>
+          <div class="emoji-container">
+            <a href="${o.rateUrl}?score=4" class="emoji-btn" title="4 - Bueno">
+              <img src="${emojiImages.happy}" alt="4" width="36" height="36" style="vertical-align:middle;" />
+            </a>
+          </div>
+          <div class="emoji-container">
+            <a href="${o.rateUrl}?score=5" class="emoji-btn" title="5 - Excelente">
+              <img src="${emojiImages.love}" alt="5" width="36" height="36" style="vertical-align:middle;" />
+            </a>
+          </div>
+        </div>
+
+        <p style="text-align: center;">
+          <a href="${o.csatUrl}" class="order-item-link">Ver detalles de entrega &rarr;</a>
+        </p>
+      </div>
+    `).join('');
+
+    const pedidoText = ctx.orderCount === 1
+      ? 'tu pedido ha sido entregado exitosamente'
+      : `tus ${ctx.orderCount} pedidos han sido entregados exitosamente`;
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos Entregados</title>
+  ${this.getEmailStyles()}
+  ${this.getOrderListStyles()}
+  <style>
+    .emoji-rating {
+      text-align: center;
+      margin: 10px 0;
+    }
+    .emoji-btn {
+      display: inline-block;
+      width: 48px;
+      height: 48px;
+      text-decoration: none;
+      margin: 0 4px;
+      background: #f5f7fa;
+      border-radius: 50%;
+      padding: 6px;
+      box-sizing: border-box;
+    }
+    .emoji-btn:hover {
+      background: #e8ecf0;
+    }
+    .emoji-container {
+      display: inline-block;
+      text-align: center;
+      margin: 0 2px;
+      vertical-align: top;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    ${this.getEmailHeader('Pedido Entregado!')}
+    <div class="content">
+      <p>Hola <strong>${ctx.clientName}</strong>,</p>
+      <p>Confirmamos que ${pedidoText}.</p>
+
+      <div class="success-box">
+        <p style="margin: 0; text-align: center; font-size: 16px;">
+          <strong>Gracias por tu preferencia!</strong>
+        </p>
+      </div>
+
+      <p style="text-align: center; margin: 25px 0 10px 0; font-size: 16px; color: ${this.COLOR_GRAY_BLUE};">Haz clic en una carita para calificar cada entrega</p>
+
+      <div class="order-list">
+        ${orderBlocks}
+      </div>
     </div>
     ${this.getEmailFooter()}
   </div>

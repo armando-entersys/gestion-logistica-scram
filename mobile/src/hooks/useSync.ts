@@ -148,7 +148,9 @@ export function useSync() {
         case 'en-route': {
           await axios.post(
             `${API_URL}/orders/${item.payload.orderId}/en-route`,
-            {},
+            {
+              etaDurationMinutes: item.payload.etaDurationMinutes,
+            },
             { headers }
           );
           break;

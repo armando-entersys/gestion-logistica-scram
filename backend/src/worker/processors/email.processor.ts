@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { Order } from '@/modules/orders/entities/order.entity';
+import { OrderStatus } from '@/common/enums';
 import { User } from '@/modules/users/entities/user.entity';
 import { EmailService } from '../services/email.service';
 
@@ -61,6 +62,44 @@ interface CarrierShipmentPayload {
   trackingHash: string;
 }
 
+// Batch interfaces
+interface EtaEmailBatchPayload {
+  clientEmail: string;
+  clientName: string;
+  driverId: string;
+  etaStart: string;
+  etaEnd: string;
+  orders: Array<{
+    orderId: string;
+    trackingHash: string;
+    routePosition: number;
+    orderNumber: string;
+  }>;
+}
+
+interface CarrierShipmentBatchPayload {
+  clientEmail: string;
+  clientName: string;
+  orders: Array<{
+    orderId: string;
+    trackingHash: string;
+    carrierName: string;
+    carrierType: string;
+    trackingNumber: string | null;
+    deliveryInfo: string;
+    orderNumber: string;
+  }>;
+}
+
+interface EnRouteBatchPayload {
+  clientEmail: string;
+  driverId: string;
+}
+
+interface DeliveryConfirmationBatchPayload {
+  clientEmail: string;
+}
+
 @Processor('notifications')
 export class EmailProcessor extends WorkerHost {
   private readonly logger = new Logger(EmailProcessor.name);
@@ -103,6 +142,23 @@ export class EmailProcessor extends WorkerHost {
         await this.handleCarrierShipment(job.data as CarrierShipmentPayload);
         break;
 
+      // Batch handlers (consolidated emails per client)
+      case 'send-eta-email-batch':
+        await this.handleEtaEmailBatch(job.data as EtaEmailBatchPayload);
+        break;
+
+      case 'send-carrier-shipment-batch':
+        await this.handleCarrierShipmentBatch(job.data as CarrierShipmentBatchPayload);
+        break;
+
+      case 'send-en-route-email-batch':
+        await this.handleEnRouteEmailBatch(job.data as EnRouteBatchPayload);
+        break;
+
+      case 'send-delivery-confirmation-batch':
+        await this.handleDeliveryConfirmationBatch(job.data as DeliveryConfirmationBatchPayload);
+        break;
+
       default:
         this.logger.warn(`Unknown job type: ${job.name}`);
     }
@@ -118,19 +174,8 @@ export class EmailProcessor extends WorkerHost {
     const driver = await this.userRepository.findOne({ where: { id: driverId } });
     const driverName = driver?.fullName || 'Tu chofer asignado';
 
-    // Format ETA times
-    const etaStartDate = new Date(etaStart);
-    const etaEndDate = new Date(etaEnd);
-
-    const formatTime = (date: Date) => {
-      return date.toLocaleTimeString('es-MX', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-    };
-
-    const etaRange = `${formatTime(etaStartDate)} - ${formatTime(etaEndDate)}`;
+    // Rango fijo de horario de entrega (no exponer hora exacta al cliente)
+    const etaRange = '9:00 AM - 6:00 PM';
 
     await this.emailService.sendEmail({
       to: clientEmail,
@@ -211,22 +256,8 @@ export class EmailProcessor extends WorkerHost {
   private async handleEnRouteEmail(payload: EnRouteEmailPayload): Promise<void> {
     const { orderId, clientEmail, clientName, driverName, estimatedArrivalStart, estimatedArrivalEnd, trackingHash } = payload;
 
-    // Format ETA times
-    let etaRange = 'Muy pronto';
-    if (estimatedArrivalStart && estimatedArrivalEnd) {
-      const etaStartDate = new Date(estimatedArrivalStart);
-      const etaEndDate = new Date(estimatedArrivalEnd);
-
-      const formatTime = (date: Date) => {
-        return date.toLocaleTimeString('es-MX', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        });
-      };
-
-      etaRange = `${formatTime(etaStartDate)} - ${formatTime(etaEndDate)}`;
-    }
+    // Rango fijo de horario de entrega (no exponer hora exacta al cliente)
+    const etaRange = '9:00 AM - 6:00 PM';
 
     await this.emailService.sendEmail({
       to: clientEmail,
@@ -270,7 +301,7 @@ export class EmailProcessor extends WorkerHost {
 
     const isProvider = carrierType === 'PROVIDER';
 
-    // Format delivery date
+    // Format delivery date con rango de horario fijo
     let deliveryInfo = 'Pronto';
     if (estimatedDeliveryDate) {
       const date = new Date(estimatedDeliveryDate);
@@ -279,9 +310,7 @@ export class EmailProcessor extends WorkerHost {
         day: 'numeric',
         month: 'long',
       });
-      if (estimatedDeliveryTime) {
-        deliveryInfo += ` aproximadamente a las ${estimatedDeliveryTime}`;
-      }
+      deliveryInfo += ' entre 9:00 AM y 6:00 PM';
     }
 
     // For "Proveedor Directo": hide carrier details, SCRAM handles delivery
@@ -304,6 +333,206 @@ export class EmailProcessor extends WorkerHost {
     });
 
     this.logger.log(`Carrier shipment email sent to ${clientEmail} for order ${orderId}`);
+  }
+
+  // =============================================
+  // BATCH HANDLERS (consolidated emails per client)
+  // =============================================
+
+  /**
+   * Batch ETA email: sends 1 consolidated email with all orders for this client
+   */
+  private async handleEtaEmailBatch(payload: EtaEmailBatchPayload): Promise<void> {
+    const { clientEmail, clientName, driverId, etaStart, etaEnd, orders } = payload;
+
+    const driver = await this.userRepository.findOne({ where: { id: driverId } });
+    const driverName = driver?.fullName || 'Tu chofer asignado';
+    const etaRange = '9:00 AM - 6:00 PM';
+    const appUrl = process.env.APP_URL || '';
+
+    const orderList = orders.map(o => ({
+      ...o,
+      trackingUrl: `${appUrl}/track/${o.trackingHash}`,
+    }));
+
+    const n = orders.length;
+    const subject = n === 1
+      ? '🚀 ¡Tu pedido SCRAM va en camino!'
+      : `🚀 ¡Tus ${n} pedidos SCRAM van en camino!`;
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject,
+      template: 'eta-notification-batch',
+      context: {
+        clientName: clientName.split(' ')[0],
+        driverName,
+        etaRange,
+        orders: orderList,
+        orderCount: n,
+      },
+    });
+
+    this.logger.log(`Batch ETA email sent to ${clientEmail} for ${n} orders`);
+  }
+
+  /**
+   * Batch carrier shipment email: sends 1 consolidated email with all orders for this client
+   */
+  private async handleCarrierShipmentBatch(payload: CarrierShipmentBatchPayload): Promise<void> {
+    const { clientEmail, clientName, orders } = payload;
+    const appUrl = process.env.APP_URL || '';
+
+    const orderList = orders.map(o => ({
+      ...o,
+      trackingUrl: `${appUrl}/track/${o.trackingHash}`,
+      isProvider: o.carrierType === 'PROVIDER',
+    }));
+
+    const n = orders.length;
+    const subject = n === 1
+      ? '📦 ¡Tu pedido SCRAM fue enviado!'
+      : `📦 ¡Tus ${n} pedidos SCRAM fueron enviados!`;
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject,
+      template: 'carrier-shipment-batch',
+      context: {
+        clientName: clientName.split(' ')[0],
+        orders: orderList,
+        orderCount: n,
+      },
+    });
+
+    this.logger.log(`Batch carrier shipment email sent to ${clientEmail} for ${n} orders`);
+  }
+
+  /**
+   * Batch en-route email: queries DB for all pending en-route orders for this client+driver
+   * Uses 30s delay window for consolidation
+   */
+  private async handleEnRouteEmailBatch(payload: EnRouteBatchPayload): Promise<void> {
+    const { clientEmail, driverId } = payload;
+
+    // Query orders: same client email + same driver + marked en-route + email not sent yet
+    const pendingOrders = await this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.assignedDriver', 'driver')
+      .where('LOWER(order.clientEmail) = :email', { email: clientEmail.toLowerCase() })
+      .andWhere('order.assignedDriverId = :driverId', { driverId })
+      .andWhere('order.enRouteAt IS NOT NULL')
+      .andWhere('order.enRouteEmailSent = false')
+      .orderBy('order.routePosition', 'ASC')
+      .getMany();
+
+    if (pendingOrders.length === 0) {
+      this.logger.log(`En-route batch: no pending orders for ${clientEmail} - already consolidated`);
+      return;
+    }
+
+    const driver = pendingOrders[0].assignedDriver;
+    const driverName = driver?.fullName || 'Nuestro chofer';
+    const etaRange = '9:00 AM - 6:00 PM';
+    const appUrl = process.env.APP_URL || '';
+
+    const orderList = pendingOrders.map(o => ({
+      orderId: o.id,
+      orderNumber: o.orderNumber || o.bindId || o.id,
+      trackingHash: o.trackingHash,
+      trackingUrl: `${appUrl}/track/${o.trackingHash}`,
+      routePosition: o.routePosition,
+    }));
+
+    const n = pendingOrders.length;
+    const subject = n === 1
+      ? '🚗 ¡Tu pedido SCRAM está en camino!'
+      : `🚗 ¡Tus ${n} pedidos SCRAM están en camino!`;
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject,
+      template: 'en-route-notification-batch',
+      context: {
+        clientName: pendingOrders[0].clientName?.split(' ')[0] || 'Cliente',
+        driverName,
+        etaRange,
+        orders: orderList,
+        orderCount: n,
+      },
+    });
+
+    // Mark all as sent
+    const orderIds = pendingOrders.map(o => o.id);
+    await this.orderRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ enRouteEmailSent: true })
+      .whereInIds(orderIds)
+      .execute();
+
+    this.logger.log(`Batch en-route email sent to ${clientEmail} for ${n} orders`);
+  }
+
+  /**
+   * Batch delivery confirmation email: queries DB for all delivered orders pending email for this client
+   * Uses 30s delay window for consolidation
+   */
+  private async handleDeliveryConfirmationBatch(payload: DeliveryConfirmationBatchPayload): Promise<void> {
+    const { clientEmail } = payload;
+
+    // Query orders: same client email + delivered + email not sent yet
+    const pendingOrders = await this.orderRepository
+      .createQueryBuilder('order')
+      .where('LOWER(order.clientEmail) = :email', { email: clientEmail.toLowerCase() })
+      .andWhere('order.status = :status', { status: OrderStatus.DELIVERED })
+      .andWhere('order.deliveryEmailSent = false')
+      .orderBy('order.deliveredAt', 'ASC')
+      .getMany();
+
+    if (pendingOrders.length === 0) {
+      this.logger.log(`Delivery batch: no pending orders for ${clientEmail} - already consolidated`);
+      return;
+    }
+
+    const appUrl = process.env.APP_URL || '';
+    const apiUrl = process.env.API_URL || 'https://api-gestion-logistica.scram2k.com';
+
+    const orderList = pendingOrders.map(o => ({
+      orderId: o.id,
+      orderNumber: o.orderNumber || o.bindId || o.id,
+      trackingHash: o.trackingHash,
+      csatUrl: `${appUrl}/track/${o.trackingHash}#csat`,
+      rateUrl: `${apiUrl}/api/v1/orders/rate/${o.trackingHash}`,
+      invoiceNumber: o.invoiceNumber || o.orderNumber || '',
+    }));
+
+    const n = pendingOrders.length;
+    const subject = n === 1
+      ? '✅ ¡Tu pedido ha sido entregado! - Cuéntanos tu experiencia'
+      : `✅ ¡Tus ${n} pedidos han sido entregados! - Cuéntanos tu experiencia`;
+
+    await this.emailService.sendEmail({
+      to: clientEmail,
+      subject,
+      template: 'delivery-confirmation-batch',
+      context: {
+        clientName: pendingOrders[0].clientName?.split(' ')[0] || 'Cliente',
+        orders: orderList,
+        orderCount: n,
+      },
+    });
+
+    // Mark all as sent
+    const orderIds = pendingOrders.map(o => o.id);
+    await this.orderRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ deliveryEmailSent: true })
+      .whereInIds(orderIds)
+      .execute();
+
+    this.logger.log(`Batch delivery confirmation sent to ${clientEmail} for ${n} orders`);
   }
 
   @OnWorkerEvent('completed')

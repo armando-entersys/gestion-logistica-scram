@@ -67,6 +67,9 @@ export const ordersApi = {
   exportReport: (startDate: string, endDate: string) =>
     api.get('/orders/report/export', { params: { startDate, endDate } }),
 
+  getCsatStats: (startDate?: string, endDate?: string) =>
+    api.get('/orders/stats/csat', { params: { startDate, endDate } }),
+
   assign: (driverId: string, orderIds: string[]) =>
     api.post('/orders/assign', { driverId, orderIds }),
 

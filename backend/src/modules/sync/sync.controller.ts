@@ -3,6 +3,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiBody } from '@nes
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
+import { ConfigService } from '@nestjs/config';
+
 import { SyncService } from './sync.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -16,6 +18,7 @@ import { UserRole } from '@/common/enums';
 export class SyncController {
   constructor(
     private readonly syncService: SyncService,
+    private readonly configService: ConfigService,
     @InjectQueue('sync') private readonly syncQueue: Queue,
   ) {}
 
@@ -51,11 +54,14 @@ export class SyncController {
       },
     );
 
+    const environment = this.configService.get<string>('environment', 'development');
+
     return {
       success: true,
       jobId: job.id,
       date: syncDate,
-      message: `Sincronización de pedidos del ${syncDate} iniciada. Consulta el estado en /sync/status/${job.id}`,
+      environment,
+      message: `Sincronización de pedidos del ${syncDate} iniciada en ambiente ${environment}. Consulta el estado en /sync/status/${job.id}`,
     };
   }
 

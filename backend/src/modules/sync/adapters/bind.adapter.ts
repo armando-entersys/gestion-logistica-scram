@@ -219,7 +219,7 @@ export class BindAdapter {
       // Transformar pedidos - obtener detalles solo si son pocos para evitar rate limiting
       const orders: CreateOrderDto[] = [];
 
-      if (newBindOrders.length <= 20) {
+      if (newBindOrders.length <= 50) {
         // Pocos pedidos: obtener detalles para mejor dirección
         for (const bindOrder of newBindOrders) {
           try {
@@ -368,12 +368,14 @@ export class BindAdapter {
    * Transforma un cliente de Bind al formato interno
    */
   private transformClient(client: BindClient | BindClientDetails): SyncClientDto {
+    const emailOverride = this.getEmailOverride();
+
     return {
       bindId: client.ID,
       clientNumber: client.Number?.toString() || client.ID,
       name: this.cleanString(client.LegalName),
       commercialName: client.CommercialName,
-      email: client.Email,
+      email: emailOverride || client.Email,
       phone: client.Telephones,
       rfc: client.RFC,
       city: client.City,
@@ -389,8 +391,8 @@ export class BindAdapter {
     // RF-02: Detectar VIP/Urgente en comentarios
     const comments = (order.Comments || '').toUpperCase();
     const isVip = comments.includes('VIP') ||
-                  comments.includes('URGENTE') ||
-                  comments.includes('PRIORITARIO');
+      comments.includes('URGENTE') ||
+      comments.includes('PRIORITARIO');
 
     // Número de pedido visible (ej: PE2945)
     const orderNumber = `${order.Serie || 'PE'}${order.Number}`;
@@ -408,7 +410,7 @@ export class BindAdapter {
       bindClientId: order.ClientID, // UUID del cliente en Bind (para sincronizar direcciones)
       purchaseOrder: order.PurchaseOrder,
       clientName: this.cleanString(order.ClientName),
-      clientEmail: client?.Email || '',
+      clientEmail: this.getEmailOverride() || client?.Email || '',
       clientPhone: order.PhoneNumber || client?.Telephones,
       clientRfc: order.RFC,
       addressRaw: {
@@ -424,6 +426,13 @@ export class BindAdapter {
       totalAmount: order.Total || 0,
       isVip,
       promisedDate: order.OrderDate ? new Date(order.OrderDate) : undefined,
+      items: (order as BindOrderDetail).Products?.map(p => ({
+        productId: p.ProductID,
+        name: p.Name,
+        code: p.Code,
+        quantity: p.Qty,
+        price: p.Price,
+      })) || [],
     };
   }
 
@@ -497,6 +506,17 @@ export class BindAdapter {
 
   private cleanString(str: string): string {
     return (str || '').trim();
+  }
+
+  /**
+   * Returns the email override for non-production environments.
+   * In development/staging, all synced emails are replaced with the test address
+   * to prevent accidentally contacting real customers.
+   */
+  private getEmailOverride(): string | undefined {
+    const env = this.configService.get<string>('environment', 'development');
+    if (env === 'production') return undefined;
+    return this.configService.get<string>('email.override') || undefined;
   }
 
   /**

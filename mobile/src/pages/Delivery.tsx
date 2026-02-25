@@ -350,7 +350,7 @@ export default function DeliveryPage() {
               Confirmar Entrega
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {order.bindId}
+              {order.orderNumber || order.bindId}
             </Typography>
           </Box>
         </Toolbar>

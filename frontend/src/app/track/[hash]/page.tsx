@@ -437,15 +437,7 @@ export default function TrackingPage() {
                       Hora Estimada de Llegada
                     </Typography>
                     <Typography variant="h6" fontWeight={700} sx={{ color: SCRAM_ORANGE }}>
-                      {new Date(order.estimatedArrivalStart).toLocaleTimeString('es-MX', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                      {' - '}
-                      {new Date(order.estimatedArrivalEnd).toLocaleTimeString('es-MX', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      9:00 AM - 6:00 PM
                     </Typography>
                   </Box>
                 </Stack>

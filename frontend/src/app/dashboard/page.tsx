@@ -43,7 +43,17 @@ import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import UndoIcon from '@mui/icons-material/Undo';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 
+import dynamic from 'next/dynamic';
 import { ordersApi } from '@/lib/api';
+
+// Recharts must be loaded client-side only (no SSR)
+const LineChart = dynamic(() => import('recharts').then(m => m.LineChart), { ssr: false });
+const Line = dynamic(() => import('recharts').then(m => m.Line), { ssr: false });
+const XAxis = dynamic(() => import('recharts').then(m => m.XAxis), { ssr: false });
+const YAxis = dynamic(() => import('recharts').then(m => m.YAxis), { ssr: false });
+const CartesianGrid = dynamic(() => import('recharts').then(m => m.CartesianGrid), { ssr: false });
+const Tooltip = dynamic(() => import('recharts').then(m => m.Tooltip), { ssr: false });
+const ResponsiveContainer = dynamic(() => import('recharts').then(m => m.ResponsiveContainer), { ssr: false });
 
 interface DashboardStats {
   total: number;
@@ -66,6 +76,29 @@ interface DashboardStats {
     pending: number;
   }>;
   dailyDeliveries: Array<{ date: string; count: number }>;
+  csatDistribution: Record<number, number>;
+}
+
+interface CsatEvaluation {
+  orderId: string;
+  invoiceNumber: string | null;
+  clientName: string;
+  clientNumber: string | null;
+  csatScore: number;
+  csatFeedback: string | null;
+  deliveredAt: string;
+  driverName: string;
+}
+
+interface CsatData {
+  evaluations: CsatEvaluation[];
+  summary: {
+    avgScore: number;
+    totalResponses: number;
+    satisfactionRate: number;
+    distribution: Record<number, number>;
+  };
+  trend: Array<{ date: string; avgScore: number; count: number }>;
 }
 
 export default function DashboardPage() {
@@ -91,6 +124,14 @@ export default function DashboardPage() {
     queryKey: ['dashboard-stats', startDate, endDate],
     queryFn: async () => {
       const response = await ordersApi.getStats(startDate, endDate);
+      return response.data;
+    },
+  });
+
+  const { data: csatData } = useQuery<CsatData>({
+    queryKey: ['csat-evaluations', startDate, endDate],
+    queryFn: async () => {
+      const response = await ordersApi.getCsatStats(startDate, endDate);
       return response.data;
     },
   });
@@ -445,6 +486,55 @@ export default function DashboardPage() {
                       <StarIcon color="warning" sx={{ fontSize: 32 }} />
                     </Avatar>
                   </Stack>
+
+                  {/* Rating Distribution Bar Chart */}
+                  {stats?.csatDistribution && (
+                    <Box sx={{ mt: 3 }}>
+                      <Typography variant="caption" fontWeight={700} color="text.secondary" gutterBottom display="block">
+                        Distribución de Calificaciones
+                      </Typography>
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        {[5, 4, 3, 2, 1].map((rating) => {
+                          const count = stats.csatDistribution[rating] || 0;
+                          const percentage = stats.csatCount > 0 ? (count / stats.csatCount) * 100 : 0;
+                          const colors = {
+                            5: '#44ce6f',
+                            4: '#44ce6f',
+                            3: '#a0aec0',
+                            2: '#ed8936',
+                            1: '#e53e3e',
+                          };
+
+                          return (
+                            <Box key={rating} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography variant="caption" sx={{ minWidth: 20, fontWeight: 600 }}>
+                                {rating} ★
+                              </Typography>
+                              <Box sx={{ flexGrow: 1, height: 8, bgcolor: 'grey.100', borderRadius: 4, overflow: 'hidden' }}>
+                                <Box
+                                  sx={{
+                                    width: `${percentage}%`,
+                                    height: '100%',
+                                    bgcolor: colors[rating as keyof typeof colors],
+                                    borderRadius: 4
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 25, textAlign: 'right' }}>
+                                {count}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Stack>
+
+                      <Box sx={{ mt: 2, p: 1, bgcolor: 'grey.50', borderRadius: 1, border: '1px dashed', borderColor: 'grey.200' }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center' }}>
+                          {Math.round(((stats.csatDistribution[5] || 0) + (stats.csatDistribution[4] || 0)) / (stats.csatCount || 1) * 100)}% de clientes satisfechos
+                        </Typography>
+                      </Box>
+                    </Box>
+                  )}
                 </CardContent>
               </Card>
             </Grid>
@@ -639,6 +729,162 @@ export default function DashboardPage() {
                 </Grid>
               </Paper>
             </Grid>
+
+            {/* CSAT Trend Chart */}
+            {csatData && csatData.trend.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                    <Box>
+                      <Typography variant="h6" fontWeight={600}>
+                        Tendencia de Satisfaccion (CSAT)
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Promedio diario de calificaciones en el periodo seleccionado
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Chip
+                        label={`${csatData.summary.satisfactionRate}% satisfechos`}
+                        color={csatData.summary.satisfactionRate >= 80 ? 'success' : csatData.summary.satisfactionRate >= 60 ? 'warning' : 'error'}
+                        size="small"
+                      />
+                      <Chip
+                        label={`${csatData.summary.totalResponses} respuestas`}
+                        variant="outlined"
+                        size="small"
+                      />
+                    </Stack>
+                  </Stack>
+                  <Box sx={{ width: '100%', height: 300 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={csatData.trend} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(v: string) => {
+                            const d = new Date(v + 'T12:00:00');
+                            return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+                          }}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis domain={[0, 5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          labelFormatter={(v: any) => {
+                            const d = new Date(String(v) + 'T12:00:00');
+                            return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+                          }}
+                          formatter={(value: any, name: any) => {
+                            if (name === 'avgScore') return [Number(value).toFixed(2), 'Promedio'];
+                            if (name === 'count') return [value, 'Respuestas'];
+                            return [value, name];
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="avgScore"
+                          stroke="#ff9800"
+                          strokeWidth={3}
+                          dot={{ r: 5, fill: '#ff9800' }}
+                          activeDot={{ r: 7 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="count"
+                          stroke="#90caf9"
+                          strokeWidth={1}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          yAxisId={0}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Box>
+                </Paper>
+              </Grid>
+            )}
+
+            {/* CSAT Individual Evaluations Table */}
+            {csatData && csatData.evaluations.length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Typography variant="h6" fontWeight={600} gutterBottom>
+                    Evaluaciones Individuales CSAT
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                    {csatData.evaluations.length} evaluaciones en el periodo
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 400 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Fecha</TableCell>
+                          <TableCell>Cliente</TableCell>
+                          <TableCell># Cliente</TableCell>
+                          <TableCell align="center">Calificacion</TableCell>
+                          <TableCell>Comentario</TableCell>
+                          <TableCell>Chofer</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {csatData.evaluations.map((ev) => {
+                          const scoreColor =
+                            ev.csatScore >= 4 ? 'success.main' :
+                            ev.csatScore === 3 ? 'warning.main' : 'error.main';
+                          const scoreBg =
+                            ev.csatScore >= 4 ? 'success.light' :
+                            ev.csatScore === 3 ? 'warning.light' : 'error.light';
+
+                          return (
+                            <TableRow key={ev.orderId} hover>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {new Date(ev.deliveredAt).toLocaleDateString('es-MX', {
+                                    day: '2-digit', month: 'short', year: 'numeric',
+                                  })}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" fontWeight={500}>
+                                  {ev.clientName}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" color="text.secondary">
+                                  {ev.clientNumber || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="center">
+                                <Chip
+                                  label={`${'★'.repeat(ev.csatScore)}${'☆'.repeat(5 - ev.csatScore)}`}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: scoreBg,
+                                    color: scoreColor,
+                                    fontWeight: 700,
+                                    fontSize: 14,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell sx={{ maxWidth: 300 }}>
+                                <Typography variant="body2" color="text.secondary" noWrap title={ev.csatFeedback || ''}>
+                                  {ev.csatFeedback || '-'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2">
+                                  {ev.driverName}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Paper>
+              </Grid>
+            )}
           </Grid>
         )}
       </Box>
