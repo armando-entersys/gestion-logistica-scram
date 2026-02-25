@@ -22,6 +22,7 @@ import {
   RespondAddressChangeDto,
   ReturnOrderDto,
   ConfirmPickupDto,
+  AdminMarkDeliveredDto,
 } from './dto';
 import { GeocodingService } from '@/common/services/geocoding.service';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
@@ -2225,6 +2226,148 @@ export class OrdersService {
       success: true,
       cancelled: orders.length,
       message: `${orders.length} pedido(s) cancelado(s)`,
+    };
+  }
+
+  /**
+   * Admin marks IN_TRANSIT orders as DELIVERED
+   * Requires a comment. Optionally sends delivery confirmation email.
+   */
+  async adminMarkDelivered(
+    dto: AdminMarkDeliveredDto,
+    userId: string,
+  ): Promise<{ success: boolean; delivered: number; message: string }> {
+    if (!dto.orderIds || dto.orderIds.length === 0) {
+      throw new BadRequestException('Debe seleccionar al menos un pedido');
+    }
+
+    if (!dto.comment || dto.comment.trim().length === 0) {
+      throw new BadRequestException('Debe ingresar un comentario');
+    }
+
+    const orders = await this.orderRepository.find({
+      where: {
+        id: In(dto.orderIds),
+        status: OrderStatus.IN_TRANSIT,
+      },
+      relations: ['client'],
+    });
+
+    if (orders.length === 0) {
+      throw new BadRequestException('No se encontraron pedidos en tránsito para marcar como entregados');
+    }
+
+    const now = new Date();
+
+    for (const order of orders) {
+      const adminNote = `[ENTREGADO POR ADMIN ${now.toLocaleDateString('es-MX')}] ${dto.comment.trim()}`;
+      const existingNotes = order.internalNotes || '';
+      const updatedNotes = existingNotes
+        ? `${existingNotes}\n\n${adminNote}`
+        : adminNote;
+
+      const trackingHash = order.trackingHash || this.generateTrackingHash();
+      const trackingExpires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+      await this.orderRepository.update(order.id, {
+        status: OrderStatus.DELIVERED,
+        deliveredAt: now,
+        trackingHash,
+        trackingExpiresAt: trackingExpires,
+        internalNotes: updatedNotes,
+      });
+
+      // Send delivery email if requested
+      if (dto.sendEmail) {
+        const recipientEmail = order.clientEmail || order.client?.email;
+        if (recipientEmail && !order.deliveryEmailSent) {
+          const jobId = `delivery-${order.id}-${now.toISOString().split('T')[0]}`;
+          await this.notificationQueue.add(
+            'send-delivery-confirmation',
+            {
+              orderId: order.id,
+              clientEmail: recipientEmail,
+              clientName: order.clientName,
+              trackingHash,
+            },
+            {
+              jobId,
+              delay: 5000,
+              attempts: 3,
+            },
+          );
+          await this.orderRepository.update(order.id, { deliveryEmailSent: true });
+        }
+      }
+    }
+
+    this.logger.log(`${orders.length} orders marked as delivered by admin ${userId}`);
+
+    return {
+      success: true,
+      delivered: orders.length,
+      message: `${orders.length} pedido(s) marcado(s) como entregado(s)`,
+    };
+  }
+
+  /**
+   * Admin changes status of RETURNED_TO_PURCHASING orders
+   * Can move them to READY, IN_TRANSIT, or back to RETURNED_TO_PURCHASING
+   */
+  async adminChangeReviewStatus(
+    orderIds: string[],
+    targetStatus: 'READY' | 'IN_TRANSIT' | 'RETURNED_TO_PURCHASING',
+    comment: string,
+    userId: string,
+  ): Promise<{ success: boolean; updated: number; message: string }> {
+    if (!orderIds || orderIds.length === 0) {
+      throw new BadRequestException('Debe seleccionar al menos un pedido');
+    }
+
+    if (!comment || comment.trim().length === 0) {
+      throw new BadRequestException('Debe ingresar un comentario');
+    }
+
+    const validTargets = [OrderStatus.READY, OrderStatus.IN_TRANSIT, OrderStatus.RETURNED_TO_PURCHASING];
+    if (!validTargets.includes(targetStatus as OrderStatus)) {
+      throw new BadRequestException('Estado destino no válido');
+    }
+
+    const orders = await this.orderRepository.find({
+      where: {
+        id: In(orderIds),
+        status: OrderStatus.RETURNED_TO_PURCHASING,
+      },
+    });
+
+    if (orders.length === 0) {
+      throw new BadRequestException('No se encontraron pedidos en revisión');
+    }
+
+    const now = new Date();
+    const statusLabel = targetStatus === 'READY' ? 'ACTIVO'
+      : targetStatus === 'IN_TRANSIT' ? 'EN RUTA'
+      : 'REGRESADO A COMPRAS';
+
+    for (const order of orders) {
+      const adminNote = `[CAMBIO A ${statusLabel} POR ADMIN ${now.toLocaleDateString('es-MX')}] ${comment.trim()}`;
+      const existingNotes = order.internalNotes || '';
+      const updatedNotes = existingNotes
+        ? `${existingNotes}\n\n${adminNote}`
+        : adminNote;
+
+      await this.orderRepository.update(order.id, {
+        status: targetStatus as OrderStatus,
+        internalNotes: updatedNotes,
+      });
+    }
+
+    this.logger.log(`${orders.length} orders changed to ${targetStatus} by admin ${userId}`);
+
+    return {
+      success: true,
+      updated: orders.length,
+      message: `${orders.length} pedido(s) movido(s) a ${statusLabel}`,
     };
   }
 }

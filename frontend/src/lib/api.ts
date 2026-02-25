@@ -157,6 +157,14 @@ export const ordersApi = {
   // Cancel orders (DRAFT or RETURNED_TO_PURCHASING only)
   cancelOrders: (orderIds: string[], reason?: string) =>
     api.post('/orders/cancel', { orderIds, reason }),
+
+  // Admin marks IN_TRANSIT orders as delivered (with comment)
+  adminMarkDelivered: (orderIds: string[], comment: string, sendEmail: boolean) =>
+    api.post('/orders/admin-mark-delivered', { orderIds, comment, sendEmail }),
+
+  // Admin changes status of RETURNED_TO_PURCHASING orders (with comment)
+  adminReviewAction: (orderIds: string[], targetStatus: string, comment: string) =>
+    api.post('/orders/admin-review-action', { orderIds, targetStatus, comment }),
 };
 
 // Users API

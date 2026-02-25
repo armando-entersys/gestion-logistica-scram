@@ -331,6 +331,22 @@ export class UpdatePromisedDateDto {
   promisedDate: string;
 }
 
+export class AdminMarkDeliveredDto {
+  @ApiProperty({ description: 'UUIDs de los pedidos a marcar como entregados' })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  orderIds: string[];
+
+  @ApiProperty({ description: 'Comentario del admin explicando por qué se marca como entregado' })
+  @IsString()
+  comment: string;
+
+  @ApiPropertyOptional({ description: 'Enviar email de confirmación al cliente', default: false })
+  @IsOptional()
+  @IsBoolean()
+  sendEmail?: boolean;
+}
+
 export class OrderFilterDto {
   @ApiPropertyOptional({ description: 'Status filter (single or comma-separated)', example: 'DRAFT,READY' })
   @IsOptional()
