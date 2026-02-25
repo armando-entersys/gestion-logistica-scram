@@ -216,6 +216,16 @@ export default function PlanningPage() {
   const [confirmingOrder, setConfirmingOrder] = useState<Order | null>(null);
   const [deliveryEvidenceFile, setDeliveryEvidenceFile] = useState<File | null>(null);
 
+  // Admin mark delivered dialog state
+  const [adminDeliverDialogOpen, setAdminDeliverDialogOpen] = useState(false);
+  const [adminDeliverComment, setAdminDeliverComment] = useState('');
+  const [adminDeliverSendEmail, setAdminDeliverSendEmail] = useState(false);
+
+  // Admin review action dialog state (for RETURNED_TO_PURCHASING orders)
+  const [reviewActionDialogOpen, setReviewActionDialogOpen] = useState(false);
+  const [reviewActionTarget, setReviewActionTarget] = useState<'READY' | 'IN_TRANSIT' | 'RETURNED_TO_PURCHASING'>('READY');
+  const [reviewActionComment, setReviewActionComment] = useState('');
+
   // Parse dates without timezone shift for date-only strings (YYYY-MM-DD)
   const parseDate = (dateStr: string): Date => {
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -474,6 +484,45 @@ export default function PlanningPage() {
     },
     onError: (error: any) => {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error al cancelar pedidos', severity: 'error' });
+    },
+  });
+
+  // Admin mark as delivered mutation
+  const adminDeliverMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
+      if (!adminDeliverComment.trim()) throw new Error('Ingresa un comentario');
+      return ordersApi.adminMarkDelivered(selectedOrderIds, adminDeliverComment.trim(), adminDeliverSendEmail);
+    },
+    onSuccess: (response) => {
+      setSnackbar({ open: true, message: response.data.message || 'Pedidos marcados como entregados', severity: 'success' });
+      setSelectedOrderIds([]);
+      setAdminDeliverDialogOpen(false);
+      setAdminDeliverComment('');
+      setAdminDeliverSendEmail(false);
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al marcar entrega', severity: 'error' });
+    },
+  });
+
+  // Admin review action mutation (for RETURNED_TO_PURCHASING orders)
+  const reviewActionMutation = useMutation({
+    mutationFn: async () => {
+      if (selectedOrderIds.length === 0) throw new Error('Selecciona pedidos');
+      if (!reviewActionComment.trim()) throw new Error('Ingresa un comentario');
+      return ordersApi.adminReviewAction(selectedOrderIds, reviewActionTarget, reviewActionComment.trim());
+    },
+    onSuccess: (response) => {
+      setSnackbar({ open: true, message: response.data.message || 'Pedidos actualizados', severity: 'success' });
+      setSelectedOrderIds([]);
+      setReviewActionDialogOpen(false);
+      setReviewActionComment('');
+      queryClient.invalidateQueries({ queryKey: ['planning-orders'] });
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al cambiar estado', severity: 'error' });
     },
   });
 
@@ -1207,26 +1256,86 @@ export default function PlanningPage() {
                 >
                   Regresar a Compras ({selectedOrderIds.length})
                 </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  color="success"
+                  disabled={selectedOrderIds.length === 0}
+                  onClick={() => setAdminDeliverDialogOpen(true)}
+                  startIcon={<CheckCircleIcon />}
+                  fullWidth
+                >
+                  Marcar Entregado ({selectedOrderIds.length})
+                </Button>
               </Stack>
             )}
             {/* Actions for RETURNED_TO_PURCHASING orders */}
             {statusFilter === 3 && (
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="error"
-                  disabled={selectedOrderIds.length === 0 || cancelOrdersMutation.isPending}
-                  onClick={() => {
-                    if (confirm('¿Cancelar los pedidos seleccionados? Esta acción no se puede deshacer.')) {
-                      cancelOrdersMutation.mutate();
-                    }
-                  }}
-                  startIcon={<CancelIcon />}
-                  sx={{ flex: 1 }}
-                >
-                  Cancelar Pedidos ({selectedOrderIds.length})
-                </Button>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="primary"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => {
+                      setReviewActionTarget('READY');
+                      setReviewActionComment('');
+                      setReviewActionDialogOpen(true);
+                    }}
+                    startIcon={<PlayArrowIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    Activar ({selectedOrderIds.length})
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="info"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => {
+                      setReviewActionTarget('IN_TRANSIT');
+                      setReviewActionComment('');
+                      setReviewActionDialogOpen(true);
+                    }}
+                    startIcon={<LocalShippingIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    En Ruta ({selectedOrderIds.length})
+                  </Button>
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="warning"
+                    disabled={selectedOrderIds.length === 0}
+                    onClick={() => {
+                      setReviewActionTarget('RETURNED_TO_PURCHASING');
+                      setReviewActionComment('');
+                      setReviewActionDialogOpen(true);
+                    }}
+                    startIcon={<UndoIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    A Compras ({selectedOrderIds.length})
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    disabled={selectedOrderIds.length === 0 || cancelOrdersMutation.isPending}
+                    onClick={() => {
+                      if (confirm('¿Cancelar los pedidos seleccionados? Esta acción no se puede deshacer.')) {
+                        cancelOrdersMutation.mutate();
+                      }
+                    }}
+                    startIcon={<CancelIcon />}
+                    sx={{ flex: 1 }}
+                  >
+                    Cancelar ({selectedOrderIds.length})
+                  </Button>
+                </Stack>
               </Stack>
             )}
             {/* No actions for DELIVERED or CANCELLED */}
@@ -1999,6 +2108,82 @@ export default function PlanningPage() {
             startIcon={confirmDeliveryMutation.isPending ? <CircularProgress size={16} /> : <CheckCircleIcon />}
           >
             {confirmDeliveryMutation.isPending ? 'Confirmando...' : 'Confirmar Entrega'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin Mark Delivered Dialog */}
+      <Dialog open={adminDeliverDialogOpen} onClose={() => setAdminDeliverDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Marcar como Entregado</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Se marcarán {selectedOrderIds.length} pedido(s) como entregados. Ingresa un comentario explicando por qué se marcan como entregados desde el panel.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            rows={3}
+            label="Comentario *"
+            placeholder="Ej: Cliente confirmó recepción por teléfono..."
+            value={adminDeliverComment}
+            onChange={(e) => setAdminDeliverComment(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={adminDeliverSendEmail}
+                onChange={(e) => setAdminDeliverSendEmail(e.target.checked)}
+              />
+            }
+            label="Enviar email de confirmación de entrega al cliente"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAdminDeliverDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => adminDeliverMutation.mutate()}
+            disabled={!adminDeliverComment.trim() || adminDeliverMutation.isPending}
+            startIcon={adminDeliverMutation.isPending ? <CircularProgress size={16} /> : <CheckCircleIcon />}
+          >
+            {adminDeliverMutation.isPending ? 'Procesando...' : 'Confirmar Entrega'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Admin Review Action Dialog (for RETURNED_TO_PURCHASING) */}
+      <Dialog open={reviewActionDialogOpen} onClose={() => setReviewActionDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {reviewActionTarget === 'READY' ? 'Mover a Activos' : reviewActionTarget === 'IN_TRANSIT' ? 'Mover a En Ruta' : 'Regresar a Compras'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Se cambiarán {selectedOrderIds.length} pedido(s) de &quot;En Revisión&quot; a &quot;{reviewActionTarget === 'READY' ? 'Activo' : reviewActionTarget === 'IN_TRANSIT' ? 'En Ruta' : 'Regresado a Compras'}&quot;. Ingresa un comentario.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            rows={3}
+            label="Comentario *"
+            placeholder="Ej: Se verificó con el cliente y confirma recepción..."
+            value={reviewActionComment}
+            onChange={(e) => setReviewActionComment(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReviewActionDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color={reviewActionTarget === 'READY' ? 'primary' : reviewActionTarget === 'IN_TRANSIT' ? 'info' : 'warning'}
+            onClick={() => reviewActionMutation.mutate()}
+            disabled={!reviewActionComment.trim() || reviewActionMutation.isPending}
+            startIcon={reviewActionMutation.isPending ? <CircularProgress size={16} /> : null}
+          >
+            {reviewActionMutation.isPending ? 'Procesando...' : 'Confirmar'}
           </Button>
         </DialogActions>
       </Dialog>

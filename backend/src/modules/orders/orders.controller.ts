@@ -41,6 +41,7 @@ import {
   RespondAddressChangeDto,
   ReturnOrderDto,
   ConfirmPickupDto,
+  AdminMarkDeliveredDto,
 } from './dto';
 
 /**
@@ -610,5 +611,45 @@ export class OrdersController {
     @CurrentUser('id') userId: string,
   ) {
     return this.ordersService.cancelOrders(body.orderIds, body.reason, userId);
+  }
+
+  /**
+   * Admin marks IN_TRANSIT orders as DELIVERED
+   * Requires a comment explaining why admin is marking delivery
+   * Optionally sends delivery confirmation email to client
+   */
+  @Post('admin-mark-delivered')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin marks orders as delivered with comment' })
+  adminMarkDelivered(
+    @Body() dto: AdminMarkDeliveredDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ordersService.adminMarkDelivered(dto, userId);
+  }
+
+  /**
+   * Admin changes status of RETURNED_TO_PURCHASING (En Revisión) orders
+   * Can move to READY, IN_TRANSIT, or RETURNED_TO_PURCHASING
+   */
+  @Post('admin-review-action')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Admin changes review status of orders with comment' })
+  adminReviewAction(
+    @Body() body: { orderIds: string[]; targetStatus: string; comment: string },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.ordersService.adminChangeReviewStatus(
+      body.orderIds,
+      body.targetStatus as any,
+      body.comment,
+      userId,
+    );
   }
 }
