@@ -32,7 +32,7 @@ export class ClientsService {
 
     const queryBuilder = this.clientRepo
       .createQueryBuilder('client')
-      .loadRelationCountAndMap('client.orderCount', 'client.orders')
+      .loadRelationCountAndMap('client.totalOrders', 'client.orders')
       .loadRelationCountAndMap('client.addressCount', 'client.addresses');
 
     if (filters.search) {
