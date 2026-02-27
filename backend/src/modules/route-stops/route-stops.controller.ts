@@ -85,6 +85,22 @@ export class RouteStopsController {
     return this.routeStopsService.getPendingRouteStops();
   }
 
+  @Get('completed')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiOperation({ summary: 'Get completed/cancelled route stops' })
+  getCompletedStops() {
+    return this.routeStopsService.getCompletedRouteStops();
+  }
+
+  @Get('in-transit')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING)
+  @ApiOperation({ summary: 'Get in-transit route stops' })
+  getInTransitStops() {
+    return this.routeStopsService.getInTransitRouteStops();
+  }
+
   @Get('my-stops')
   @UseGuards(RolesGuard)
   @Roles(UserRole.DRIVER)

@@ -158,6 +158,11 @@ interface RouteStopItem {
   estimatedArrivalStart?: string;
   estimatedArrivalEnd?: string;
   pickupPointId?: string;
+  completedAt?: string;
+  completedBy?: string;
+  completionNotes?: string;
+  assignedDriverId?: string;
+  createdAt?: string;
 }
 
 interface PickupPoint {
@@ -385,7 +390,7 @@ export default function PlanningPage() {
   });
 
   // Route stops queries
-  const { data: pendingStopsData, refetch: refetchStops } = useQuery({
+  const { data: pendingStopsData, refetch: refetchPendingStops } = useQuery({
     queryKey: ['pending-route-stops'],
     queryFn: async () => {
       const response = await routeStopsApi.getPending();
@@ -393,6 +398,26 @@ export default function PlanningPage() {
     },
   });
   const pendingStops: RouteStopItem[] = pendingStopsData || [];
+
+  const { data: completedStopsData, refetch: refetchCompletedStops } = useQuery({
+    queryKey: ['completed-route-stops'],
+    queryFn: async () => {
+      const response = await routeStopsApi.getCompleted();
+      return response.data as RouteStopItem[];
+    },
+  });
+  const completedStops: RouteStopItem[] = completedStopsData || [];
+
+  const { data: inTransitStopsData, refetch: refetchInTransitStops } = useQuery({
+    queryKey: ['in-transit-route-stops'],
+    queryFn: async () => {
+      const response = await routeStopsApi.getInTransit();
+      return response.data as RouteStopItem[];
+    },
+  });
+  const inTransitStops: RouteStopItem[] = inTransitStopsData || [];
+
+  const refetchStops = () => { refetchPendingStops(); refetchCompletedStops(); refetchInTransitStops(); };
 
   const { data: pickupPointsData } = useQuery({
     queryKey: ['pickup-points', pickupPointSearch],
@@ -409,13 +434,16 @@ export default function PlanningPage() {
 
   const stats = useMemo(() => {
     const ready = orders.filter((o) => o.status === 'READY').length;
-    const inTransit = orders.filter((o) => o.status === 'IN_TRANSIT').length;
-    const delivered = orders.filter((o) => o.status === 'DELIVERED').length;
+    const inTransitOrders = orders.filter((o) => o.status === 'IN_TRANSIT').length;
+    const inTransit = inTransitOrders + inTransitStops.length;
+    const deliveredOrders = orders.filter((o) => o.status === 'DELIVERED').length;
+    const completedStopsCount = completedStops.filter((s) => s.status === 'COMPLETED').length;
+    const delivered = deliveredOrders + completedStopsCount;
     const returnedToPurchasing = orders.filter((o) => o.status === 'RETURNED_TO_PURCHASING').length;
     const cancelled = orders.filter((o) => o.status === 'CANCELLED').length;
     const urgent = orders.filter((o) => o.priorityLevel === 3 && o.status !== 'DELIVERED' && o.status !== 'CANCELLED').length;
-    return { ready, inTransit, delivered, returnedToPurchasing, cancelled, urgent, active: ready + inTransit };
-  }, [orders]);
+    return { ready, inTransit, delivered, returnedToPurchasing, cancelled, urgent, active: ready + inTransitOrders };
+  }, [orders, completedStops, inTransitStops]);
 
   const filteredOrders = useMemo(() => {
     let result = orders;
@@ -1257,7 +1285,7 @@ export default function PlanningPage() {
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
                 <CircularProgress size={32} />
               </Box>
-            ) : filteredOrders.length === 0 ? (
+            ) : filteredOrders.length === 0 && !(statusFilter === 0 && pendingStops.length > 0) && !(statusFilter === 1 && inTransitStops.length > 0) && !(statusFilter === 2 && completedStops.filter(s => s.status === 'COMPLETED').length > 0) ? (
               <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
                 <LocalShippingIcon sx={{ fontSize: 48, opacity: 0.3, mb: 1 }} />
                 <Typography variant="body2">No hay pedidos</Typography>
@@ -1328,6 +1356,77 @@ export default function PlanningPage() {
                         >
                           <CancelIcon fontSize="small" />
                         </IconButton>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+                {/* Completed Route Stops (shown in Entregados tab) */}
+                {statusFilter === 2 && completedStops.filter(s => s.status === 'COMPLETED').map((stop) => (
+                  <Card
+                    key={`stop-${stop.id}`}
+                    variant="outlined"
+                    sx={{ borderColor: stop.stopType === 'PICKUP' ? 'info.main' : 'secondary.main', borderWidth: 1, opacity: 0.9 }}
+                  >
+                    <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <CheckCircleIcon fontSize="small" color="success" />
+                        <Chip
+                          size="small"
+                          label={stop.stopType === 'PICKUP' ? 'Recolección' : 'Documentación'}
+                          color={stop.stopType === 'PICKUP' ? 'info' : 'secondary'}
+                          variant="filled"
+                          sx={{ fontSize: '0.65rem', height: 20 }}
+                        />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>{stop.clientName}</Typography>
+                          {stop.itemsDescription && (
+                            <Typography variant="caption" color="text.secondary" noWrap display="block" fontWeight={600}>
+                              {stop.stopType === 'PICKUP' ? '📥 ' : '📄 '}{stop.itemsDescription}
+                            </Typography>
+                          )}
+                          {stop.completionNotes && (
+                            <Typography variant="caption" color="text.disabled" noWrap display="block">
+                              Notas: {stop.completionNotes}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                          {formatDateTime(stop.completedAt)}
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
+                {/* In-Transit Route Stops (shown in En Ruta tab) */}
+                {statusFilter === 1 && inTransitStops.map((stop) => (
+                  <Card
+                    key={`stop-${stop.id}`}
+                    variant="outlined"
+                    sx={{ borderColor: stop.stopType === 'PICKUP' ? 'info.main' : 'secondary.main', borderWidth: 1 }}
+                  >
+                    <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <LocalShippingIcon fontSize="small" color="warning" />
+                        <Chip
+                          size="small"
+                          label={stop.stopType === 'PICKUP' ? 'Recolección' : 'Documentación'}
+                          color={stop.stopType === 'PICKUP' ? 'info' : 'secondary'}
+                          variant="filled"
+                          sx={{ fontSize: '0.65rem', height: 20 }}
+                        />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>{stop.clientName}</Typography>
+                          {stop.itemsDescription && (
+                            <Typography variant="caption" color="text.secondary" noWrap display="block" fontWeight={600}>
+                              {stop.stopType === 'PICKUP' ? '📥 ' : '📄 '}{stop.itemsDescription}
+                            </Typography>
+                          )}
+                          {stop.addressRaw && (
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {[stop.addressRaw.street, stop.addressRaw.number, stop.addressRaw.neighborhood].filter(Boolean).join(' ')}
+                            </Typography>
+                          )}
+                        </Box>
                       </Stack>
                     </CardContent>
                   </Card>

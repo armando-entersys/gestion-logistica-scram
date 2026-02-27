@@ -413,6 +413,12 @@ export const routeStopsApi = {
   getPending: () =>
     api.get('/route-stops/pending'),
 
+  getCompleted: () =>
+    api.get('/route-stops/completed'),
+
+  getInTransit: () =>
+    api.get('/route-stops/in-transit'),
+
   getMyStops: () =>
     api.get('/route-stops/my-stops'),
 

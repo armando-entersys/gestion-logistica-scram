@@ -187,6 +187,21 @@ export class RouteStopsService {
     });
   }
 
+  async getCompletedRouteStops(): Promise<RouteStop[]> {
+    return this.routeStopRepo.find({
+      where: { status: In([RouteStopStatus.COMPLETED, RouteStopStatus.CANCELLED]) },
+      order: { completedAt: 'DESC' },
+      take: 100,
+    });
+  }
+
+  async getInTransitRouteStops(): Promise<RouteStop[]> {
+    return this.routeStopRepo.find({
+      where: { status: RouteStopStatus.IN_TRANSIT },
+      order: { routePosition: 'ASC' },
+    });
+  }
+
   async getRouteStopById(id: string): Promise<RouteStop> {
     const stop = await this.routeStopRepo.findOne({ where: { id } });
     if (!stop) throw new NotFoundException('Parada no encontrada');
