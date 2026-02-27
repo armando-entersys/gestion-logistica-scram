@@ -66,7 +66,7 @@ export function useSync() {
           // Get ALL local evidence for this order
           const evidenceList = await db.evidence
             .where('orderId')
-            .equals(item.payload.orderId)
+            .equals(item.payload.orderId!)
             .toArray();
 
           // Build array of evidence items to send
@@ -150,6 +150,18 @@ export function useSync() {
             `${API_URL}/orders/${item.payload.orderId}/en-route`,
             {
               etaDurationMinutes: item.payload.etaDurationMinutes,
+            },
+            { headers }
+          );
+          break;
+        }
+
+        case 'route-stop-complete': {
+          await axios.patch(
+            `${API_URL}/route-stops/${item.payload.stopId}/complete`,
+            {
+              completionNotes: item.payload.completionNotes || undefined,
+              base64Photo: item.payload.base64Photo || undefined,
             },
             { headers }
           );

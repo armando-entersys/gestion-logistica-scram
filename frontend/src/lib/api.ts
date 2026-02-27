@@ -73,8 +73,8 @@ export const ordersApi = {
   assign: (driverId: string, orderIds: string[]) =>
     api.post('/orders/assign', { driverId, orderIds }),
 
-  dispatch: (driverId: string, orderIds: string[], startTime?: string) =>
-    api.post('/orders/dispatch', { driverId, orderIds, startTime }),
+  dispatch: (driverId: string, orderIds: string[], startTime?: string, routeStopIds?: string[]) =>
+    api.post('/orders/dispatch', { driverId, orderIds, startTime, routeStopIds }),
 
   updateLocation: (orderId: string, latitude: number, longitude: number) =>
     api.patch('/orders/location', { orderId, latitude, longitude }),
@@ -258,7 +258,7 @@ export const routesApi = {
     api.get('/routes/nearby', { params: { lat, lng, radius } }),
 
   // Route optimization with Google Routes API
-  optimize: (orderIds: string[], options?: { startTime?: string; respectPriority?: boolean }) =>
+  optimize: (orderIds: string[], options?: { startTime?: string; respectPriority?: boolean; routeStopIds?: string[] }) =>
     api.post<{
       success: boolean;
       optimization: {
@@ -284,6 +284,7 @@ export const routesApi = {
       warnings: string[];
     }>('/routes/optimize', {
       orderIds,
+      routeStopIds: options?.routeStopIds || [],
       startTime: options?.startTime || '09:00',
       respectPriority: options?.respectPriority ?? true,
     }),
@@ -374,4 +375,76 @@ export const clientAddressesApi = {
 
   delete: (id: string) =>
     api.delete(`/client-addresses/${id}`),
+};
+
+// Route Stops API
+export const routeStopsApi = {
+  // Pickup Points
+  getPickupPoints: (clientId?: string) =>
+    api.get('/route-stops/pickup-points', { params: clientId ? { clientId } : {} }),
+
+  searchPickupPoints: (q: string) =>
+    api.get('/route-stops/pickup-points/search', { params: { q } }),
+
+  createPickupPoint: (data: {
+    clientId?: string;
+    clientName: string;
+    contactName?: string;
+    contactPhone?: string;
+    label?: string;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    reference?: string;
+    latitude?: number;
+    longitude?: number;
+  }) => api.post('/route-stops/pickup-points', data),
+
+  updatePickupPoint: (id: string, data: Record<string, any>) =>
+    api.patch(`/route-stops/pickup-points/${id}`, data),
+
+  deletePickupPoint: (id: string) =>
+    api.delete(`/route-stops/pickup-points/${id}`),
+
+  // Route Stops
+  getPending: () =>
+    api.get('/route-stops/pending'),
+
+  getMyStops: () =>
+    api.get('/route-stops/my-stops'),
+
+  create: (data: {
+    stopType: 'PICKUP' | 'DOCUMENTATION';
+    pickupPointId?: string;
+    clientId?: string;
+    clientName: string;
+    contactName?: string;
+    contactPhone?: string;
+    addressRaw?: {
+      street?: string;
+      number?: string;
+      neighborhood?: string;
+      postalCode?: string;
+      city?: string;
+      state?: string;
+      reference?: string;
+    };
+    latitude?: number;
+    longitude?: number;
+    description?: string;
+    itemsDescription?: string;
+    internalNotes?: string;
+  }) => api.post('/route-stops', data),
+
+  complete: (id: string, data: { completionNotes?: string; base64Photo?: string }) =>
+    api.patch(`/route-stops/${id}/complete`, data),
+
+  cancel: (id: string) =>
+    api.patch(`/route-stops/${id}/cancel`),
+
+  dispatch: (stopIds: string[], driverId: string) =>
+    api.post('/route-stops/dispatch', { stopIds, driverId }),
 };

@@ -19,6 +19,7 @@ import { ClientsModule } from './modules/clients/clients.module';
 import { PushSubscriptionsModule } from './modules/push-subscriptions/push-subscriptions.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { RouteStopsModule } from './modules/route-stops/route-stops.module';
 
 // Configuration
 import configuration from './config/configuration';
@@ -89,6 +90,7 @@ import { typeOrmConfig } from './config/typeorm.config';
     PushSubscriptionsModule,
     WebhooksModule,
     StorageModule,
+    RouteStopsModule,
   ],
 })
 export class AppModule { }

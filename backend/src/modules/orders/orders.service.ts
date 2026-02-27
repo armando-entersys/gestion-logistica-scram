@@ -29,6 +29,7 @@ import { ClientAddressesService } from '@/modules/client-addresses/client-addres
 import { ClientsService } from '@/modules/clients/clients.service';
 import { PushSubscriptionsService } from '@/modules/push-subscriptions/push-subscriptions.service';
 import { StorageService } from '@/modules/storage/storage.service';
+import { RouteStopsService } from '@/modules/route-stops/route-stops.service';
 
 @Injectable()
 export class OrdersService {
@@ -49,6 +50,7 @@ export class OrdersService {
     private readonly clientsService: ClientsService,
     private readonly pushService: PushSubscriptionsService,
     private readonly storageService: StorageService,
+    private readonly routeStopsService: RouteStopsService,
   ) { }
 
   /**
@@ -575,6 +577,7 @@ export class OrdersService {
   async dispatchRoute(dto: DispatchRouteDto): Promise<{
     dispatched: number;
     emailsQueued: number;
+    stopsDispatched: number;
   }> {
     this.logger.log(`Dispatch request: driver=${dto.driverId}, orders=${dto.orderIds.length}, startTime=${dto.startTime}`);
 
@@ -694,8 +697,15 @@ export class OrdersService {
       emailsQueued++;
     }
 
-    this.logger.log(`Route dispatched: ${dto.orderIds.length} orders, ${emailsQueued} batch emails queued`);
-    return { dispatched: dto.orderIds.length, emailsQueued };
+    // Dispatch route stops if provided
+    let stopsDispatched = 0;
+    if (dto.routeStopIds && dto.routeStopIds.length > 0 && this.routeStopsService) {
+      stopsDispatched = await this.routeStopsService.dispatchStops(dto.routeStopIds, dto.driverId);
+      this.logger.log(`Dispatched ${stopsDispatched} route stops alongside orders`);
+    }
+
+    this.logger.log(`Route dispatched: ${dto.orderIds.length} orders, ${stopsDispatched} stops, ${emailsQueued} batch emails queued`);
+    return { dispatched: dto.orderIds.length, emailsQueued, stopsDispatched };
   }
 
   /**
@@ -1128,33 +1138,10 @@ export class OrdersService {
   }
 
   /**
-   * Ruta del chofer (solo sus pedidos asignados)
+   * Ruta del chofer (pedidos + paradas asignadas)
    */
-  async getDriverRoute(driverId: string): Promise<Partial<Order>[]> {
+  async getDriverRoute(driverId: string): Promise<{ orders: Partial<Order>[]; routeStops: any[] }> {
     this.logger.log(`getDriverRoute called for driver: ${driverId}`);
-
-    // Debug: count orders assigned to this driver
-    const totalAssigned = await this.orderRepository.count({
-      where: { assignedDriverId: driverId },
-    });
-    this.logger.log(`Total orders assigned to driver ${driverId}: ${totalAssigned}`);
-
-    // Debug: count by status
-    const inTransitCount = await this.orderRepository.count({
-      where: { assignedDriverId: driverId, status: OrderStatus.IN_TRANSIT },
-    });
-    const readyCount = await this.orderRepository.count({
-      where: { assignedDriverId: driverId, status: OrderStatus.READY },
-    });
-    this.logger.log(`Driver ${driverId} orders - IN_TRANSIT: ${inTransitCount}, READY: ${readyCount}`);
-
-    if (totalAssigned === 0) {
-      // Check if there are any dispatched orders at all
-      const allInTransit = await this.orderRepository.count({
-        where: { status: OrderStatus.IN_TRANSIT },
-      });
-      this.logger.log(`Total IN_TRANSIT orders in system: ${allInTransit}`);
-    }
 
     const orders = await this.orderRepository.find({
       where: {
@@ -1184,7 +1171,12 @@ export class OrdersService {
       ],
     });
 
-    return orders;
+    // Get route stops for this driver
+    const routeStops = await this.routeStopsService.getRouteStopsByDriver(driverId);
+
+    this.logger.log(`Driver ${driverId}: ${orders.length} orders, ${routeStops.length} route stops`);
+
+    return { orders, routeStops };
   }
 
   /**

@@ -12,6 +12,7 @@ import { ClientAddressesModule } from '@/modules/client-addresses/client-address
 import { ClientsModule } from '@/modules/clients/clients.module';
 import { PushSubscriptionsModule } from '@/modules/push-subscriptions/push-subscriptions.module';
 import { StorageModule } from '@/modules/storage/storage.module';
+import { RouteStopsModule } from '@/modules/route-stops/route-stops.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StorageModule } from '@/modules/storage/storage.module';
     ClientsModule,
     PushSubscriptionsModule,
     StorageModule,
+    RouteStopsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, GeocodingService],

@@ -192,6 +192,12 @@ export class DispatchRouteDto {
   @IsUUID('4', { each: true })
   orderIds: string[];
 
+  @ApiPropertyOptional({ description: 'IDs de route stops a despachar junto con las órdenes' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  routeStopIds?: string[];
+
   @ApiPropertyOptional({ description: 'Hora de inicio de ruta (HH:mm)', default: '09:00' })
   @IsOptional()
   @IsString()

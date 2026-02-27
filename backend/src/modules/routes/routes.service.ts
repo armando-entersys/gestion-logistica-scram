@@ -4,8 +4,10 @@ import { Repository, In } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 
 import { Order } from '../orders/entities/order.entity';
-import { OrderStatus, PriorityLevel } from '@/common/enums';
+import { RouteStop } from '../route-stops/entities/route-stop.entity';
+import { OrderStatus, PriorityLevel, RouteStopStatus } from '@/common/enums';
 import { GoogleRoutesService } from '@/common/services/google-routes.service';
+import { RouteStopsService } from '../route-stops/route-stops.service';
 import { OptimizationResult, OptimizationLeg } from './dto/optimize-route.dto';
 
 @Injectable()
@@ -15,8 +17,11 @@ export class RoutesService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(RouteStop)
+    private readonly routeStopRepository: Repository<RouteStop>,
     private readonly configService: ConfigService,
     private readonly googleRoutesService: GoogleRoutesService,
+    private readonly routeStopsService: RouteStopsService,
   ) {}
 
   /**
@@ -35,24 +40,37 @@ export class RoutesService {
   }
 
   /**
-   * Get active routes (orders in transit)
+   * Get active routes (orders + route stops in transit)
    */
-  async getActiveRoutes(): Promise<Map<string, Order[]>> {
+  async getActiveRoutes(): Promise<Map<string, { orders: Order[]; routeStops: RouteStop[] }>> {
     const orders = await this.orderRepository.find({
       where: { status: OrderStatus.IN_TRANSIT },
       relations: ['assignedDriver'],
       order: { routePosition: 'ASC' },
     });
 
+    const stops = await this.routeStopRepository.find({
+      where: { status: RouteStopStatus.IN_TRANSIT },
+      order: { routePosition: 'ASC' },
+    });
+
     // Group by driver
-    const routesByDriver = new Map<string, Order[]>();
+    const routesByDriver = new Map<string, { orders: Order[]; routeStops: RouteStop[] }>();
 
     for (const order of orders) {
       const driverId = order.assignedDriverId || 'unassigned';
       if (!routesByDriver.has(driverId)) {
-        routesByDriver.set(driverId, []);
+        routesByDriver.set(driverId, { orders: [], routeStops: [] });
       }
-      routesByDriver.get(driverId)!.push(order);
+      routesByDriver.get(driverId)!.orders.push(order);
+    }
+
+    for (const stop of stops) {
+      const driverId = stop.assignedDriverId || 'unassigned';
+      if (!routesByDriver.has(driverId)) {
+        routesByDriver.set(driverId, { orders: [], routeStops: [] });
+      }
+      routesByDriver.get(driverId)!.routeStops.push(stop);
     }
 
     return routesByDriver;
@@ -114,13 +132,14 @@ export class RoutesService {
   }
 
   /**
-   * Optimiza la ruta de un conjunto de ordenes usando Google Routes API
+   * Optimiza la ruta de un conjunto de ordenes (y opcionalmente route stops) usando Google Routes API
    * RF-13: Optimizacion de Rutas con IA
    */
   async optimizeRoute(
     orderIds: string[],
     startTime: string = '09:00',
     respectPriority: boolean = true,
+    routeStopIds: string[] = [],
   ): Promise<{ optimization: OptimizationResult; warnings: string[] }> {
     const warnings: string[] = [];
 
@@ -135,6 +154,15 @@ export class RoutesService {
       warnings.push(`${missingIds.length} ordenes no encontradas`);
     }
 
+    // 1b. Obtener route stops si se proporcionaron
+    const routeStops = routeStopIds.length > 0
+      ? await this.routeStopsService.getRouteStopsByIds(routeStopIds)
+      : [];
+
+    if (routeStops.length !== routeStopIds.length && routeStopIds.length > 0) {
+      warnings.push(`${routeStopIds.length - routeStops.length} paradas no encontradas`);
+    }
+
     // Filtrar ordenes sin coordenadas
     const ordersWithCoords = orders.filter((o) => o.latitude && o.longitude);
     const ordersWithoutCoords = orders.filter((o) => !o.latitude || !o.longitude);
@@ -145,8 +173,16 @@ export class RoutesService {
       );
     }
 
-    if (ordersWithCoords.length < 2) {
-      throw new Error('Se requieren al menos 2 ordenes geocodificadas para optimizar');
+    // Filtrar stops sin coordenadas
+    const stopsWithCoords = routeStops.filter((s) => s.latitude && s.longitude);
+    const stopsWithoutCoords = routeStops.filter((s) => !s.latitude || !s.longitude);
+    if (stopsWithoutCoords.length > 0) {
+      warnings.push(`${stopsWithoutCoords.length} paradas sin geocodificar`);
+    }
+
+    const totalWaypointsWithCoords = ordersWithCoords.length + stopsWithCoords.length;
+    if (totalWaypointsWithCoords < 2) {
+      throw new Error('Se requieren al menos 2 puntos geocodificados para optimizar');
     }
 
     // 2. Preparar resultado
@@ -344,13 +380,20 @@ export class RoutesService {
   }
 
   /**
-   * Aplica una optimizacion guardando routePosition en las ordenes
+   * Aplica una optimizacion guardando routePosition en las ordenes (y route stops)
    * Re-calcula los ETAs con Google Routes API para tiempos reales de manejo
    */
   async applyOptimization(
     optimizedOrderIds: string[],
     startTime: string = '09:00',
+    optimizedItems?: Array<{ type: 'order' | 'stop'; id: string }>,
   ): Promise<{ applied: number }> {
+    // If optimizedItems provided, use mixed mode
+    if (optimizedItems && optimizedItems.length > 0) {
+      return this.applyMixedOptimization(optimizedItems, startTime);
+    }
+
+    // Legacy: orders only
     // Intentar obtener ETAs reales de Google Maps
     const orders = await this.orderRepository.find({
       where: { id: In(optimizedOrderIds) },
@@ -429,6 +472,47 @@ export class RoutesService {
     return { applied };
   }
 
+  /**
+   * Aplica optimización para items mixtos (orders + route stops)
+   */
+  private async applyMixedOptimization(
+    items: Array<{ type: 'order' | 'stop'; id: string }>,
+    startTime: string,
+  ): Promise<{ applied: number }> {
+    const avgStopTime = this.configService.get<number>('business.averageStopTimeMinutes') || 30;
+    const bufferPercent = this.configService.get<number>('business.trafficBufferPercent') || 15;
+
+    const [hours, minutes] = startTime.split(':').map(Number);
+    let currentTime = new Date();
+    currentTime.setHours(hours || 9, minutes || 0, 0, 0);
+
+    let applied = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const position = i + 1;
+      const minutesToAdd = i * avgStopTime;
+      const bufferMinutes = Math.ceil(minutesToAdd * (bufferPercent / 100));
+
+      const etaStart = new Date(currentTime.getTime() + minutesToAdd * 60000);
+      const etaEnd = new Date(etaStart.getTime() + (avgStopTime + bufferMinutes) * 60000);
+
+      if (item.type === 'order') {
+        await this.orderRepository.update(item.id, {
+          routePosition: position,
+          estimatedArrivalStart: etaStart,
+          estimatedArrivalEnd: etaEnd,
+        });
+      } else {
+        await this.routeStopsService.updateStopRouteInfo(item.id, position, etaStart, etaEnd);
+      }
+      applied++;
+    }
+
+    this.logger.log(`Applied mixed optimization: ${applied} items`);
+    return { applied };
+  }
+
   // Helpers privados
   private parseStartTime(startTime: string): Date {
     const [hours, minutes] = startTime.split(':').map(Number);
@@ -458,6 +542,7 @@ export class RoutesService {
 
     return {
       orderId: order.id,
+      itemType: 'order',
       position,
       distanceKm: Math.round(distanceKm * 10) / 10,
       durationMinutes: Math.round(durationMinutes),

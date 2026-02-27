@@ -30,9 +30,9 @@ export class RoutesController {
   async getActiveRoutes() {
     const routes = await this.routesService.getActiveRoutes();
     // Convert Map to object for JSON serialization
-    const result: Record<string, any[]> = {};
-    routes.forEach((orders, driverId) => {
-      result[driverId] = orders;
+    const result: Record<string, { orders: any[]; routeStops: any[] }> = {};
+    routes.forEach((data, driverId) => {
+      result[driverId] = data;
     });
     return result;
   }
@@ -62,6 +62,7 @@ export class RoutesController {
       dto.orderIds,
       dto.startTime,
       dto.respectPriority ?? true,
+      dto.routeStopIds || [],
     );
 
     return {
@@ -79,6 +80,7 @@ export class RoutesController {
     const result = await this.routesService.applyOptimization(
       dto.optimizedOrderIds,
       dto.startTime,
+      dto.optimizedItems,
     );
 
     return {

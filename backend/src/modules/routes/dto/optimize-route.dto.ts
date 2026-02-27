@@ -1,5 +1,6 @@
 import { IsArray, IsString, IsBoolean, IsOptional, ArrayMinSize, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { StopType } from '@/common/enums';
 
 export class OptimizeRouteDto {
   @ApiProperty({
@@ -7,9 +8,16 @@ export class OptimizeRouteDto {
     example: ['uuid1', 'uuid2', 'uuid3'],
   })
   @IsArray()
-  @ArrayMinSize(2, { message: 'Se requieren al menos 2 ordenes para optimizar' })
   @IsUUID('4', { each: true })
   orderIds: string[];
+
+  @ApiPropertyOptional({
+    description: 'IDs de route stops a incluir en la optimización',
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  routeStopIds?: string[];
 
   @ApiPropertyOptional({
     description: 'Hora de inicio de la ruta (HH:mm)',
@@ -33,9 +41,15 @@ export class ApplyOptimizationDto {
     description: 'IDs de ordenes en el orden optimizado',
   })
   @IsArray()
-  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   optimizedOrderIds: string[];
+
+  @ApiPropertyOptional({
+    description: 'Items mixtos optimizados (orders + stops). Si presente, tiene prioridad sobre optimizedOrderIds.',
+  })
+  @IsOptional()
+  @IsArray()
+  optimizedItems?: Array<{ type: 'order' | 'stop'; id: string }>;
 
   @ApiPropertyOptional({
     description: 'Hora de inicio para calcular ETAs',
@@ -49,6 +63,9 @@ export class ApplyOptimizationDto {
 // Response interfaces
 export interface OptimizationLeg {
   orderId: string;
+  routeStopId?: string;
+  itemType: 'order' | 'stop';
+  stopType?: StopType;
   position: number;
   distanceKm: number;
   durationMinutes: number;

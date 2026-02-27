@@ -10,7 +10,7 @@ import Dexie, { Table } from 'dexie';
  * Incrementar este número fuerza limpieza de IndexedDB en todos los dispositivos
  * Útil cuando hay cambios de esquema o para forzar resincronización
  */
-const APP_DATA_VERSION = 4; // Incrementar para forzar limpieza de datos locales
+const APP_DATA_VERSION = 5; // Incrementar para forzar limpieza de datos locales
 const VERSION_KEY = 'scram_app_data_version';
 
 /**
@@ -27,6 +27,7 @@ export async function checkAndClearStaleData(): Promise<boolean> {
     try {
       // Limpiar todas las tablas de IndexedDB
       await db.orders.clear();
+      await db.routeStops.clear();
       await db.pendingSync.clear();
       await db.evidence.clear();
       // NO limpiar session para que el usuario no tenga que re-loguearse
@@ -87,11 +88,38 @@ export interface LocalOrder {
   }>;
 }
 
+export interface LocalRouteStop {
+  id: string;
+  stopType: 'PICKUP' | 'DOCUMENTATION';
+  status: 'PENDING' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
+  clientName: string;
+  contactName?: string;
+  contactPhone?: string;
+  addressRaw?: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    reference?: string;
+  };
+  latitude?: number;
+  longitude?: number;
+  description?: string;
+  itemsDescription?: string;
+  routePosition?: number;
+  estimatedArrivalStart?: string;
+  estimatedArrivalEnd?: string;
+  lastSyncedAt?: string;
+}
+
 export interface PendingSync {
   id?: number;
-  type: 'delivery' | 'evidence' | 'location' | 'pickup-confirmation' | 'en-route';
+  type: 'delivery' | 'evidence' | 'location' | 'pickup-confirmation' | 'en-route' | 'route-stop-complete';
   payload: {
-    orderId: string;
+    orderId?: string;
+    stopId?: string;
     [key: string]: any;
   };
   createdAt: string;
@@ -128,6 +156,7 @@ export interface UserSession {
 class SCRAMDatabase extends Dexie {
   // Tables
   orders!: Table<LocalOrder, string>;
+  routeStops!: Table<LocalRouteStop, string>;
   pendingSync!: Table<PendingSync, number>;
   evidence!: Table<LocalEvidence, number>;
   session!: Table<UserSession, string>;
@@ -143,6 +172,14 @@ class SCRAMDatabase extends Dexie {
       // Auto-increment id, index on orderId and uploaded status
       evidence: '++id, orderId, uploaded',
       // Single session record
+      session: 'id',
+    });
+
+    this.version(2).stores({
+      orders: 'id, bindId, status, routePosition, lastSyncedAt',
+      routeStops: 'id, status, routePosition',
+      pendingSync: '++id, status, type, [orderId+type]',
+      evidence: '++id, orderId, uploaded',
       session: 'id',
     });
   }
@@ -313,6 +350,7 @@ export async function clearSession(): Promise<void> {
 export async function clearAllData(): Promise<void> {
   await Promise.all([
     db.orders.clear(),
+    db.routeStops.clear(),
     db.pendingSync.clear(),
     db.evidence.clear(),
     db.session.clear(),
@@ -397,4 +435,76 @@ export async function allOrdersConfirmed(): Promise<boolean> {
     .count();
 
   return pendingCount === 0;
+}
+
+// ── Route Stops helpers ──────────────────────────────────
+
+/**
+ * Save route stops from server to local database
+ */
+export async function saveRouteStopsLocally(stops: LocalRouteStop[]): Promise<void> {
+  const now = new Date().toISOString();
+
+  // Filter out stops that are pending completion sync
+  const pendingCompletions = await db.pendingSync
+    .where('type')
+    .equals('route-stop-complete')
+    .toArray();
+  const pendingCompletionStopIds = new Set(pendingCompletions.map((p) => p.payload.stopId));
+
+  const filteredStops = stops.filter((stop) => !pendingCompletionStopIds.has(stop.id));
+
+  const stopsWithSync = filteredStops.map((stop) => ({
+    ...stop,
+    lastSyncedAt: now,
+  }));
+
+  await db.routeStops.clear();
+  await db.routeStops.bulkPut(stopsWithSync);
+}
+
+/**
+ * Get active route items (orders + route stops) ordered by routePosition
+ */
+export async function getActiveRouteItems(): Promise<Array<(LocalOrder & { _type: 'order' }) | (LocalRouteStop & { _type: 'stop' })>> {
+  const orders = await db.orders
+    .where('status')
+    .anyOf(['READY', 'IN_TRANSIT'])
+    .toArray();
+
+  const stops = await db.routeStops
+    .where('status')
+    .equals('IN_TRANSIT')
+    .toArray();
+
+  const taggedOrders = orders.map((o) => ({ ...o, _type: 'order' as const }));
+  const taggedStops = stops.map((s) => ({ ...s, _type: 'stop' as const }));
+
+  const combined = [...taggedOrders, ...taggedStops];
+  combined.sort((a, b) => (a.routePosition || 999) - (b.routePosition || 999));
+
+  return combined;
+}
+
+/**
+ * Mark route stop as completed locally (Optimistic UI)
+ */
+export async function completeRouteStopLocally(
+  stopId: string,
+  completionNotes?: string,
+  base64Photo?: string,
+): Promise<void> {
+  await db.routeStops.delete(stopId);
+
+  await db.pendingSync.add({
+    type: 'route-stop-complete',
+    payload: {
+      stopId,
+      completionNotes: completionNotes || null,
+      base64Photo: base64Photo || null,
+    },
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+    status: 'pending',
+  });
 }

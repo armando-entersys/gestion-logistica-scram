@@ -45,10 +45,13 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import {
   db,
   saveOrdersLocally,
+  saveRouteStopsLocally,
   getActiveRoute,
+  getActiveRouteItems,
   clearAllData,
   getSession,
   LocalOrder,
+  LocalRouteStop,
   confirmPickupLocally,
   markEnRouteLocally,
   getPendingPickupOrders,
@@ -115,8 +118,9 @@ export default function RoutePage() {
   const [isConfirmingPickup, setIsConfirmingPickup] = useState<string | null>(null);
   const [isMarkingEnRoute, setIsMarkingEnRoute] = useState<string | null>(null);
 
-  // Live query for orders
+  // Live query for orders and route items
   const orders = useLiveQuery(() => getActiveRoute(), []);
+  const routeItems = useLiveQuery(() => getActiveRouteItems(), []);
   const session = useLiveQuery(() => db.session.toCollection().first());
   const pendingPickupOrders = useLiveQuery(() => getPendingPickupOrders(), []);
 
@@ -137,7 +141,18 @@ export default function RoutePage() {
         headers: { Authorization: `Bearer ${sessionData.token}` },
       });
 
-      await saveOrdersLocally(response.data);
+      // Handle both old format (array) and new format ({ orders, routeStops })
+      const data = response.data;
+      if (Array.isArray(data)) {
+        // Legacy format: array of orders
+        await saveOrdersLocally(data);
+      } else if (data.orders) {
+        // New format: { orders, routeStops }
+        await saveOrdersLocally(data.orders);
+        if (data.routeStops) {
+          await saveRouteStopsLocally(data.routeStops);
+        }
+      }
     } catch (error) {
       console.error('Error fetching route:', error);
     } finally {
@@ -547,7 +562,7 @@ export default function RoutePage() {
           pb: 'calc(16px + var(--safe-area-inset-bottom, 0px))',
         }}
       >
-        {!orders || orders.length === 0 ? (
+        {(!routeItems || routeItems.length === 0) && (!orders || orders.length === 0) ? (
           <Box sx={{ textAlign: 'center', py: 8 }}>
             <LocalShippingIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -559,20 +574,42 @@ export default function RoutePage() {
           </Box>
         ) : (
           <Stack spacing={2}>
-            {orders.map((order, index) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                position={index + 1}
-                onNavigate={() => openNavigation(order)}
-                onCall={() => order.clientPhone && handleCall(order.clientPhone)}
-                onDeliver={() => navigate(`/delivery/${order.id}`)}
-                onReturn={() => openReturnDialog(order)}
-                onEnRoute={() => handleMarkEnRoute(order)}
-                isMarkingEnRoute={isMarkingEnRoute === order.id}
-                allOrdersConfirmed={allOrdersConfirmed}
-              />
-            ))}
+            {(routeItems || []).map((item, index) => {
+              if (item._type === 'order') {
+                const order = item as LocalOrder & { _type: 'order' };
+                return (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    position={order.routePosition || index + 1}
+                    onNavigate={() => openNavigation(order)}
+                    onCall={() => order.clientPhone && handleCall(order.clientPhone)}
+                    onDeliver={() => navigate(`/delivery/${order.id}`)}
+                    onReturn={() => openReturnDialog(order)}
+                    onEnRoute={() => handleMarkEnRoute(order)}
+                    isMarkingEnRoute={isMarkingEnRoute === order.id}
+                    allOrdersConfirmed={allOrdersConfirmed}
+                  />
+                );
+              } else {
+                const stop = item as LocalRouteStop & { _type: 'stop' };
+                return (
+                  <RouteStopCard
+                    key={`stop-${stop.id}`}
+                    stop={stop}
+                    position={stop.routePosition || index + 1}
+                    onNavigate={() => {
+                      if (stop.addressRaw) {
+                        const address = `${stop.addressRaw.street || ''} ${stop.addressRaw.number || ''}, ${stop.addressRaw.neighborhood || ''}, ${stop.addressRaw.city || ''}`;
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`, '_blank');
+                      }
+                    }}
+                    onCall={() => stop.contactPhone && handleCall(stop.contactPhone)}
+                    onComplete={() => navigate(`/complete-stop/${stop.id}`)}
+                  />
+                );
+              }
+            })}
           </Stack>
         )}
       </Box>
@@ -1020,6 +1057,132 @@ function OrderCard({ order, position, onNavigate, onCall, onDeliver, onReturn, o
             </Button>
           </Stack>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Route Stop Card ──────────────────────────────────────
+
+interface RouteStopCardProps {
+  stop: LocalRouteStop;
+  position: number;
+  onNavigate: () => void;
+  onCall: () => void;
+  onComplete: () => void;
+}
+
+function RouteStopCard({ stop, position, onNavigate, onCall, onComplete }: RouteStopCardProps) {
+  const isPickup = stop.stopType === 'PICKUP';
+  const icon = isPickup ? '📥' : '📄';
+  const typeLabel = isPickup ? 'Recolección' : 'Documentación';
+  const bgColor = isPickup ? '#e3f2fd' : '#f3e5f5';
+  const borderColor = isPickup ? '#1976d2' : '#9c27b0';
+
+  const etaStart = stop.estimatedArrivalStart
+    ? new Date(stop.estimatedArrivalStart).toLocaleTimeString('es-MX', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    : null;
+
+  return (
+    <Card sx={{ borderLeft: `4px solid ${borderColor}`, bgcolor: bgColor }}>
+      <CardContent>
+        {/* Header */}
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                bgcolor: borderColor,
+                fontSize: 16,
+              }}
+            >
+              {position}
+            </Avatar>
+            <Box>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <Typography variant="body2">{icon}</Typography>
+                <Typography variant="caption" fontWeight={700} color={borderColor}>
+                  {typeLabel}
+                </Typography>
+              </Stack>
+              <Typography variant="subtitle1" fontWeight={600}>
+                {stop.clientName}
+              </Typography>
+            </Box>
+          </Stack>
+          {etaStart && (
+            <Chip
+              size="small"
+              icon={<AccessTimeIcon />}
+              label={etaStart}
+              color={isPickup ? 'primary' : 'secondary'}
+              variant="outlined"
+            />
+          )}
+        </Stack>
+
+        {/* Address */}
+        {stop.addressRaw && (
+          <Stack direction="row" spacing={1} alignItems="flex-start" mb={1}>
+            <LocationOnIcon fontSize="small" color="action" sx={{ mt: 0.3 }} />
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                {stop.addressRaw.street} {stop.addressRaw.number}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {stop.addressRaw.neighborhood}, {stop.addressRaw.city}
+              </Typography>
+            </Box>
+          </Stack>
+        )}
+
+        {/* Description */}
+        {stop.description && (
+          <Typography variant="body2" color="text.secondary" mb={1} fontStyle="italic">
+            {stop.description}
+          </Typography>
+        )}
+
+        {/* Items */}
+        {stop.itemsDescription && (
+          <Box sx={{ mb: 1.5, bgcolor: 'rgba(255,255,255,0.7)', p: 1, borderRadius: 1, border: '1px dashed', borderColor: 'grey.400' }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary">
+              {isPickup ? 'A recoger:' : 'Documentos:'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">{stop.itemsDescription}</Typography>
+          </Box>
+        )}
+
+        {/* Actions */}
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<NavigationIcon />}
+            onClick={onNavigate}
+            sx={{ flex: 1 }}
+          >
+            Navegar
+          </Button>
+          {stop.contactPhone && (
+            <IconButton onClick={onCall} sx={{ border: 1, borderColor: 'divider' }}>
+              <PhoneIcon />
+            </IconButton>
+          )}
+          <Button
+            variant="contained"
+            color={isPickup ? 'primary' : 'secondary'}
+            startIcon={<CheckCircleIcon />}
+            onClick={onComplete}
+            sx={{ flex: 1 }}
+          >
+            Completar
+          </Button>
+        </Stack>
       </CardContent>
     </Card>
   );

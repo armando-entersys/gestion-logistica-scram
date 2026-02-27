@@ -73,7 +73,7 @@ import UndoIcon from '@mui/icons-material/Undo';
 import RouteIcon from '@mui/icons-material/Route';
 
 import { useRouter } from 'next/navigation';
-import { ordersApi, usersApi, clientAddressesApi, syncApi } from '@/lib/api';
+import { ordersApi, usersApi, clientAddressesApi, syncApi, routeStopsApi } from '@/lib/api';
 
 const OrdersMap = dynamic(() => import('@/components/OrdersMap'), {
   ssr: false,
@@ -132,6 +132,51 @@ interface Order {
   carrierName?: string;
   carrierTrackingNumber?: string;
   evidences?: ShipmentEvidence[];
+}
+
+interface RouteStopItem {
+  id: string;
+  stopType: 'PICKUP' | 'DOCUMENTATION';
+  status: string;
+  clientName: string;
+  contactName?: string;
+  contactPhone?: string;
+  addressRaw?: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    reference?: string;
+  };
+  latitude?: number;
+  longitude?: number;
+  description?: string;
+  itemsDescription?: string;
+  routePosition?: number;
+  estimatedArrivalStart?: string;
+  estimatedArrivalEnd?: string;
+  pickupPointId?: string;
+}
+
+interface PickupPoint {
+  id: string;
+  clientId?: string;
+  clientName: string;
+  contactName?: string;
+  contactPhone?: string;
+  label?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  postalCode?: string;
+  city?: string;
+  state?: string;
+  reference?: string;
+  latitude?: number;
+  longitude?: number;
+  useCount: number;
 }
 
 interface ClientAddress {
@@ -196,6 +241,20 @@ export default function PlanningPage() {
   const [trackingNumber, setTrackingNumber] = useState('');
   const [carrierDeliveryDate, setCarrierDeliveryDate] = useState('');
   const [carrierDeliveryTime, setCarrierDeliveryTime] = useState('');
+
+  // Route stops state
+  const [selectedStopIds, setSelectedStopIds] = useState<string[]>([]);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [newStopType, setNewStopType] = useState<'PICKUP' | 'DOCUMENTATION'>('PICKUP');
+  const [newStopClientName, setNewStopClientName] = useState('');
+  const [newStopContactName, setNewStopContactName] = useState('');
+  const [newStopContactPhone, setNewStopContactPhone] = useState('');
+  const [newStopDescription, setNewStopDescription] = useState('');
+  const [newStopItemsDescription, setNewStopItemsDescription] = useState('');
+  const [newStopAddress, setNewStopAddress] = useState({ street: '', number: '', neighborhood: '', city: '', state: '', postalCode: '', reference: '' });
+  const [selectedPickupPointId, setSelectedPickupPointId] = useState<string>('');
+  const [pickupPointSearch, setPickupPointSearch] = useState('');
+  const [newStopDriverId, setNewStopDriverId] = useState<string>('');
 
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({
     open: false,
@@ -325,6 +384,29 @@ export default function PlanningPage() {
     },
   });
 
+  // Route stops queries
+  const { data: pendingStopsData, refetch: refetchStops } = useQuery({
+    queryKey: ['pending-route-stops'],
+    queryFn: async () => {
+      const response = await routeStopsApi.getPending();
+      return response.data as RouteStopItem[];
+    },
+  });
+  const pendingStops: RouteStopItem[] = pendingStopsData || [];
+
+  const { data: pickupPointsData } = useQuery({
+    queryKey: ['pickup-points', pickupPointSearch],
+    queryFn: async () => {
+      if (pickupPointSearch) {
+        const response = await routeStopsApi.searchPickupPoints(pickupPointSearch);
+        return response.data as PickupPoint[];
+      }
+      const response = await routeStopsApi.getPickupPoints();
+      return response.data as PickupPoint[];
+    },
+  });
+  const pickupPoints: PickupPoint[] = pickupPointsData || [];
+
   const stats = useMemo(() => {
     const ready = orders.filter((o) => o.status === 'READY').length;
     const inTransit = orders.filter((o) => o.status === 'IN_TRANSIT').length;
@@ -405,16 +487,18 @@ export default function PlanningPage() {
 
   const dispatchMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedDriverId || selectedOrderIds.length === 0) throw new Error('Selecciona chofer y pedidos');
-      return ordersApi.dispatch(selectedDriverId, selectedOrderIds, startTime);
+      if (!selectedDriverId || (selectedOrderIds.length === 0 && selectedStopIds.length === 0)) throw new Error('Selecciona chofer y pedidos/paradas');
+      return ordersApi.dispatch(selectedDriverId, selectedOrderIds, startTime, selectedStopIds.length > 0 ? selectedStopIds : undefined);
     },
     onSuccess: (response) => {
+      const stopsMsg = response.data.stopsDispatched ? ` + ${response.data.stopsDispatched} paradas` : '';
       setSnackbar({
         open: true,
-        message: `Ruta despachada: ${response.data.dispatched} pedidos`,
+        message: `Ruta despachada: ${response.data.dispatched} pedidos${stopsMsg}`,
         severity: 'success',
       });
       setSelectedOrderIds([]);
+      setSelectedStopIds([]);
       setSelectedDriverId('');
       setDispatchDialogOpen(false);
       setTimeout(() => {
@@ -523,6 +607,56 @@ export default function PlanningPage() {
     },
     onError: (error: any) => {
       setSnackbar({ open: true, message: error.response?.data?.message || 'Error al cambiar estado', severity: 'error' });
+    },
+  });
+
+  // Create route stop mutation
+  const createStopMutation = useMutation({
+    mutationFn: async () => {
+      if (!newStopClientName.trim()) throw new Error('Nombre de cliente requerido');
+      if (!newStopDriverId) throw new Error('Selecciona un chofer');
+      const response = await routeStopsApi.create({
+        stopType: newStopType,
+        pickupPointId: selectedPickupPointId || undefined,
+        clientName: newStopClientName.trim(),
+        contactName: newStopContactName.trim() || undefined,
+        contactPhone: newStopContactPhone.trim() || undefined,
+        addressRaw: selectedPickupPointId ? undefined : newStopAddress,
+        description: newStopDescription.trim() || undefined,
+        itemsDescription: newStopItemsDescription.trim() || undefined,
+      });
+      // Auto-dispatch: assign driver and set IN_TRANSIT immediately
+      const stopId = response.data.id;
+      await routeStopsApi.dispatch([stopId], newStopDriverId);
+      return response;
+    },
+    onSuccess: () => {
+      setSnackbar({ open: true, message: `${newStopType === 'PICKUP' ? 'Recolección' : 'Visita'} creada y asignada`, severity: 'success' });
+      setStopDialogOpen(false);
+      setNewStopClientName('');
+      setNewStopContactName('');
+      setNewStopContactPhone('');
+      setNewStopDescription('');
+      setNewStopItemsDescription('');
+      setNewStopAddress({ street: '', number: '', neighborhood: '', city: '', state: '', postalCode: '', reference: '' });
+      setSelectedPickupPointId('');
+      setNewStopDriverId('');
+      refetchStops();
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error al crear parada', severity: 'error' });
+    },
+  });
+
+  // Cancel route stop mutation
+  const cancelStopMutation = useMutation({
+    mutationFn: async (stopId: string) => routeStopsApi.cancel(stopId),
+    onSuccess: () => {
+      setSnackbar({ open: true, message: 'Parada cancelada', severity: 'success' });
+      refetchStops();
+    },
+    onError: (error: any) => {
+      setSnackbar({ open: true, message: error.response?.data?.message || 'Error', severity: 'error' });
     },
   });
 
@@ -1140,6 +1274,64 @@ export default function PlanningPage() {
                     onViewPod={() => openPodViewer(order)}
                   />
                 ))}
+                {/* Route Stops (shown in READY tab) */}
+                {statusFilter === 0 && pendingStops.map((stop) => (
+                  <Card
+                    key={`stop-${stop.id}`}
+                    variant="outlined"
+                    sx={{
+                      borderColor: selectedStopIds.includes(stop.id) ? (stop.stopType === 'PICKUP' ? 'info.main' : 'secondary.main') : 'divider',
+                      borderWidth: selectedStopIds.includes(stop.id) ? 2 : 1,
+                      bgcolor: selectedStopIds.includes(stop.id) ? (stop.stopType === 'PICKUP' ? 'info.50' : 'secondary.50') : 'background.paper',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      setSelectedStopIds(prev =>
+                        prev.includes(stop.id) ? prev.filter(id => id !== stop.id) : [...prev, stop.id]
+                      );
+                    }}
+                  >
+                    <CardContent sx={{ py: 1, px: 1.5, '&:last-child': { pb: 1 } }}>
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedStopIds.includes(stop.id)}
+                          sx={{ p: 0.5 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={stop.stopType === 'PICKUP' ? 'Recolección' : 'Documentación'}
+                          color={stop.stopType === 'PICKUP' ? 'info' : 'secondary'}
+                          variant="filled"
+                          sx={{ fontSize: '0.65rem', height: 20 }}
+                        />
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>{stop.clientName}</Typography>
+                          {stop.addressRaw && (
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {[stop.addressRaw.street, stop.addressRaw.number, stop.addressRaw.neighborhood].filter(Boolean).join(' ')}
+                            </Typography>
+                          )}
+                          {stop.description && (
+                            <Typography variant="caption" color="text.disabled" noWrap display="block">{stop.description}</Typography>
+                          )}
+                          {stop.itemsDescription && (
+                            <Typography variant="caption" color="text.secondary" noWrap display="block" fontWeight={600}>
+                              {stop.stopType === 'PICKUP' ? '📥 ' : '📄 '}{stop.itemsDescription}
+                            </Typography>
+                          )}
+                        </Box>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={(e) => { e.stopPropagation(); cancelStopMutation.mutate(stop.id); }}
+                        >
+                          <CancelIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                ))}
               </Stack>
             )}
           </Box>
@@ -1157,6 +1349,27 @@ export default function PlanningPage() {
             {/* Main actions for READY orders */}
             {statusFilter === 0 && (
               <Stack spacing={1}>
+                {/* Route Stops buttons */}
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="info"
+                    onClick={() => { setNewStopType('PICKUP'); setStopDialogOpen(true); }}
+                    sx={{ flex: 1, fontSize: '0.7rem' }}
+                  >
+                    + Recolección
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="secondary"
+                    onClick={() => { setNewStopType('DOCUMENTATION'); setStopDialogOpen(true); }}
+                    sx={{ flex: 1, fontSize: '0.7rem' }}
+                  >
+                    + Documentación
+                  </Button>
+                </Stack>
                 <Stack direction="row" spacing={1}>
                   <Button
                     variant="outlined"
@@ -2184,6 +2397,107 @@ export default function PlanningPage() {
             startIcon={reviewActionMutation.isPending ? <CircularProgress size={16} /> : null}
           >
             {reviewActionMutation.isPending ? 'Procesando...' : 'Confirmar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Route Stop Dialog */}
+      <Dialog open={stopDialogOpen} onClose={() => setStopDialogOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>
+          {newStopType === 'PICKUP' ? 'Nueva Recolección' : 'Nueva Visita de Documentación'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {/* Pickup Point selector */}
+            <FormControl fullWidth size="small">
+              <InputLabel>Punto guardado (opcional)</InputLabel>
+              <Select
+                value={selectedPickupPointId}
+                label="Punto guardado (opcional)"
+                onChange={(e) => {
+                  const pointId = e.target.value as string;
+                  setSelectedPickupPointId(pointId);
+                  if (pointId) {
+                    const point = pickupPoints.find(p => p.id === pointId);
+                    if (point) {
+                      setNewStopClientName(point.clientName);
+                      setNewStopContactName(point.contactName || '');
+                      setNewStopContactPhone(point.contactPhone || '');
+                      setNewStopAddress({
+                        street: point.street || '',
+                        number: point.number || '',
+                        neighborhood: point.neighborhood || '',
+                        city: point.city || '',
+                        state: point.state || '',
+                        postalCode: point.postalCode || '',
+                        reference: point.reference || '',
+                      });
+                    }
+                  }
+                }}
+              >
+                <MenuItem value="">-- Dirección manual --</MenuItem>
+                {pickupPoints.map((point) => (
+                  <MenuItem key={point.id} value={point.id}>
+                    {point.clientName}{point.label ? ` — ${point.label}` : ''} ({point.useCount} usos)
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField size="small" label="Cliente *" value={newStopClientName} onChange={(e) => setNewStopClientName(e.target.value)} fullWidth />
+            <Stack direction="row" spacing={1}>
+              <TextField size="small" label="Contacto" value={newStopContactName} onChange={(e) => setNewStopContactName(e.target.value)} fullWidth />
+              <TextField size="small" label="Teléfono" value={newStopContactPhone} onChange={(e) => setNewStopContactPhone(e.target.value)} fullWidth />
+            </Stack>
+
+            {!selectedPickupPointId && (
+              <>
+                <Typography variant="caption" fontWeight={600} color="text.secondary">Dirección</Typography>
+                <Stack direction="row" spacing={1}>
+                  <TextField size="small" label="Calle" value={newStopAddress.street} onChange={(e) => setNewStopAddress(p => ({ ...p, street: e.target.value }))} sx={{ flex: 2 }} />
+                  <TextField size="small" label="Número" value={newStopAddress.number} onChange={(e) => setNewStopAddress(p => ({ ...p, number: e.target.value }))} sx={{ flex: 1 }} />
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <TextField size="small" label="Colonia" value={newStopAddress.neighborhood} onChange={(e) => setNewStopAddress(p => ({ ...p, neighborhood: e.target.value }))} fullWidth />
+                  <TextField size="small" label="Ciudad" value={newStopAddress.city} onChange={(e) => setNewStopAddress(p => ({ ...p, city: e.target.value }))} fullWidth />
+                </Stack>
+                <Stack direction="row" spacing={1}>
+                  <TextField size="small" label="CP" value={newStopAddress.postalCode} onChange={(e) => setNewStopAddress(p => ({ ...p, postalCode: e.target.value }))} sx={{ flex: 1 }} />
+                  <TextField size="small" label="Estado" value={newStopAddress.state} onChange={(e) => setNewStopAddress(p => ({ ...p, state: e.target.value }))} sx={{ flex: 2 }} />
+                </Stack>
+                <TextField size="small" label="Referencia" value={newStopAddress.reference} onChange={(e) => setNewStopAddress(p => ({ ...p, reference: e.target.value }))} fullWidth />
+              </>
+            )}
+
+            <TextField size="small" label="Descripción (motivo de la visita)" value={newStopDescription} onChange={(e) => setNewStopDescription(e.target.value)} fullWidth multiline rows={2} />
+            <TextField size="small" label="Artículos/documentos a recoger *" value={newStopItemsDescription} onChange={(e) => setNewStopItemsDescription(e.target.value)} fullWidth />
+
+            <FormControl size="small" fullWidth required>
+              <InputLabel>Chofer asignado *</InputLabel>
+              <Select
+                value={newStopDriverId}
+                label="Chofer asignado *"
+                onChange={(e) => setNewStopDriverId(e.target.value)}
+              >
+                {(drivers || []).map((d) => (
+                  <MenuItem key={d.id} value={d.id}>
+                    {d.firstName} {d.lastName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => createStopMutation.mutate()}
+            disabled={!newStopClientName.trim() || !newStopDriverId || createStopMutation.isPending}
+            startIcon={createStopMutation.isPending ? <CircularProgress size={16} /> : undefined}
+          >
+            Crear y Asignar {newStopType === 'PICKUP' ? 'Recolección' : 'Visita'}
           </Button>
         </DialogActions>
       </Dialog>

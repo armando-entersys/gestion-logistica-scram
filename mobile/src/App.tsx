@@ -10,6 +10,7 @@ import useSync from '@/hooks/useSync';
 import LoginPage from '@/pages/Login';
 import RoutePage from '@/pages/Route';
 import DeliveryPage from '@/pages/Delivery';
+import CompleteStopPage from '@/pages/CompleteStop';
 
 function App() {
   const session = useLiveQuery(() => db.session.toCollection().first());
@@ -57,6 +58,10 @@ function App() {
         <Route
           path="/delivery/:orderId"
           element={isAuthenticated ? <DeliveryPage /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/complete-stop/:stopId"
+          element={isAuthenticated ? <CompleteStopPage /> : <Navigate to="/login" />}
         />
         <Route path="*" element={<Navigate to={isAuthenticated ? '/route' : '/login'} />} />
       </Routes>

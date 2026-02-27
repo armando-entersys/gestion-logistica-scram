@@ -47,3 +47,21 @@ export enum OrderSource {
   BIND_INVOICE = 'BIND_INVOICE', // Creado desde factura de Bind (webhook)
   MANUAL = 'MANUAL',             // Creado manualmente
 }
+
+/**
+ * Tipo de parada de ruta (no-entrega)
+ */
+export enum StopType {
+  PICKUP = 'PICKUP',               // Recolección de producto en ubicación del cliente
+  DOCUMENTATION = 'DOCUMENTATION', // Visita para recoger/entregar documentos
+}
+
+/**
+ * Estado de una parada de ruta
+ */
+export enum RouteStopStatus {
+  PENDING = 'PENDING',
+  IN_TRANSIT = 'IN_TRANSIT',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
