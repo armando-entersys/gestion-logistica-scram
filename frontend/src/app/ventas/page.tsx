@@ -312,9 +312,9 @@ export default function VentasPage() {
                         Hora Estimada de Llegada
                       </Typography>
                       <Typography variant="body1" fontWeight={500}>
-                        {new Date(selectedOrder.estimatedArrivalStart).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(selectedOrder.estimatedArrivalStart).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })}
                         {' - '}
-                        {new Date(selectedOrder.estimatedArrivalEnd).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(selectedOrder.estimatedArrivalEnd).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })}
                       </Typography>
                     </Box>
                   </Stack>

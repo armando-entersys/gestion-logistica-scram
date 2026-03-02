@@ -134,6 +134,7 @@ export default function RouteOptimizationDialog({
     return new Date(isoString).toLocaleTimeString('es-MX', {
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'America/Mexico_City',
     });
   };
 

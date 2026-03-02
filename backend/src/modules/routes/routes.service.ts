@@ -514,12 +514,37 @@ export class RoutesService {
   }
 
   // Helpers privados
+
+  /**
+   * Obtiene el offset UTC de CDMX en minutos para una fecha dada.
+   * Maneja automáticamente CST (-6h) y CDT (-5h horario de verano).
+   */
+  private getCDMXOffsetMinutes(date: Date): number {
+    const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' });
+    const cdmxStr = date.toLocaleString('en-US', { timeZone: 'America/Mexico_City' });
+    return (new Date(cdmxStr).getTime() - new Date(utcStr).getTime()) / 60000;
+  }
+
+  /**
+   * Interpreta startTime (HH:mm) como hora local de CDMX y devuelve Date en UTC.
+   */
   private parseStartTime(startTime: string): Date {
     const [hours, minutes] = startTime.split(':').map(Number);
-    const date = new Date();
-    date.setHours(hours || 9, minutes || 0, 0, 0);
 
-    // Si la hora ya pasó hoy, usar mañana
+    // Obtener fecha actual en CDMX
+    const now = new Date();
+    const offsetMin = this.getCDMXOffsetMinutes(now);
+    const cdmxNow = new Date(now.getTime() + offsetMin * 60000);
+
+    const year = cdmxNow.getUTCFullYear();
+    const month = cdmxNow.getUTCMonth();
+    const day = cdmxNow.getUTCDate();
+
+    // Crear la hora deseada en UTC y restar el offset de CDMX para obtener UTC real
+    const desiredUTC = new Date(Date.UTC(year, month, day, hours || 9, minutes || 0, 0));
+    const date = new Date(desiredUTC.getTime() - offsetMin * 60000);
+
+    // Si la hora ya pasó hoy en CDMX, usar mañana
     if (date.getTime() < Date.now()) {
       date.setDate(date.getDate() + 1);
     }
