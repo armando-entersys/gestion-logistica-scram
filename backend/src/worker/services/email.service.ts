@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as sgMail from '@sendgrid/mail';
+import * as nodemailer from 'nodemailer';
 
 interface EmailOptions {
   to: string;
@@ -13,7 +13,9 @@ interface EmailOptions {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly from: string;
+  private readonly fromName: string;
   private readonly emailOverride?: string;
+  private readonly transporter: nodemailer.Transporter;
 
   // SCRAM Brand Assets
   private readonly SCRAM_LOGO = 'https://storage.googleapis.com/scram-evidence/assets/scram_logotipo_vnegativa.png';
@@ -33,13 +35,19 @@ export class EmailService {
   private readonly COLOR_GREEN = '#44ce6f';
 
   constructor(private readonly configService: ConfigService) {
-    this.from = this.configService.get('sendgrid.from') || 'no-reply@scram2k.com';
+    this.from = this.configService.get('smtp.from') || 'mesa-servicio@scram2k.com';
+    this.fromName = this.configService.get('smtp.fromName') || 'SCRAM Logistica';
     this.emailOverride = this.configService.get('EMAIL_OVERRIDE');
 
-    const apiKey = this.configService.get('sendgrid.apiKey');
-    if (apiKey) {
-      sgMail.setApiKey(apiKey);
-    }
+    this.transporter = nodemailer.createTransport({
+      host: this.configService.get('smtp.host') || 'smtp.bizmail.yahoo.com',
+      port: this.configService.get('smtp.port') || 465,
+      secure: true,
+      auth: {
+        user: this.configService.get('smtp.user') || this.from,
+        pass: this.configService.get('smtp.pass'),
+      },
+    });
 
     if (this.emailOverride) {
       this.logger.warn(`EMAIL OVERRIDE ENABLED: All emails will be sent to ${this.emailOverride}`);
@@ -58,14 +66,14 @@ export class EmailService {
     }
 
     try {
-      const [response] = await sgMail.send({
-        from: { email: this.from, name: 'SCRAM Logistica' },
+      const info = await this.transporter.sendMail({
+        from: `"${this.fromName}" <${this.from}>`,
         to: actualRecipient,
         subject: options.subject,
         html: html,
       });
 
-      this.logger.log(`Email sent to ${actualRecipient} - StatusCode: ${response.statusCode}`);
+      this.logger.log(`Email sent to ${actualRecipient} - MessageId: ${info.messageId}`);
     } catch (error) {
       this.logger.error(`Failed to send email to ${actualRecipient}:`, error);
       throw error;

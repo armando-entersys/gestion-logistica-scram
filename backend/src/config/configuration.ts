@@ -28,9 +28,13 @@ export default () => ({
     apiKey: process.env.GOOGLE_MAPS_API_KEY,
   },
 
-  sendgrid: {
-    apiKey: process.env.SENDGRID_API_KEY,
-    from: process.env.EMAIL_FROM || 'no-reply@scram2k.com',
+  smtp: {
+    host: process.env.SMTP_HOST || 'smtp.bizmail.yahoo.com',
+    port: parseInt(process.env.SMTP_PORT || '465', 10),
+    user: process.env.SMTP_USER || 'mesa-servicio@scram2k.com',
+    pass: process.env.SMTP_PASS,
+    from: process.env.EMAIL_FROM || 'mesa-servicio@scram2k.com',
+    fromName: process.env.EMAIL_FROM_NAME || 'SCRAM Logistica',
   },
 
   email: {

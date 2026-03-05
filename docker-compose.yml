@@ -77,8 +77,12 @@ services:
       BIND_API_URL: ${BIND_API_URL}
       BIND_API_KEY: ${BIND_API_KEY}
       GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM:-notificaciones@scram2k.com}
+      SMTP_HOST: ${SMTP_HOST:-smtp.bizmail.yahoo.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-mesa-servicio@scram2k.com}
+      SMTP_PASS: ${SMTP_PASS}
+      EMAIL_FROM: ${EMAIL_FROM:-mesa-servicio@scram2k.com}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-SCRAM Logistica}
       OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
       APP_URL: https://gestion-logistica.scram2k.com
       API_URL: https://api-gestion-logistica.scram2k.com
@@ -138,8 +142,12 @@ services:
       REDIS_URL: redis://redis:6379
       BIND_API_URL: ${BIND_API_URL}
       BIND_API_KEY: ${BIND_API_KEY}
-      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
-      EMAIL_FROM: ${EMAIL_FROM:-notificaciones@scram2k.com}
+      SMTP_HOST: ${SMTP_HOST:-smtp.bizmail.yahoo.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-mesa-servicio@scram2k.com}
+      SMTP_PASS: ${SMTP_PASS}
+      EMAIL_FROM: ${EMAIL_FROM:-mesa-servicio@scram2k.com}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-SCRAM Logistica}
       OPERATIONS_ALERT_EMAIL: ${OPERATIONS_ALERT_EMAIL:-operaciones@scram2k.com}
       EMAIL_OVERRIDE: ${EMAIL_OVERRIDE:-}
       APP_URL: https://gestion-logistica.scram2k.com
