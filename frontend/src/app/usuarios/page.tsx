@@ -62,6 +62,7 @@ interface User {
   roleCode: string;
   isActive: boolean;
   createdAt: string;
+  bindEmployeeName: string | null;
 }
 
 export default function UsuariosPage() {
@@ -75,6 +76,7 @@ export default function UsuariosPage() {
     firstName: '',
     lastName: '',
     roleCode: 'DRIVER',
+    bindEmployeeName: '',
   });
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -184,6 +186,7 @@ export default function UsuariosPage() {
       firstName: '',
       lastName: '',
       roleCode: 'DRIVER',
+      bindEmployeeName: '',
     });
   };
 
@@ -196,6 +199,7 @@ export default function UsuariosPage() {
         firstName: user.firstName,
         lastName: user.lastName,
         roleCode: user.roleCode,
+        bindEmployeeName: user.bindEmployeeName || '',
       });
     } else {
       setEditingUser(null);
@@ -210,6 +214,7 @@ export default function UsuariosPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         roleCode: formData.roleCode,
+        bindEmployeeName: formData.bindEmployeeName || null,
       };
       if (formData.password) {
         updateData.password = formData.password;
@@ -301,7 +306,14 @@ export default function UsuariosPage() {
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <Chip size="small" label={role.label} color={role.color} />
+                          <Stack spacing={0.5}>
+                            <Chip size="small" label={role.label} color={role.color} />
+                            {user.roleCode === 'SALES' && user.bindEmployeeName && (
+                              <Typography variant="caption" color="text.secondary">
+                                Bind: {user.bindEmployeeName}
+                              </Typography>
+                            )}
+                          </Stack>
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -396,6 +408,15 @@ export default function UsuariosPage() {
                 <MenuItem value="SALES">Ventas</MenuItem>
               </Select>
             </FormControl>
+            {formData.roleCode === 'SALES' && (
+              <TextField
+                fullWidth
+                label="Nombre de vendedor en Bind"
+                value={formData.bindEmployeeName}
+                onChange={(e) => setFormData({ ...formData, bindEmployeeName: e.target.value })}
+                helperText="Debe coincidir exactamente con el nombre del empleado en Bind ERP"
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

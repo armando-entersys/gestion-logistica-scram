@@ -51,6 +51,9 @@ export class User {
   @Column({ name: 'reset_token_expires', type: 'timestamp', nullable: true })
   resetTokenExpires: Date | null;
 
+  @Column({ name: 'bind_employee_name', type: 'varchar', length: 100, nullable: true, comment: 'Nombre del vendedor en Bind ERP para vincular pedidos' })
+  bindEmployeeName: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

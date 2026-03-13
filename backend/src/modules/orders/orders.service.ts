@@ -1024,7 +1024,7 @@ export class OrdersService {
   /**
    * RF-09: Portal de Visibilidad - Listar pedidos con filtros
    */
-  async findAll(filters: OrderFilterDto): Promise<{
+  async findAll(filters: OrderFilterDto, currentUser?: { id: string; roleCode: UserRole; bindEmployeeName?: string }): Promise<{
     data: Order[];
     total: number;
     page: number;
@@ -1037,6 +1037,11 @@ export class OrdersService {
     const queryBuilder = this.orderRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.assignedDriver', 'driver')
       .leftJoinAndSelect('order.evidences', 'evidence');
+
+    // SALES users only see orders from their Bind employee name
+    if (currentUser?.roleCode === UserRole.SALES && currentUser.bindEmployeeName) {
+      queryBuilder.andWhere('order.employeeName = :empName', { empName: currentUser.bindEmployeeName });
+    }
 
     if (filters.status) {
       const statuses = filters.status.split(',').map(s => s.trim());

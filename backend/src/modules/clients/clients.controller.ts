@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@/modules/auth/guards/roles.guard';
 import { Roles } from '@/modules/auth/decorators/roles.decorator';
+import { CurrentUser } from '@/modules/auth/decorators/current-user.decorator';
 import { UserRole } from '@/common/enums';
 import { ClientsService } from './clients.service';
 import { CreateClientDto, UpdateClientDto, ClientFilterDto } from './dto';
@@ -28,15 +29,15 @@ export class ClientsController {
   @Get()
   @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.SALES, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get all clients with pagination' })
-  findAll(@Query() filters: ClientFilterDto) {
-    return this.service.findAll(filters);
+  findAll(@Query() filters: ClientFilterDto, @CurrentUser() user: { id: string; roleCode: UserRole; bindEmployeeName?: string }) {
+    return this.service.findAll(filters, user);
   }
 
   @Get('stats')
-  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.DIRECTOR)
+  @Roles(UserRole.ADMIN, UserRole.PURCHASING, UserRole.SALES, UserRole.DIRECTOR)
   @ApiOperation({ summary: 'Get client statistics' })
-  getStats() {
-    return this.service.getStats();
+  getStats(@CurrentUser() user: { id: string; roleCode: UserRole; bindEmployeeName?: string }) {
+    return this.service.getStats(user);
   }
 
   @Get(':id')

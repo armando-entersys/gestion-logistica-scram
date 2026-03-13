@@ -36,6 +36,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
 import { ordersApi } from '@/lib/api';
 
@@ -213,6 +214,15 @@ export default function VentasPage() {
                             <Typography variant="caption" color="text.secondary">
                               ${order.totalAmount?.toLocaleString() || 0}
                             </Typography>
+                            {order.status === 'DELIVERED' && order.deliveredAt ? (
+                              <Typography variant="caption" color="success.main" fontWeight={500}>
+                                Entregado: {new Date(order.deliveredAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </Typography>
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                Creado: {new Date(order.promisedDate || order.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                              </Typography>
+                            )}
                           </Stack>
                         }
                       />
@@ -234,6 +244,14 @@ export default function VentasPage() {
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Pedido: {selectedOrder.orderNumber || selectedOrder.bindId}
               </Typography>
+              {selectedOrder.promisedDate && (
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                  <CalendarTodayIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Fecha de Pedido: {new Date(selectedOrder.promisedDate).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </Typography>
+                </Stack>
+              )}
 
               {/* Status Stepper */}
               <Box sx={{ my: 4 }}>

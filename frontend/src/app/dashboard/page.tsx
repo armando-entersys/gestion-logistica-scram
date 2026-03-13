@@ -42,6 +42,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import UndoIcon from '@mui/icons-material/Undo';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
+import FormatQuoteIcon from '@mui/icons-material/FormatQuote';
 
 import dynamic from 'next/dynamic';
 import { ordersApi } from '@/lib/api';
@@ -882,6 +884,69 @@ export default function DashboardPage() {
                       </TableBody>
                     </Table>
                   </TableContainer>
+                </Paper>
+              </Grid>
+            )}
+
+            {/* Resenas de Clientes */}
+            {csatData && csatData.evaluations.filter(ev => ev.csatFeedback).length > 0 && (
+              <Grid item xs={12}>
+                <Paper sx={{ p: 3 }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <ChatBubbleOutlineIcon color="primary" />
+                    <Typography variant="h6" fontWeight={600}>
+                      Resenas de Clientes
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    {csatData.evaluations.filter(ev => ev.csatFeedback).length} comentarios recibidos en el periodo
+                  </Typography>
+                  <Grid container spacing={2} sx={{ maxHeight: 500, overflow: 'auto' }}>
+                    {csatData.evaluations
+                      .filter(ev => ev.csatFeedback)
+                      .map((ev) => {
+                        const emojis: Record<number, string> = { 1: '😡', 2: '😞', 3: '😐', 4: '😊', 5: '😍' };
+                        const borderColor =
+                          ev.csatScore >= 4 ? '#44ce6f' :
+                          ev.csatScore === 3 ? '#a0aec0' : '#e53e3e';
+
+                        return (
+                          <Grid item xs={12} md={6} key={ev.orderId}>
+                            <Card variant="outlined" sx={{ borderLeft: 4, borderLeftColor: borderColor, height: '100%' }}>
+                              <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 1.5 }}>
+                                  <Box>
+                                    <Typography variant="subtitle2" fontWeight={600}>
+                                      {ev.clientName}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {ev.clientNumber ? `#${ev.clientNumber} · ` : ''}{new Date(ev.deliveredAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    </Typography>
+                                  </Box>
+                                  <Typography sx={{ fontSize: 28, lineHeight: 1 }}>
+                                    {emojis[ev.csatScore] || '😐'}
+                                  </Typography>
+                                </Stack>
+                                <Box sx={{ bgcolor: 'grey.50', borderRadius: 1, p: 1.5, position: 'relative' }}>
+                                  <FormatQuoteIcon sx={{ fontSize: 18, color: 'grey.300', position: 'absolute', top: 4, left: 4 }} />
+                                  <Typography variant="body2" sx={{ pl: 2.5, whiteSpace: 'pre-wrap' }}>
+                                    {ev.csatFeedback}
+                                  </Typography>
+                                </Box>
+                                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 1.5 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Chofer: {ev.driverName}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Pedido: {ev.invoiceNumber || ev.orderId.slice(0, 8)}
+                                  </Typography>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          </Grid>
+                        );
+                      })}
+                  </Grid>
                 </Paper>
               </Grid>
             )}

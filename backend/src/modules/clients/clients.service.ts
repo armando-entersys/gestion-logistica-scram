@@ -5,6 +5,7 @@ import { Client } from './entities/client.entity';
 import { CreateClientDto, UpdateClientDto, ClientFilterDto } from './dto';
 import { ClientAddressesService } from '@/modules/client-addresses/client-addresses.service';
 import { SyncClientDto } from '@/modules/sync/adapters/bind.adapter';
+import { UserRole } from '@/common/enums';
 
 @Injectable()
 export class ClientsService {
@@ -18,9 +19,10 @@ export class ClientsService {
   ) {}
 
   /**
-   * Find all clients with pagination and filters
+   * Find all clients with pagination and filters.
+   * SALES users only see clients that have orders with their bindEmployeeName.
    */
-  async findAll(filters: ClientFilterDto): Promise<{
+  async findAll(filters: ClientFilterDto, currentUser?: { id: string; roleCode: UserRole; bindEmployeeName?: string }): Promise<{
     data: (Client & { orderCount: number; addressCount: number })[];
     total: number;
     page: number;
@@ -34,6 +36,16 @@ export class ClientsService {
       .createQueryBuilder('client')
       .loadRelationCountAndMap('client.totalOrders', 'client.orders')
       .loadRelationCountAndMap('client.addressCount', 'client.addresses');
+
+    // SALES users only see clients with orders from their Bind employee name
+    if (currentUser?.roleCode === UserRole.SALES && currentUser.bindEmployeeName) {
+      queryBuilder.innerJoin(
+        'client.orders', 'salesOrder',
+        'salesOrder.employee_name = :empName',
+        { empName: currentUser.bindEmployeeName },
+      );
+      queryBuilder.groupBy('client.id');
+    }
 
     if (filters.search) {
       queryBuilder.andWhere(
@@ -183,14 +195,40 @@ export class ClientsService {
   }
 
   /**
-   * Get client statistics
+   * Get client statistics.
+   * SALES users only see stats for clients with their orders.
    */
-  async getStats(): Promise<{
+  async getStats(currentUser?: { id: string; roleCode: UserRole; bindEmployeeName?: string }): Promise<{
     totalClients: number;
     vipClients: number;
     totalRevenue: number;
     averageOrderValue: number;
   }> {
+    if (currentUser?.roleCode === UserRole.SALES && currentUser.bindEmployeeName) {
+      // For SALES: count only clients that have orders from this employee
+      const baseQuery = this.clientRepo
+        .createQueryBuilder('client')
+        .innerJoin('client.orders', 'salesOrder', 'salesOrder.employee_name = :empName', { empName: currentUser.bindEmployeeName });
+
+      const totalClients = await baseQuery.clone().select('COUNT(DISTINCT client.id)', 'count').getRawOne();
+      const vipClients = await baseQuery.clone().andWhere('client.isVip = true').select('COUNT(DISTINCT client.id)', 'count').getRawOne();
+      const statsResult = await baseQuery.clone()
+        .select('SUM(client.totalAmount)', 'totalRevenue')
+        .addSelect('SUM(client.totalOrders)', 'totalOrders')
+        .groupBy('client.id')
+        .getRawMany();
+
+      const totalRevenue = statsResult.reduce((sum, r) => sum + parseFloat(r.totalRevenue || '0'), 0);
+      const totalOrders = statsResult.reduce((sum, r) => sum + parseInt(r.totalOrders || '0', 10), 0);
+
+      return {
+        totalClients: parseInt(totalClients?.count || '0', 10),
+        vipClients: parseInt(vipClients?.count || '0', 10),
+        totalRevenue,
+        averageOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+      };
+    }
+
     const totalClients = await this.clientRepo.count();
     const vipClients = await this.clientRepo.count({ where: { isVip: true } });
 

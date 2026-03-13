@@ -77,6 +77,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         roleCode: user.roleCode,
+        bindEmployeeName: user.bindEmployeeName,
       },
     };
   }

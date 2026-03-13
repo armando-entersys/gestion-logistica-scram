@@ -135,8 +135,7 @@ export class OrdersController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get orders (filtered by role permissions)' })
   findAll(@Query() filters: OrderFilterDto, @CurrentUser() user: any) {
-    // SALES solo ve pedidos relacionados a sus clientes (implementar filtro)
-    return this.ordersService.findAll(filters);
+    return this.ordersService.findAll(filters, user);
   }
 
   /**
